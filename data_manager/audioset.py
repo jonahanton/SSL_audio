@@ -91,9 +91,11 @@ class AudioSet(Dataset):
 			start = random.randint(0, length_adj) if length_adj > 0 else 0
 			wav = wav[start:start + self.unit_length]
 			
-			# transforms to raw waveform
+			# transforms to raw waveform (must convert wav to np array)
+			# note that transforms to raw waveform don't have cuda compatibility (done via audiomentations package, which uses librosa)
 			if self.wav_transform:
-				wav = self.wav_transform(wav)
+				wav = self.wav_transform(wav.numpy())
+				wav = torch.tensor(wav)
 				
 			# to log mel spectogram -> (1, n_mels, time)
 			lms = (self.to_melspecgram(wav) + torch.finfo().eps).log().unsqueeze(0)

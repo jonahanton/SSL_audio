@@ -1,0 +1,25 @@
+# Unit duration in seconds for one audio segment
+unit_sec: 0.95
+
+# FFT parameters
+sample_rate: 16000
+n_fft: 1024
+win_length: 1024
+hop_length: 160
+n_mels: 64
+f_min: 60
+f_max: 7800
+
+# Transforms parameters
+# Transforms to raw waveform
+transform_min_rate: 0.5
+transform_max_rate: 1.5
+transform_ts_p: 0.6
+transform_min_semitones: -8
+transform_max_semitones: 8
+transform_ps_p: 0.6
+# Transforms to lms
+transform_mixup: True
+transform_gaussnoise: False
+transform_mixup_ratio: 0.4
+transform_gaussnoise_ratio: 0.4
