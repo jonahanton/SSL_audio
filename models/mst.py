@@ -66,11 +66,11 @@ class MaskedSpectrogramTransformer(nn.Module):
        
 		
     def random_masking(self, x, mask_ratio):
-    """
-    Perform per-sample random masking by per-sample shuffling.
-    Per-sample shuffling is done by argsort random noise.
-    x: [N, L, D], sequence
-    """
+    	"""
+    	Perform per-sample random masking by per-sample shuffling.
+    	Per-sample shuffling is done by argsort random noise.
+    	x: [N, L, D], sequence
+    	"""
         N, L, D = x.shape  # batch, length, dim
 		
         if isinstance(mask_ratio, (torch.Tensor, np.ndarray, list, tuple)):
