@@ -31,7 +31,7 @@ for subset_name in ["balanced_train_segments", "unbalanced_train_segments"]:
 			labels = "#".join(labels)
 			# check if YTID has been downloaded
 			if YTID in downloaded_YTIDs:
-				downloaded_files[subset_name].append([YTID, labels])
+				downloaded_files[subset_name].append([YTID, labels, subset_name])
 
 	
 	# write a new csv containing only the YouTube audio segments that have been downloaded

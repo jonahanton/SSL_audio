@@ -58,7 +58,8 @@ class AudioSet(Dataset):
 		self.audio_fnames = np.asarray(self.combined_df.iloc[:, 0])
 		# second column contains the labels (separated by # for multi-label)
 		self.labels = np.asarray(self.combined_df.iloc[:, 1])
-		
+		# third column contains the identifier (balanced_train_segments or unbalanced_train_segments)
+		self.ident = np.asarray(self.combined_df.iloc[;, 2])
 	
 		def __len__(self):
 			return len(self.audio_fnames)
@@ -67,7 +68,7 @@ class AudioSet(Dataset):
 		def __getitem__(self, idx):
 			# load .wav audio
 			audio_fname = self.audio_fnames[idx]
-			if f"{audio_fname}.wav" in os.listdir(os.path.join(self.base_dir, "balanced_train_segments")):
+			if self.ident[idx] == "balanced_train_segments":
 				audio_fpath = os.path.join(os.path.join(*[self.base_dir, "balanced_train_segments", f"{audio_fname}.wav"]))
 			else:
 				audio_fpath = os.path.join(os.path.join(*[self.base_dir, "unbalanced_train_segments", f"{audio_fname}.wav"]))
