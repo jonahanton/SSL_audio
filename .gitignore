@@ -4,7 +4,7 @@ data/audioset/balanced_train_segments/
 data/audioset/unbalanced_train_segments/
 proj_venv
 condor
-
+misc/
 
 
 # Byte-compiled / optimized / DLL files

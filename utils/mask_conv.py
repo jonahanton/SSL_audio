@@ -1,8 +1,6 @@
 """
 Mask random patches in input lms (fraction to mask controlled by parameter 'mask_ratio').
-Separate functions for masking lms when using:
-	a) convolutional encoder (e.g. resnet)
-	b) transformer encoder
+Only valid approach when using a convolutional encoder (e.g., resnet). 
 Code adapted from https://github.com/facebookresearch/mae/blob/main/models_mae.py.
 """
 
