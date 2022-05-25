@@ -18,38 +18,40 @@ from functools import partial
 
 
 class MaskedSpectrogramTransformer(nn.Module):
+    
     def __init__(
         img_size=(64, 96),
-		patch_size=(16, 16),
-		in_chans=1,
-		embed_dim=768,
-		depth=12,
-		num_heads=12,
-		mlp_ratio=4.,
-		norm_layer=nn.LayerNorm,
+	patch_size=(16, 16),
+	in_chans=1,
+	embed_dim=768,
+	depth=12,
+	num_heads=12,
+	mlp_ratio=4.,
+	norm_layer=nn.LayerNorm,
 	):
-        super().__init__()
+        
+	super().__init__()
 
-		# projects input to have dim. embed_dim (conv2d layer, kernel_size=patch_size, stride=patch_size)
-		self.patch_embed = PatchEmbed(img_size, patch_size, in_chans, embed_dim)
-		num_patches = self.patch_embed.num_patches
+	# projects input to have dim. embed_dim (conv2d layer, kernel_size=patch_size, stride=patch_
+        self.patch_embed = PatchEmbed(img_size, patch_size, in_chans, embed_dim)
+	num_patches = self.patch_embed.num_patches
 
-		# [CLS] token
-		self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
-		# (learned) positional embeddings
-		self.pos_embed = nn.Parameter(torch.zeros(1, num_patches+1, embed_dim))
+	# [CLS] token
+	self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
+	# (learned) positional
+        self.pos_embed = nn.Parameter(torch.zeros(1, num_patches+1, embed_dim))
 
-		self.blocks = nn.ModuleList([
-			Block(embed_dim, num_heads, mlp_ratio, qkv_bias=True,
-			      qk_scale=None, norm_layer=norm_layer)
-			for i in range(depth)])
+	self.blocks = nn.ModuleList([
+	    Block(embed_dim, num_heads, mlp_ratio, qkv_bias=True,
+		  qk_scale=None, norm_layer=norm_layer)
+	    for i in range(depth)])
 
-		self.norm = norm_layer(embed_dim)
+	self.norm = norm_layer(embed_dim)
 
-		# timm's trunc_normal_(std=.02) is effectively normal_(std=.02) as cutoff is too big (2.)
-        	torch.nn.init.normal_(self.cls_token, std=.02)
-		torch.nn.init.normal_(self.pos_embed, std=.02)
-		self.apply(self._init_weights)
+	# timm's trunc_normal_(std=.02) is effectively normal_(std=.02) as cutoff is too big (2.)
+        torch.nn.init.normal_(self.cls_token, std=.02)
+	torch.nn.init.normal_(self.pos_embed, std=.02)
+	self.apply(self._init_weights)
 
                 
     def _init_weights(self, m):
@@ -69,26 +71,26 @@ class MaskedSpectrogramTransformer(nn.Module):
     Per-sample shuffling is done by argsort random noise.
     x: [N, L, D], sequence
     """
-    N, L, D = x.shape  # batch, length, dim
+        N, L, D = x.shape  # batch, length, dim
 		
-    if isinstance(mask_ratio, (torch.Tensor, np.ndarray, list, tuple)):
-    # Prefixed mask
-    mask = mask_ratio.clone().detach()
-    ids_shuffle = torch.argsort(mask.reshape(N, -1), dim=1)
-    ids_restore = torch.argsort(ids_shuffle, dim=1)
-    len_keep = (mask[0] == 0).sum()
-    elif mask_ratio == 0:
-        # No mask
-        mask = torch.zeros([N, L], device=x.device)
-	ids_restore = torch.tensor(list(range(L))).to(torch.int)
-	return x, mask, ids_restore
-    else:
-	# Random mask
-	len_keep = int(L * (1 - mask_ratio))
-	noise = torch.rand(N, L, device=x.device)  # noise in [0, 1]
-	# sort noise for each sample
-	ids_shuffle = torch.argsort(noise, dim=1)  # ascend: small is keep, large is remove
-	ids_restore = torch.argsort(ids_shuffle, dim=1)
+        if isinstance(mask_ratio, (torch.Tensor, np.ndarray, list, tuple)):
+            # Prefixed mask
+            mask = mask_ratio.clone().detach()
+            ids_shuffle = torch.argsort(mask.reshape(N, -1), dim=1)
+            ids_restore = torch.argsort(ids_shuffle, dim=1)
+            len_keep = (mask[0] == 0).sum()
+        elif mask_ratio == 0:
+            # No mask
+            mask = torch.zeros([N, L], device=x.device)
+	    ids_restore = torch.tensor(list(range(L))).to(torch.int)
+	    return x, mask, ids_restore
+        else:
+	    # Random mask
+	    len_keep = int(L * (1 - mask_ratio))
+	    noise = torch.rand(N, L, device=x.device)  # noise in [0, 1]
+	    # sort noise for each sample
+	    ids_shuffle = torch.argsort(noise, dim=1)  # ascend: small is keep, large is remove
+	    ids_restore = torch.argsort(ids_shuffle, dim=1)
         
         # keep the first subset
         ids_keep = ids_shuffle[:,:len_keep]
