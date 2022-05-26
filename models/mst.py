@@ -118,7 +118,7 @@ class MaskedSpectrogramTransformer(nn.Module):
 		# return cls token global clip representation
 		x = x[:, 0]
 		
-		return x, mask, ids_restore
+		return x
 		
 	
 

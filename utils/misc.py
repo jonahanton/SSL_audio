@@ -61,3 +61,11 @@ class LARS(torch.optim.Optimizer):
                 mu.mul_(g['momentum']).add_(dp)
 
                 p.add_(mu, alpha=-g['lr'])
+
+
+
+if __name__ == "__main__":
+
+    import pprint
+    cfg = load_yaml_config('/vol/bitbucket/jla21/proj/config.yaml')
+    pprint.pprint(cfg)

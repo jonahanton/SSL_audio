@@ -21,11 +21,12 @@ def off_diagonal(x):
 
 class BarlowTwins(nn.Module):
 	
-	def __init__(self, backbone, projection_sizes, lambd):
+	def __init__(self, backbone, projection_sizes, lambd, mask_ratio):
 		
 		super().__init__()
 		self.backbone = backbone
 		self.lambd = lambd
+		self.mask_ratio = mask_ratio
 		
 		# projector
 		sizes = projection_sizes
@@ -42,8 +43,8 @@ class BarlowTwins(nn.Module):
 		
 	
 	def forward(self, y1, y2):
-		z1 = self.projector(self.backbone(y1))
-		z2 = self.projector(self.backbone(y2))
+		z1 = self.projector(self.backbone(y1, mask_ratio=0.))
+		z2 = self.projector(self.backbone(y2, mask_ratio=self.mask_ratio))
 		
 		# empirical cross-correlation matrix
 		c = self.bn(z1).T @ self.bn(z2)

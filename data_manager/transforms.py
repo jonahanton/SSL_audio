@@ -1,3 +1,6 @@
+import torch
+import torch.nn as nn
+
 from audiomentations import Compose, TimeStretch, PitchShift
 from data_manager.augmentations_lms import Mixup, MixGaussianNoise
 
@@ -6,7 +9,7 @@ def make_transforms(cfg):
 	
 	# transforms to raw waveform (.wav) -> time strech, pitch shift
 	wav_transform = Compose([
-		TimeStretch(min_rate=cfg.transform_min_rate, max_rate=cfg.transform_max_rate, p=cfg.transform_ts_p)
+		TimeStretch(min_rate=cfg.transform_min_rate, max_rate=cfg.transform_max_rate, p=cfg.transform_ts_p),
 		PitchShift(min_semitones=cfg.transform_min_semitones, max_semitones=cfg.transform_max_semitones, p=cfg.transform_ps_p),
 	])
 	

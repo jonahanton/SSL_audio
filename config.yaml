@@ -19,19 +19,23 @@ transform_min_semitones: -8
 transform_max_semitones: 8
 transform_ps_p: 0.6
 # Transform lms
-transform_mixup: True
-transform_gaussnoise: False
+transform_mixup: true
+transform_gaussnoise: false
 transform_mixup_ratio: 0.4
 transform_gaussnoise_ratio: 0.4
 
 # Encoder parameters
-encoder_type: 'transformer'
-encoder_size: 'small'
+encoder_type: transformer
+encoder_size: small
 encoder_ps: [16,16]
+encoder_mask_ratio: 0.75
 
 # Training parameters
-device: 'cuda'
+device: cpu
 epochs: 10
-bs: 256
-lr: None
-blr: 0.001
+bs: 1024
+lr_w: 0.2
+lr_b: 0.0048
+wd: 0.0000015
+lambd: 0.005
+projection_sizes: null
