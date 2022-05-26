@@ -31,7 +31,7 @@ encoder_ps: [16,16]
 encoder_mask_ratio: 0.75
 
 # Training parameters
-device: gpu
+device: cuda
 epochs: 1
 bs: 256
 lr_w: 0.2

@@ -75,7 +75,7 @@ class AudioSet(Dataset):
 			audio_fpath = os.path.join(os.path.join(*[self.base_dir, "unbalanced_train_segments", f"{audio_fname}.wav"]))
 			
 		wav, sr = torchaudio.load(audio_fpath)
-		# assert sr = self.cfg.sample_rate, f"Convert .wav files to {self.cfg.sample_rate} Hz. {audio_fname}.wav has {sr} Hz."
+		assert sr == self.cfg.sample_rate, f"Convert .wav files to {self.cfg.sample_rate} Hz. {audio_fname}.wav has {sr} Hz."
 		
 		# if audio has 2 channels, convert to mono
 		if wav.shape[0] == 2:
@@ -96,7 +96,7 @@ class AudioSet(Dataset):
 		# transforms to raw waveform (must convert wav to np array)
 		# note that transforms to raw waveform don't have cuda compatibility (done via audiomentations package, which uses librosa)
 		if self.wav_transform:
-			wav_tf = self.wav_transform(wav.numpy())
+			wav_tf = self.wav_transform(samples=wav.numpy(), sample_rate=self.cfg.sample_rate)
 			wav_tf = torch.tensor(wav_tf)
 			
 		# to log mel spectogram -> (1, n_mels, time)

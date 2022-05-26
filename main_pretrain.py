@@ -44,7 +44,7 @@ def main():
     stats_file = open(cfg.checkpoint_dir / 'stats.txt', 'a', buffering=1)
 
     name = (f'BTA-{cfg.encoder_type}-ps{cfg.encoder_ps[0]}x{cfg.encoder_ps[1]}'
-            f'-maskratio{cfg.mask_ratio}-e{cfg.epochs}-bs{cfg.bs}')
+            f'-maskratio{cfg.encoder_mask_ratio}-e{cfg.epochs}-bs{cfg.bs}')
 
     # data preparation
     wav_transform, lms_transform = make_transforms(cfg)
@@ -95,7 +95,7 @@ def main():
     optimizer = LARS(
         parameters,
         lr=0, 
-        weight_decay=cfg.weight_decay,
+        weight_decay=cfg.wd,
         weight_decay_filter=True,
         lars_adaptation_filter=True,
     )
