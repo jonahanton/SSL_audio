@@ -11,6 +11,8 @@ References:
 import torch
 import torch.nn as nn
 
+import numpy as np
+
 import timm
 from timm.models.vision_transformer import PatchEmbed, Block
 
@@ -105,7 +107,7 @@ class MaskedSpectrogramTransformer(nn.Module):
 		
 		# append cls token
 		cls_token = self.cls_token + self.pos_embed[:,:1,:]
-		cls_token = cls_token.expand(x.shape[0], -1, -1)  # expand dim 0 of cls token to equal batch size
+		cls_tokens = cls_token.expand(x.shape[0], -1, -1)  # expand dim 0 of cls token to equal batch size
 		x = torch.cat((cls_tokens, x), dim=1)
 		
 		# apply Transformer blocks
@@ -131,8 +133,13 @@ def mst_vit_base_p16x16(patch_size=(16,16), **kwargs):
 	return model
 
 
+def mst_vit_small_p16x16(patch_size=(16,16), **kwargs):
 
-if __name__ == "__main__":
+	model = MaskedSpectrogramTransformer(
+		patch_size=patch_size, embed_dim=384, depth=12, num_heads=6, mlp_ratio=4,
+		norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
 
-	model = mst_vit_base_p16x16()
-	print(model)
+	return model
+
+
+

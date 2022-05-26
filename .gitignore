@@ -5,6 +5,7 @@ data/audioset/unbalanced_train_segments/
 proj_venv
 condor
 misc/
+*/__init__.py
 
 
 # Byte-compiled / optimized / DLL files
