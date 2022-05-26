@@ -129,7 +129,6 @@ def mst_vit_base_p16x16(patch_size=(16,16), **kwargs):
 	model = MaskedSpectrogramTransformer(
 		patch_size=patch_size, embed_dim=768, depth=12, num_heads=12, mlp_ratio=4,
 		norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
-		
 	return model
 
 
@@ -138,7 +137,14 @@ def mst_vit_small_p16x16(patch_size=(16,16), **kwargs):
 	model = MaskedSpectrogramTransformer(
 		patch_size=patch_size, embed_dim=384, depth=12, num_heads=6, mlp_ratio=4,
 		norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
+	return model
 
+
+def mst_vit_tiny_p16x16(patch_size=(16,16), **kwargs):
+
+	model = MaskedSpectrogramTransformer(
+		patch_size=patch_size, embed_dim=192, depth=12, num_heads=3, mlp_ratio=4,
+		norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
 	return model
 
 
@@ -149,4 +155,7 @@ def get_mst_model(size='base', patch_size=(16,16), **kwargs):
 	elif size == 'small':
 		if patch_size == (16,16):
 			return mst_vit_small_p16x16(**kwargs)
+	elif size == 'tiny':
+		if patch_size == (16,16):
+			return mst_vit_tiny_p16x16(**kwargs)
 

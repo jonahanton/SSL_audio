@@ -26,16 +26,18 @@ transform_gaussnoise_ratio: 0.4
 
 # Encoder parameters
 encoder_type: transformer
-encoder_size: small
+encoder_size: tiny
 encoder_ps: [16,16]
 encoder_mask_ratio: 0.75
 
 # Training parameters
-device: cpu
-epochs: 10
-bs: 1024
+device: gpu
+epochs: 1
+bs: 256
 lr_w: 0.2
 lr_b: 0.0048
 wd: 0.0000015
 lambd: 0.005
 projection_sizes: null
+print_freq: 100
+checkpoint_dir: ./checkpoint/

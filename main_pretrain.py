@@ -5,6 +5,7 @@ References:
     https://github.com/nttcslab/byol-a/blob/master/train.py
 """
 
+import argparse
 import os
 import sys
 import numpy as np
@@ -13,6 +14,7 @@ from pathlib import Path
 import time
 import multiprocessing
 import math
+import json
 
 import torch
 from torch import nn, optim
@@ -24,10 +26,25 @@ from models.mst import get_mst_model
 from utils.misc import load_yaml_config, LARS
 
 
-def main(config_path):
-    
-    cfg = load_yaml_config(config_path)
+parser = argparse.ArgumentParser(description='Barlow Twins Training')
+parser.add_argument('--config-path', type=str, default='./config.yaml',
+                    help='path to .yaml config file')
+
+
+def main():
+
+    # parse args
+    args = parser.parse_args()
+    # load args from .ymal config file
+    cfg = load_yaml_config(args.config_path)
     device = torch.device(cfg.device)
+
+    cfg.checkpoint_dir = Path(cfg.checkpoint_dir)
+    cfg.checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    stats_file = open(cfg.checkpoint_dir / 'stats.txt', 'a', buffering=1)
+
+    name = (f'BTA-{cfg.encoder_type}-ps{cfg.encoder_ps[0]}x{cfg.encoder_ps[1]}'
+            f'-maskratio{cfg.mask_ratio}-e{cfg.epochs}-bs{cfg.bs}')
 
     # data preparation
     wav_transform, lms_transform = make_transforms(cfg)
@@ -83,8 +100,8 @@ def main(config_path):
         lars_adaptation_filter=True,
     )
 
-
     # training loop
+    start_time = time.time()
     for epoch in range(cfg.epochs):
         for step, (y, y_tf) in enumerate(loader, start=epoch * len(loader)):
             y = y.to(device)
@@ -97,7 +114,25 @@ def main(config_path):
             loss.backward()
             optimizer.step()
 
-
+            if step % cfg.print_freq == 0:
+                stats = dict(
+                    epoch=epoch, 
+                    step=step,
+                    lr_weights=optimizer.param_groups[0]['lr'],
+                    lr_biases=optimizer.param_groups[1]['lr'],
+                    loss=loss.item(),
+                    time=int(time.time() - start_time),
+                )
+                print(json.dumps(stats))
+                print(json.dumps(stats), file=stats_file)
+        
+        # save checkpoint after every epoch
+        state = dict(
+            epoch=epoch+1,
+            model=bt_model.state_dict(),
+            optimizer=optimizer.state_dict(),
+        )
+        torch.save(state, cfg.checkpoint_dir / f'{name}_checkpoint{epoch+1}.')
 
 
 def adjust_learning_rate(cfg, optimizer, loader, step):
@@ -118,6 +153,4 @@ def adjust_learning_rate(cfg, optimizer, loader, step):
 
 
 if __name__ == "__main__":
-
-    config_path = 'config.yaml'
-    main(config_path)
+    main()

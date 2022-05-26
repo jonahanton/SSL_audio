@@ -6,6 +6,7 @@ proj_venv
 condor
 misc/
 */__init__.py
+checkpoint
 
 
 # Byte-compiled / optimized / DLL files
