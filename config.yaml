@@ -23,3 +23,15 @@ transform_mixup: True
 transform_gaussnoise: False
 transform_mixup_ratio: 0.4
 transform_gaussnoise_ratio: 0.4
+
+# Encoder parameters
+encoder_type: 'transformer'
+encoder_size: 'small'
+encoder_ps: [16,16]
+
+# Training parameters
+device: 'cuda'
+epochs: 10
+bs: 256
+lr: None
+blr: 0.001

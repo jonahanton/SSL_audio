@@ -22,7 +22,7 @@ import pandas as pd
 
 class AudioSet(Dataset):
 	
-	def __init__(self, cfg, base_dir, wav_transform=None, lms_transform=None):
+	def __init__(self, cfg, base_dir="data/audioset", wav_transform=None, lms_transform=None):
 		
 		super().__init__()
 		

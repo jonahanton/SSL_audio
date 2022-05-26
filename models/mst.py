@@ -142,4 +142,11 @@ def mst_vit_small_p16x16(patch_size=(16,16), **kwargs):
 	return model
 
 
+def get_mst_model(size='base', patch_size=(16,16), **kwargs):
+	if size == 'base':
+		if patch_size == (16,16):
+			return mst_vit_base_p16x16(**kwargs)
+	elif size == 'small':
+		if patch_size == (16,16):
+			return mst_vit_small_p16x16(**kwargs)
 
