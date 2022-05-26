@@ -27,7 +27,7 @@ from utils.misc import load_yaml_config, LARS
 
 
 parser = argparse.ArgumentParser(description='Barlow Twins Training')
-parser.add_argument('--config-path', type=str, default='./config.yaml',
+parser.add_argument('-cp', '--config-path', type=str, default='./config.yaml',
                     help='path to .yaml config file')
 
 
