@@ -43,7 +43,6 @@ optimizer:
   batch_size_per_gpu: 64
 meta:
   use_fp16: true
-  distributed: false
   dist_url: env://
 checkpoint:
   save_epoch: 1
