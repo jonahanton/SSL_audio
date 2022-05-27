@@ -25,7 +25,7 @@ def main():
     # parse args
     args = parser.parse_args()
     # load args from .ymal config file
-    cfg = load_yaml_config(args.config_path)
+    cfg = utils.load_yaml_config(args.config_path)
 
     # update path for logging
     name = (f'{cfg.model.encoder.type}-ps{cfg.model.encoder.ps[0]}x{cfg.model.encoder.ps[1]}'
