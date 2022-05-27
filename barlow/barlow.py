@@ -17,6 +17,10 @@ import torch.backends.cudnn as cudnn
 import time
 import datetime
 import numpy as np
+import sys
+import math
+import os
+from pathlib import Path
 
 from utils import utils
 from data_manager.audioset import AudioSetLoader
@@ -37,15 +41,13 @@ class BarlowTwinsTrainer:
 			cudnn.benchmark = True
 		else:
 			self.device = torch.device('cpu')
+
 		self.contruct_model()
 
 		# checkpoint path
 		self.ckpt_path = self.cfg.checkpoint.ckpt_path.format(
 			self.time_stamp, self.cfg.model.encoder.type, {}
 		)
-
-		# logging
-		self.logging = utils.get_std_logging()
 
 
 	def construct_model(self):
@@ -87,9 +89,9 @@ class BarlowTwinsTrainer:
 		if self.cfg.optimizer.type == 'adamw':
 			self.optimizer = torch.optim.AdamW(params_groups)  # to use with ViTs
 		# for mixed precision training
-		fp16_scaler = None
+		self.fp16_scaler = None
 		if cfg.meta.use_fp16:
-			fp16_scaler = torch.uda.amp.GradScaler()
+			self.fp16_scaler = torch.cuda.amp.GradScaler()
 		
 		"""*****init schedulers*****"""
 		self.lr_schedule = utils.cosine_scheduler(
@@ -105,19 +107,80 @@ class BarlowTwinsTrainer:
 			epochs=self.cfg.optimizer.epochs,
 			niter_per_ep=len(self.data_loader),
 		)
+	
 
+	def train_one_epoch(self, epoch):
+		
+		metric_logger = utils.MetricLogger(delimiter=" ")
+		header = f'Epoch: [{epoch}/{self.cfg.optimizer.epochs}]'
 
+		for iteration, (y1, y2) in enumerate(metric_logger.log_every(self.data_loader, 10, header)):
+			# update weight decay and learning rate according to their schedule 
+			iteration = len(self.data_loader) * epoch + iteration  # global training iteration
+			for i, param_group in enumerate(self.optimizer.param_groups):
+				param_group["lr"] = self.lr_schedule[iteration]
+				if i == 0:  # only the first group is regularized
+					param_group["weight_decay"] = self.wd_schedule[iteration]
+			
+			# move to gpu
+			y1 = y1.cuda(non_blocking=True)
+			y2 = y2.cuda(non_blocking=True)
 
+			# forward passes + compute barlow twins loss
+			with torch.cuda.amp.autocast(self.fp16_scaler is not None):
+				loss = self.model(y1, y2)
+			
+			if not math.isfinite(loss.item()):
+				print(f"Loss is {loss.item()}, stopping training", force=True)
+				sys.exit(1)
 
+			# gradient update
+			self.optimizer.zero_grad()
+			if self.fp16_scaler is None:
+				loss.backward()
+				self.optimizer.step()
+			else:
+				fp16_scaler.scale(loss).backward()
+				fp16_scaler.step(optimizer)
+				fp16_scaler.update()
 
+			# logging 
+			torch.cuda.synchronize()
+			metric_logger.update(loss=loss.item())
+			metric_logger.update(lr=self.optimizer.param_groups[0]["lr"])
+			metric_logger.update(wd=self.optimizer.param_groups[0]["weight_decay"])
+		
+		# gather the stats from all processes
+		metric_logger.synchronize_between_processes()
+		print("Averaged stats:", metric_logger)
 
+		# return training stats
+		train_stats = {k: meter.global_avg for k, meter in metric_logger.meters.items()}
 
+		# save checkpoint
+		if epoch % self.cfg.checkpoint.save_epoch == 0:
+			self.save_checkpoint(epoch, train_stats)
 
-def off_diagonal(x):
-    # return a flattened view of the off-diagonal elements of a square matrix
-    n, m = x.shape
-    assert n == m
-    return x.flatten()[:-1].view(n - 1, n + 1)[:, 1:].flatten()
+	
+	def save_checkpoint(self, epoch, train_stats):
+		save_dict = {
+			'backbone': self.model.backbone.state_dict(),
+			'opt': self.optimizer.state_dict().
+			'epoch': epoch + 1,
+			'config': self.cfg,
+		}
+		if self.fp16_scaler is not None:
+			save_dict['fp16_scaler'] = self.fp16_scaler.state_dict()
+		
+		utils.save_on_master(save_dict, self.ckpt_path.format(f'epoch-{epoch}'))
+		
+		log_stats = {
+			**{f'train_{k}':: v for k, v in train_stats.items()},
+			'epoch': epoch,
+		}
+		if utils.is_main_process():
+			with (Path(self.cfg.logging.log_path)).open("a") as f:
+				f.write(json.dumps(log_stats) + "\n")
 
 
 class BarlowTwins(nn.Module):
@@ -152,7 +215,7 @@ class BarlowTwins(nn.Module):
 		
 		# sum the cross-correlation matrix between all gpus
 		c.div_(z1.shape[0])
-		# torch.distributed.all_reduce(c)
+		torch.distributed.all_reduce(c)
 		
 		on_diag = torch.diagonal(c).add_(-1).pow_(2).sum()
 		off_diag = off_diagonal(c).pow_(2).sum()
@@ -160,4 +223,8 @@ class BarlowTwins(nn.Module):
 		return loss
 
 
-
+def off_diagonal(x):
+    # return a flattened view of the off-diagonal elements of a square matrix
+    n, m = x.shape
+    assert n == m
+    return x.flatten()[:-1].view(n - 1, n + 1)[:, 1:].flatten()

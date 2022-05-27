@@ -44,10 +44,9 @@ optimizer:
 meta:
   use_fp16: true
   distributed: false
+  dist_url: env://
 checkpoint:
-  resume_path:
-  save_epoch: 10
+  save_epoch: 1
   ckpt_path: checkpoint/models/{}_{}_{}.pth.tar
 logging:
-  step: 100
-  log_path: checkpoint/bt_logs/
+  log_path: checkpoint/logs/{}_log.txt
