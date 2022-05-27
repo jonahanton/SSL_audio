@@ -35,13 +35,6 @@ class BarlowTwinsTrainer:
 		self.time_stamp = self.cfg.checkpoint.get('time_stamp',
 			datetime.datetime.now().strftime('%m%d_%H-%M'))
 
-		if torch.cuda.is_available():
-			self.device = torch.device(f'cuda:{self.cfg.local_rank}')
-			torch.cuda.set_device(self.device)
-			cudnn.benchmark = True
-		else:
-			self.device = torch.device('cpu')
-
 		self.contruct_model()
 
 		# checkpoint path
@@ -77,11 +70,11 @@ class BarlowTwinsTrainer:
         	lambd=self.cfg.model.lambd,
         	mask_ratio=self.cfg.model.encoder.mask_ratio,
 		)
-		# move networks to gpu
+		# move model to (current) gpu
 		self.model = self.model.cuda()
 		# synchronize batch norms
 		self.model = nn.SyncBatchNorm.convert_sync_batchnorm(self.model)
-		# ddp
+		# wrap model with ddp
 		self.model = nn.parallel.DistributedDataParallel(self.model, device_ids=[self.cfg.gpu])
 		
 		"""*****prepare optimizer*****"""

@@ -10,6 +10,7 @@ import argparse
 import torch
 import torch.distributed as dist
 import torch.backends.cudnn as cudnn
+import torch.multiprocessing as mp
 
 from barlow.barlow import BarlowTwinsTrainer
 from utils import utils
@@ -34,6 +35,8 @@ def main():
 
     # set up ddp
     utils.init_distributed_mode(cfg)
+    # fix random seeds
+    utils.fix_random_seeds(cfg.meta.seed)
     cudnn.benchmark = True
 
     trainer = BarlowTwinsTrainer(cfg)

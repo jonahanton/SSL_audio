@@ -18,6 +18,15 @@ import yaml
 from collections import deque
 
 
+def fix_random_seeds(seed=32):
+    """
+    Fix random seeds.
+    """
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    np.random.seed(seed)
+
+
 def load_yaml_config(path_to_config):
     """
     Loads yaml configuration settings as an EasyDict object.
@@ -268,7 +277,7 @@ def init_distributed_mode(cfg):
         cfg.rank = int(os.environ['SLURM_PROCID'])
         cfg.gpu = cfg.rank % torch.cuda.device_count()
     # launched naively with `python main_pretrain.py`
-    # manually add MASTER_ADDR and MASTER_PORT to evn variables
+    # manually add MASTER_ADDR and MASTER_PORT to env variables
     elif torch.cuda.is_available():
         print('Will run the code on one GPU.')
         cfg.rank, cfg.gpu, cfg.world_size = 0, 0, 1

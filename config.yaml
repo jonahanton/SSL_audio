@@ -42,6 +42,7 @@ optimizer:
   epochs: 100
   batch_size_per_gpu: 64
 meta:
+  seed: 32
   use_fp16: true
   dist_url: env://
 checkpoint:
