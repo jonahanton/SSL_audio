@@ -11,13 +11,16 @@ import torch.nn.functional as F
 import torchaudio.functional as AF
 import torchaudio.transforms as AT
 
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader
 
 import os
 import numpy as np
 import librosa
 import random
 import pandas as pd
+import multiprocessing
+
+from data_manager.transforms import make_transforms
 
 
 class AudioSet(Dataset):
@@ -31,15 +34,15 @@ class AudioSet(Dataset):
 		self.base_dir = base_dir
 		self.wav_transform = wav_transform 
 		self.lms_transform = lms_transform
-		self.unit_length = int(cfg.unit_sec * cfg.sample_rate)
+		self.unit_length = int(cfg.data.preprocess.unit_sec * cfg.data.preprocess.sample_rate)
 		self.to_melspecgram = AT.MelSpectrogram(
-			sample_rate=cfg.sample_rate,
-			n_fft=cfg.n_fft,
-			win_length=cfg.win_length,
-			hop_length=cfg.hop_length,
-			n_mels=cfg.n_mels,
-			f_min=cfg.f_min,
-			f_max=cfg.f_max,
+			sample_rate=cfg.data.preprocess.sample_rate,
+			n_fft=cfg.data.preprocess.n_fft,
+			win_length=cfg.data.preprocess.win_length,
+			hop_length=cfg.data.preprocess.hop_length,
+			n_mels=cfg.data.preprocess.n_mels,
+			f_min=cfg.data.preprocess.f_min,
+			f_max=cfg.data.preprocess.f_max,
 			power=2,
 		)
 		
@@ -75,7 +78,7 @@ class AudioSet(Dataset):
 			audio_fpath = os.path.join(os.path.join(*[self.base_dir, "unbalanced_train_segments", f"{audio_fname}.wav"]))
 			
 		wav, sr = torchaudio.load(audio_fpath)
-		assert sr == self.cfg.sample_rate, f"Convert .wav files to {self.cfg.sample_rate} Hz. {audio_fname}.wav has {sr} Hz."
+		assert sr == self.cfg.data.preprocess.sample_rate, f"Convert .wav files to {self.cfg.data.preprocess.sample_rate} Hz. {audio_fname}.wav has {sr} Hz."
 		
 		# if audio has 2 channels, convert to mono
 		if wav.shape[0] == 2:
@@ -96,18 +99,50 @@ class AudioSet(Dataset):
 		# transforms to raw waveform (must convert wav to np array)
 		# note that transforms to raw waveform don't have cuda compatibility (done via audiomentations package, which uses librosa)
 		if self.wav_transform:
-			wav_tf = self.wav_transform(samples=wav.numpy(), sample_rate=self.cfg.sample_rate)
-			wav_tf = torch.tensor(wav_tf)
-			
+			wav_tf1 = self.wav_transform(samples=wav.numpy(), sample_rate=self.cfg.data.preprocess.sample_rate)
+			wav_tf1 = torch.tensor(wav_tf1)
+			wav_tf2 = self.wav_transform(samples=wav.numpy(), sample_rate=self.cfg.data.preprocess.sample_rate)
+			wav_tf2 = torch.tensor(wav_tf2)
+
 		# to log mel spectogram -> (1, n_mels, time)
-		lms = (self.to_melspecgram(wav) + torch.finfo().eps).log().unsqueeze(0)
-		lms_tf = (self.to_melspecgram(wav_tf) + torch.finfo().eps).log().unsqueeze(0)
+		lms_tf1 = (self.to_melspecgram(wav_tf1) + torch.finfo().eps).log().unsqueeze(0)
+		lms_tf2 = (self.to_melspecgram(wav_tf2) + torch.finfo().eps).log().unsqueeze(0)
 		
 		# transform to lms
 		if self.lms_transform:
-			lms_tf = self.lms_transform(lms_tf)
+			lms_tf1 = self.lms_transform(lms_tf1)
+			lms_tf2 = self.lms_transform(lms_tf2)
 		
-		# returns lms w/o + w/ augmentations applied
-		return lms, lms_tf
+		# returns 2 lms's
+		return lms_tf1, lms_tf2
 		
 			
+class AudioSetLoader:
+
+	def __init__(self, cfg):
+		self.cfg = cfg
+
+	def get_loader(self):
+		wav_transform, lms_transform = make_transforms(self.cfg)
+		dataset = AudioSet(self.cfg, wav_transform=wav_transform, lms_transform=lms_transform)
+
+		if self.cfg.meta.distributed:
+			sampler = torch.utils.data.distributed.DistributedSampler(
+				dataset,
+				num_replicas=cfg.world_size,
+				rank=cfg.rank,
+			)
+		else:
+			sampler = None
+		
+		loader = DataLoader(
+			dataset=dataset,
+			batch_size=self.cfg.optimizer.batch_size_per_gpu,
+			shuffle=(sampler is None),
+			num_workers=multiprocessing.cpu_count(),
+			pin_memory=True,
+			sampler=sampler,
+			drop_last=True,
+		)
+
+		return loader

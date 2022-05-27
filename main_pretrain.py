@@ -15,15 +15,16 @@ import time
 import multiprocessing
 import math
 import json
+import logging
 
 import torch
 from torch import nn, optim
 
-from barlow.barlow import BarlowTwins
+from barlow.barlow import BarlowTwins, BarlowTwinsTrainer
 from data_manager.audioset import AudioSet
 from data_manager.transforms import make_transforms
 from models.mst import get_mst_model
-from utils.misc import load_yaml_config, LARS
+from utils.misc import load_yaml_config, LARS, get_std_logging
 
 
 parser = argparse.ArgumentParser(description='Barlow Twins Training')
@@ -33,18 +34,27 @@ parser.add_argument('-cp', '--config-path', type=str, default='./config.yaml',
 
 def main():
 
+    # logging
+    logging = get_std_logging()
+
     # parse args
     args = parser.parse_args()
     # load args from .ymal config file
     cfg = load_yaml_config(args.config_path)
-    device = torch.device(cfg.device)
-
+    logger.info(f'Loaded params from config file: {cfg}')
+    
     cfg.checkpoint_dir = Path(cfg.checkpoint_dir)
     cfg.checkpoint_dir.mkdir(parents=True, exist_ok=True)
-    stats_file = open(cfg.checkpoint_dir / 'stats.txt', 'a', buffering=1)
 
     name = (f'BTA-{cfg.encoder_type}-ps{cfg.encoder_ps[0]}x{cfg.encoder_ps[1]}'
             f'-maskratio{cfg.encoder_mask_ratio}-e{cfg.epochs}-bs{cfg.bs}')
+
+    trainer = BarlowTwinsTrainer(cfg)
+
+
+
+
+    stats_file = open(cfg.checkpoint_dir / f'{name}_stats.txt', 'a', buffering=1)
 
     # data preparation
     wav_transform, lms_transform = make_transforms(cfg)
@@ -83,6 +93,7 @@ def main():
         mask_ratio=cfg.encoder_mask_ratio,
     )
     bt_model.to(device)
+    print(bt_model)
 
     param_weights = []
     param_biases = []
@@ -102,6 +113,7 @@ def main():
 
     # training loop
     start_time = time.time()
+    print('Starting Barlow Twins training')
     for epoch in range(cfg.epochs):
         for step, (y, y_tf) in enumerate(loader, start=epoch * len(loader)):
             y = y.to(device)
@@ -136,9 +148,9 @@ def main():
 
 
 def adjust_learning_rate(cfg, optimizer, loader, step):
-    max_steps = args.epochs * len(loader)
+    max_steps = cfg.epochs * len(loader)
     warmup_steps = 10 * len(loader)
-    base_lr = cfg.batch_size / 256
+    base_lr = cfg.bs / 256
     if step < warmup_steps:
         lr = base_lr * step / warmup_steps
     else:

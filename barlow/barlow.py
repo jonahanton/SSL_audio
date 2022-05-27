@@ -1,15 +1,116 @@
 """
 Implementation of Barlow Twins [Zbontar et al., 2021], 
 adapted from
-	https://github.com/MaxLikesMath/Barlow-Twins-Pytorch/blob/main/Twins/barlow.py
+	https://github.com/MaxLikesMath/Barlow-Twins-Pytorch
 	https://github.com/facebookresearch/barlowtwins
 using some code from
+	https://github.com/facebookresearch/dino
 	https://github.com/lucidrains/byol-pytorch
-
+	https://github.com/yaox12/BYOL-PyTorch
 """
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F 
+import torch.backends.cudnn as cudnn
+
+import time
+import datetime
+import numpy as np
+
+from utils import utils
+from data_manager.audioset import AudioSetLoader
+from models.mst import get_mst_model
+
+
+class BarlowTwinsTrainer:
+
+	def __init__(cfg):
+
+		self.cfg = cfg
+		self.time_stamp = self.cfg.checkpoint.get('time_stamp',
+			datetime.datetime.now().strftime('%m%d_%H-%M'))
+
+		if torch.cuda.is_available():
+			self.device = torch.device(f'cuda:{self.cfg.local_rank}')
+			torch.cuda.set_device(self.device)
+			cudnn.benchmark = True
+		else:
+			self.device = torch.device('cpu')
+		self.contruct_model()
+
+		# checkpoint path
+		self.ckpt_path = self.cfg.checkpoint.ckpt_path.format(
+			self.time_stamp, self.cfg.model.encoder.type, {}
+		)
+
+		# logging
+		self.logging = utils.get_std_logging()
+
+
+	def construct_model(self):
+
+		"""*****data loader*****"""
+		self.data_loader = AudioSetLoader(self.cfg).get_loader() 
+
+		"""*****build model*****"""
+		if self.cfg.model.encoder.type == 'transformer':
+			backbone = get_mst_model(
+				size=self.cfg.model.encoder.size,
+				patch_size=(self.cfg.model.encoder.ps[0], self.cfg.model.encoder.ps[1]),
+			)
+			if self.cfg.model.encoder.size == 'tiny':
+            	embed_dim = 192 
+        	elif self.cfg.model.encoder.size == 'small':
+            	embed_dim = 384
+        	elif self.cfg.model.encoder.size == 'base':
+            	embed_dim = 768
+
+    	if self.cfg.model.projection.sizes is None:
+        	self.cfg.model.projection.sizes = [embed_dim, 4*embed_dim, 4*embed_dim, 4*embed_dim]
+    
+    	self.model = BarlowTwins(
+        	backbone=backbone,
+        	projection_sizes=self.cfg.model.projection.sizes,
+        	lambd=cfg.model.lambd,
+        	mask_ratio=cfg.model.encoder.mask_ratio,
+		)
+		# move networks to gpu
+		self.model = self.model.cuda()
+		# synchronize batch norms
+		self.model = nn.SyncBatchNorm.convert_sync_batchnorm(self.model)
+		# ddp
+		self.model = nn.parallel.DistributedDataParallel(self.model, device_ids=[self.cfg.gpu])
+		
+		"""*****prepare optimizer*****"""
+		param_groups = utils.get_params_groups(self.model)
+		if self.cfg.optimizer.type == 'adamw':
+			self.optimizer = torch.optim.AdamW(params_groups)  # to use with ViTs
+		# for mixed precision training
+		fp16_scaler = None
+		if cfg.meta.use_fp16:
+			fp16_scaler = torch.uda.amp.GradScaler()
+		
+		"""*****init schedulers*****"""
+		self.lr_schedule = utils.cosine_scheduler(
+			base_value=self.cfg.optimizer.base_lr * (self.cfg.optimizer.batch_size / 256.),  # linear scaling rule
+			final_value=self.cfg.optimizer.final_lr,
+			epochs=self.cfg.optimizer.epochs, 
+			niter_per_ep=len(self.data_loader),
+			warmup_epochs=self.cfg.optimizer.warmup_epochs,
+		)
+		self.wd_schedule = utils.cosine_scheduler(
+			base_value=self.cfg.optimizer.weight_decay,
+			final_value=self.cfg.optimizer.final_weight_decay,
+			epochs=self.cfg.optimizer.epochs,
+			niter_per_ep=len(self.data_loader),
+		)
+
+
+
+
+
+
 
 
 def off_diagonal(x):
@@ -51,9 +152,12 @@ class BarlowTwins(nn.Module):
 		
 		# sum the cross-correlation matrix between all gpus
 		c.div_(z1.shape[0])
-		torch.distributed.all_reduce(c)
+		# torch.distributed.all_reduce(c)
 		
 		on_diag = torch.diagonal(c).add_(-1).pow_(2).sum()
 		off_diag = off_diagonal(c).pow_(2).sum()
 		loss = on_diag + self.lambd * off_diag
 		return loss
+
+
+

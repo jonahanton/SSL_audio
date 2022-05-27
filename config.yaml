@@ -1,43 +1,53 @@
-# Unit duration in seconds for one audio segment
-unit_sec: 0.95
-
-# FFT parameters
-sample_rate: 16000
-n_fft: 1024
-win_length: 1024
-hop_length: 160
-n_mels: 64
-f_min: 60
-f_max: 7800
-
-# Transform parameters
-# Transform raw waveform
-transform_min_rate: 0.5
-transform_max_rate: 1.5
-transform_ts_p: 0.6
-transform_min_semitones: -8
-transform_max_semitones: 8
-transform_ps_p: 0.6
-# Transform lms
-transform_mixup: true
-transform_gaussnoise: false
-transform_mixup_ratio: 0.4
-transform_gaussnoise_ratio: 0.4
-
-# Encoder parameters
-encoder_type: transformer
-encoder_size: tiny
-encoder_ps: [16,16]
-encoder_mask_ratio: 0.75
-
-# Training parameters
-device: cuda
-epochs: 1
-bs: 256
-lr_w: 0.2
-lr_b: 0.0048
-wd: 0.0000015
-lambd: 0.005
-projection_sizes: null
-print_freq: 100
-checkpoint_dir: ./checkpoint/
+data:
+  preprocess:
+    # Unit duration in seconds for one audio segment
+    unit_sec: 0.95
+    # FFT parameters
+    sample_rate: 16000
+    n_fft: 1024
+    win_length: 1024
+    hop_length: 160
+    n_mels: 64
+    f_min: 60
+    f_max: 7800
+  transform:
+    # Transform raw waveform
+    min_rate: 0.5
+    max_rate: 1.5
+    ts_p: 0.6
+    min_semitones: -8
+    max_semitones: 8
+    ps_p: 0.6
+    # Transform lms
+    mixup: true
+    gaussnoise: false
+    mixup_ratio: 0.4
+    gaussnoise_ratio: 0.4
+model:
+  encoder:
+    type: transformer
+    size: tiny
+    ps: [16,16]
+    mask_ratio: 0.75
+  projection:
+    sizes:
+  lambd: 5.0e-3
+optimizer:
+  type: adamw
+  base_lr: 1.0e-4
+  final_lr: 1.0e-6
+  warmup_epochs: 10
+  weight_decay: 0.04
+  final_weight_decay: 0.4
+  epochs: 100
+  batch_size_per_gpu: 64
+meta:
+  use_fp16: true
+  distributed: false
+checkpoint:
+  resume_path:
+  save_epoch: 10
+  ckpt_path: checkpoint/models/{}_{}_{}.pth.tar
+logging:
+  step: 100
+  log_path: checkpoint/bt_logs/
