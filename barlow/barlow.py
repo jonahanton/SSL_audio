@@ -74,8 +74,8 @@ class BarlowTwinsTrainer:
     	self.model = BarlowTwins(
         	backbone=backbone,
         	projection_sizes=self.cfg.model.projection.sizes,
-        	lambd=cfg.model.lambd,
-        	mask_ratio=cfg.model.encoder.mask_ratio,
+        	lambd=self.cfg.model.lambd,
+        	mask_ratio=self.cfg.model.encoder.mask_ratio,
 		)
 		# move networks to gpu
 		self.model = self.model.cuda()
