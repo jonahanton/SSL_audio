@@ -1,7 +1,5 @@
 # Repo specific files
-data/audioset/audioset-processing/
-data/audioset/balanced_train_segments/
-data/audioset/unbalanced_train_segments/
+data/
 proj_venv
 condor
 misc/
