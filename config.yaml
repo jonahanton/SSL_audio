@@ -15,8 +15,8 @@ data:
     min_rate: 0.5
     max_rate: 1.5
     ts_p: 0.6
-    min_semitones: -8
-    max_semitones: 8
+    min_semitones: -7
+    max_semitones: 7
     ps_p: 0.6
     # Transform lms
     mixup: true
