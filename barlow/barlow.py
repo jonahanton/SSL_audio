@@ -52,16 +52,11 @@ class BarlowTwinsTrainer:
 		if self.cfg.model.encoder.type == 'transformer':
 			backbone = get_mst_model(
 				size=self.cfg.model.encoder.size,
-				patch_size=(self.cfg.model.encoder.ps[0], self.cfg.model.encoder.ps[1]))
-			
-			if self.cfg.model.encoder.size == 'tiny':
-				embed_dim = 192 
-			elif self.cfg.model.encoder.size == 'small':
-				embed_dim = 384
-			elif self.cfg.model.encoder.size == 'base':
-				embed_dim = 768
-			
+				patch_size=(self.cfg.model.encoder.ps[0], self.cfg.model.encoder.ps[1])
+			)
 
+			embed_dim = backbone.embed_dim
+			
 		if self.cfg.model.projection.sizes is None:
 			self.cfg.model.projection.sizes = [embed_dim, 4*embed_dim, 4*embed_dim, 4*embed_dim]
 	
@@ -89,7 +84,7 @@ class BarlowTwinsTrainer:
 		
 		"""*****init schedulers*****"""
 		self.lr_schedule = utils.cosine_scheduler(
-			base_value=self.cfg.optimizer.base_lr * (self.cfg.optimizer.batch_size / 256.),  # linear scaling rule
+			base_value=self.cfg.optimizer.base_lr * (self.cfg.optimizer.batch_size_per_gpu * utils.get_world_size() / 256.),  # linear scaling rule
 			final_value=self.cfg.optimizer.final_lr,
 			epochs=self.cfg.optimizer.epochs, 
 			niter_per_ep=len(self.data_loader),
@@ -166,7 +161,7 @@ class BarlowTwinsTrainer:
 		if self.fp16_scaler is not None:
 			save_dict['fp16_scaler'] = self.fp16_scaler.state_dict()
 		
-		utils.save_on_master(save_dict, self.ckpt_path.format(f'epoch-{epoch}'))
+		utils.save_on_master(save_dict, self.ckpt_path.format(f'epoch-{epoch+1}'))
 		
 		log_stats = {
 			**{f'train_{k}': v for k, v in train_stats.items()},

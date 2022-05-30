@@ -4,7 +4,6 @@ Almost copy-paste from
     https://github.com/facebookresearch/dino/blob/main/run_with_submitit.py
     https://github.com/facebookresearch/deit/blob/main/run_with_submitit.py
 """
-
 import argparse
 import os
 import uuid 
@@ -12,13 +11,12 @@ from pathlib import Path
 import os
 
 import submitit 
-
 import main_pretrain
 
 def parse_args():
 
     parser = argparse.ArgumentParser("Submitit for BT-Audio", parents=[main_pretrain.get_args_parser()])
-    parser.add_argument("--ngpus", default=1, type=int, help="Number of gpus to request on each node")
+    parser.add_argument("--ngpus", default=2, type=int, help="Number of gpus to request on each node")
     parser.add_argument("--nodes", default=1, type=int, help="Number of nodes to request")
     parser.add_argument("--output_dir", default="", type=str)
     return parser.parse_args()
@@ -44,6 +42,7 @@ def get_init_file():
 class Trainer(object):
     def __init__(self, args):
         self.args = args
+        self.args.dist_url = get_init_file().as_uri()
 
     def __call__(self):
         self._setup_gpu_args()
@@ -72,15 +71,11 @@ def main():
     Path(args.output_dir).mkdir(parents=True, exist_ok=True)
     executor = submitit.AutoExecutor(folder=args.output_dir)
 
-    num_gpus_per_node = args.ngpus
-    nodes = args.nodes
-
     executor.update_parameters(
-        gpus_per_node=num_gpus_per_node,
-        tasks_per_node=num_gpus_per_node,  # one task per GPU
-        nodes=nodes,
+        gpus_per_node=args.ngpus,
+        tasks_per_node=args.ngpus, 
+        nodes=args.nodes,
     )
-
     executor.update_parameters(name="bt-audio")
 
     args.dist_url = get_init_file().as_uri()

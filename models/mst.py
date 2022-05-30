@@ -24,6 +24,8 @@ class MaskedSpectrogramTransformer(nn.Module):
 				 depth=12, num_heads=12, mlp_ratio=4., norm_layer=nn.LayerNorm):
 		super().__init__()
 
+		self.embed_dim = embed_dim 
+		
 		# projects input to have dim. embed_dim (conv2d layer, kernel_size=patch_size, stride=patch_size)
 		self.patch_embed = PatchEmbed(img_size, patch_size, in_chans, embed_dim)
 		num_patches = self.patch_embed.num_patches

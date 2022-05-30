@@ -36,17 +36,17 @@ optimizer:
   type: adamw
   base_lr: 1.0e-4
   final_lr: 1.0e-6
-  warmup_epochs: 10
+  warmup_epochs: 1
   weight_decay: 0.04
   final_weight_decay: 0.4
-  epochs: 100
-  batch_size_per_gpu: 64
+  epochs: 10
+  batch_size_per_gpu: 512
 meta:
   seed: 32
   use_fp16: true
-  dist_url: env://
 checkpoint:
   save_epoch: 1
   ckpt_path: checkpoint/models/{}_{}_{}.pth.tar
 logging:
   log_path: checkpoint/logs/{}_log.txt
+dist_url: env://

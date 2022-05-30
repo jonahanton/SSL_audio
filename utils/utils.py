@@ -16,6 +16,7 @@ from pathlib import Path
 from easydict import EasyDict
 import yaml
 from collections import deque
+from pprint import pprint
 
 
 def fix_random_seeds(seed=32):
@@ -261,6 +262,12 @@ def save_on_master(*args, **kwargs):
         torch.save(*args, **kwargs)
 
 
+def get_world_size():
+    if not is_dist_avail_and_initialized():
+        return 1
+    return dist.get_world_size()
+
+
 def is_main_process():
     return get_rank() == 0
 
@@ -272,6 +279,7 @@ def get_rank():
 
 
 def init_distributed_mode(cfg):
+
     # launced with torch.distributed.launch
     if 'RANK' in os.environ and 'WORLD_SIZE' in os.environ:
         cfg.rank = int(os.environ['RANK'])
@@ -294,7 +302,7 @@ def init_distributed_mode(cfg):
 
     dist.init_process_group(
         backend='nccl',
-        init_method=cfg.meta.dist_url,
+        init_method=cfg.dist_url,
         world_size=cfg.world_size,
         rank=cfg.rank,
     )
