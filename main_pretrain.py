@@ -15,18 +15,21 @@ import torch.multiprocessing as mp
 from barlow.barlow import BarlowTwinsTrainer
 from utils import utils
 
+def get_args_parser():
+    
+    parser = argparse.ArgumentParser(description='Barlow Twins Training', add_help=False)
+    parser.add_argument('-cp', '--config-path', type=str, default='./config.yaml',
+                        help='path to .yaml config file')
+    
+    return parser
 
-parser = argparse.ArgumentParser(description='Barlow Twins Training')
-parser.add_argument('-cp', '--config-path', type=str, default='./config.yaml',
-                    help='path to .yaml config file')
 
+def train_bt(args):
 
-def main():
-
-    # parse args
-    args = parser.parse_args()
-    # load args from .ymal config file
+    # load training params from .ymal config file
     cfg = utils.load_yaml_config(args.config_path)
+    # update config with any remaining arguments from args
+    utils.update_cfg_from_args(cfg, args)
 
     # update path for logging
     name = (f'{cfg.model.encoder.type}-ps{cfg.model.encoder.ps[0]}x{cfg.model.encoder.ps[1]}'
@@ -45,4 +48,6 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser('BT-A', parents=[get_args_parser()])
+    args = parser.parse_args()
+    train_bt(args)

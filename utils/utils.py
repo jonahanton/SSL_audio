@@ -40,6 +40,11 @@ def load_yaml_config(path_to_config):
     return cfg
 
 
+def update_cfg_from_args(cfg, args):
+    for k, v in vars(args).items():
+        cfg.setdefault(k, v)
+
+
 def get_std_logging():
     logging.basicConfig(
         stream=sys.stdout,

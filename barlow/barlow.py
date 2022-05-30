@@ -52,23 +52,24 @@ class BarlowTwinsTrainer:
 		if self.cfg.model.encoder.type == 'transformer':
 			backbone = get_mst_model(
 				size=self.cfg.model.encoder.size,
-				patch_size=(self.cfg.model.encoder.ps[0], self.cfg.model.encoder.ps[1]),
-			)
+				patch_size=(self.cfg.model.encoder.ps[0], self.cfg.model.encoder.ps[1]))
+			
 			if self.cfg.model.encoder.size == 'tiny':
-            	embed_dim = 192 
-        	elif self.cfg.model.encoder.size == 'small':
-            	embed_dim = 384
-        	elif self.cfg.model.encoder.size == 'base':
-            	embed_dim = 768
+				embed_dim = 192 
+			elif self.cfg.model.encoder.size == 'small':
+				embed_dim = 384
+			elif self.cfg.model.encoder.size == 'base':
+				embed_dim = 768
+			
 
-    	if self.cfg.model.projection.sizes is None:
-        	self.cfg.model.projection.sizes = [embed_dim, 4*embed_dim, 4*embed_dim, 4*embed_dim]
-    
-    	self.model = BarlowTwins(
-        	backbone=backbone,
-        	projection_sizes=self.cfg.model.projection.sizes,
-        	lambd=self.cfg.model.lambd,
-        	mask_ratio=self.cfg.model.encoder.mask_ratio,
+		if self.cfg.model.projection.sizes is None:
+			self.cfg.model.projection.sizes = [embed_dim, 4*embed_dim, 4*embed_dim, 4*embed_dim]
+	
+		self.model = BarlowTwins(
+			backbone=backbone,
+			projection_sizes=self.cfg.model.projection.sizes,
+			lambd=self.cfg.model.lambd,
+			mask_ratio=self.cfg.model.encoder.mask_ratio,
 		)
 		# move model to (current) gpu
 		self.model = self.model.cuda()
@@ -158,7 +159,7 @@ class BarlowTwinsTrainer:
 	def save_checkpoint(self, epoch, train_stats):
 		save_dict = {
 			'backbone': self.model.backbone.state_dict(),
-			'opt': self.optimizer.state_dict().
+			'opt': self.optimizer.state_dict(),
 			'epoch': epoch + 1,
 			'config': self.cfg,
 		}
@@ -168,7 +169,7 @@ class BarlowTwinsTrainer:
 		utils.save_on_master(save_dict, self.ckpt_path.format(f'epoch-{epoch}'))
 		
 		log_stats = {
-			**{f'train_{k}':: v for k, v in train_stats.items()},
+			**{f'train_{k}': v for k, v in train_stats.items()},
 			'epoch': epoch,
 		}
 		if utils.is_main_process():
@@ -217,7 +218,7 @@ class BarlowTwins(nn.Module):
 
 
 def off_diagonal(x):
-    # return a flattened view of the off-diagonal elements of a square matrix
-    n, m = x.shape
-    assert n == m
-    return x.flatten()[:-1].view(n - 1, n + 1)[:, 1:].flatten()
+	# return a flattened view of the off-diagonal elements of a square matrix
+	n, m = x.shape
+	assert n == m
+	return x.flatten()[:-1].view(n - 1, n + 1)[:, 1:].flatten()
