@@ -7,11 +7,13 @@ References:
 
 import argparse
 from pprint import pprint
+import os
 
 import torch
 import torch.distributed as dist
 import torch.backends.cudnn as cudnn
 import torch.multiprocessing as mp
+from torch.utils.tensorboard import SummaryWriter
 
 from barlow.barlow import BarlowTwinsTrainer
 from utils import utils
@@ -24,9 +26,9 @@ def get_args_parser():
     return parser
 
 
-def train(cfg):
+def train(cfg, log_writer=None):
 
-    trainer = BarlowTwinsTrainer(cfg)
+    trainer = BarlowTwinsTrainer(cfg, log_writer=log_writer)
     print(f'Starting training for {cfg.optimizer.epochs} epochs')
     for epoch in range(cfg.optimizer.epochs):
         trainer.train_one_epoch(epoch)
@@ -45,6 +47,7 @@ def main():
     name = (f'{cfg.model.encoder.type}-ps{cfg.model.encoder.ps[0]}x{cfg.model.encoder.ps[1]}'
             f'-maskratio{cfg.model.encoder.mask_ratio}')
     cfg.logging.log_path = cfg.logging.log_path.format(name)
+    os.makedirs(cfg.logging.log_path, exists_ok=True)
 
 
     """set-up DDP"""
@@ -52,9 +55,15 @@ def main():
     # fix random seeds
     utils.fix_random_seeds(cfg.meta.seed)
     cudnn.benchmark = True
+
+    # logging 
+    if utils.is_main_process():
+        log_writer = SummaryWriter(log_dir=cfg.logging.log_path)
+    else:
+        log_writer = None
     
     # run training
-    train(cfg)
+    train(cfg, log_writer=log_writer)
 
 
 

@@ -30,9 +30,12 @@ from models.mst import get_mst_model
 
 class BarlowTwinsTrainer:
 
-	def __init__(cfg):
-
+	def __init__(cfg, log_writer=None, printer=print):
+		
 		self.cfg = cfg
+		self.log_writer = log_writer
+		self.printer = printer
+
 		self.time_stamp = self.cfg.checkpoint.get('time_stamp',
 			datetime.datetime.now().strftime('%m%d_%H-%M'))
 
@@ -43,9 +46,9 @@ class BarlowTwinsTrainer:
 			self.time_stamp, self.cfg.model.encoder.type, {}
 		)
 
-		print(f'Loaded model: \n{self.model}')
-		print(f'Config parameters:')
-		pprint(self.cfg)
+		self.printer(f'Loaded model: \n{self.model}')
+		self.printer(f'Config parameters: \n{self.cfg}')
+		
 
 
 	def construct_model(self):
@@ -126,7 +129,7 @@ class BarlowTwinsTrainer:
 				loss = self.model(y1, y2)
 			
 			if not math.isfinite(loss.item()):
-				print(f"Loss is {loss.item()}, stopping training", force=True)
+				self.printer(f"Loss is {loss.item()}, stopping training", force=True)
 				sys.exit(1)
 
 			# gradient update
@@ -141,13 +144,23 @@ class BarlowTwinsTrainer:
 
 			# logging 
 			torch.cuda.synchronize()
-			metric_logger.update(loss=loss.item())
-			metric_logger.update(lr=self.optimizer.param_groups[0]["lr"])
-			metric_logger.update(wd=self.optimizer.param_groups[0]["weight_decay"])
+			loss_val = loss.item()
+			lr = self.optimizer.param_groups[0]["lr"]
+			wd = self.optimizer.param_groups[0]["weight_decay"]
+			metric_logger.update(loss=loss_val)
+			metric_logger.update(lr=lr)
+			metric_logger.update(wd=wd)
+
+
+			if self.log_writer is not None:
+				log_writer.add_scalar('train_loss', utils.all_reduce_mean(loss_val), iteration)
+				log_writer.add_scalar('lr', lr, iteration)
+				log_writer.add_scalar('wd', wd, iteration)
+
 		
 		# gather the stats from all processes
 		metric_logger.synchronize_between_processes()
-		print("Averaged stats:", metric_logger)
+		self.printer("Averaged stats:", metric_logger)
 
 		# return training stats
 		train_stats = {k: meter.global_avg for k, meter in metric_logger.meters.items()}
