@@ -79,12 +79,12 @@ class BarlowTwinsTrainer:
 		self.model_without_ddp = self.model.module
 		
 		"""*****prepare optimizer*****"""
-		params_groups = utils.get_params_groups(self.model)
+		param_groups = utils.get_param_groups(self.model)
 		if self.cfg.optimizer.type == 'adamw':
-			self.optimizer = torch.optim.AdamW(params_groups)  # to use with ViTs
+			self.optimizer = torch.optim.AdamW(param_groups)  # to use with ViTs
 		# for mixed precision training
 		self.fp16_scaler = None
-		if cfg.meta.use_fp16:
+		if self.cfg.meta.use_fp16:
 			self.fp16_scaler = torch.cuda.amp.GradScaler()
 		
 		"""*****init schedulers*****"""
@@ -134,9 +134,9 @@ class BarlowTwinsTrainer:
 				loss.backward()
 				self.optimizer.step()
 			else:
-				fp16_scaler.scale(loss).backward()
-				fp16_scaler.step(optimizer)
-				fp16_scaler.update()
+				self.fp16_scaler.scale(loss).backward()
+				self.fp16_scaler.step(self.optimizer)
+				self.fp16_scaler.update()
 
 			# logging 
 			torch.cuda.synchronize()
@@ -149,9 +149,9 @@ class BarlowTwinsTrainer:
 
 
 			if self.log_writer is not None:
-				log_writer.add_scalar('train_loss', utils.all_reduce_mean(loss_val), iteration)
-				log_writer.add_scalar('lr', lr, iteration)
-				log_writer.add_scalar('wd', wd, iteration)
+				self.log_writer.add_scalar('train_loss', utils.all_reduce_mean(loss_val), iteration)
+				self.log_writer.add_scalar('lr', lr, iteration)
+				self.log_writer.add_scalar('wd', wd, iteration)
 
 		
 		# gather the stats from all processes

@@ -68,7 +68,7 @@ def cosine_scheduler(base_value, final_value, epochs, niter_per_ep, warmup_epoch
     return schedule 
 
 
-def get_params_groups(model):
+def get_param_groups(model):
     regularized = []
     not_regularized = []
     for name, param in model.named_parameters():

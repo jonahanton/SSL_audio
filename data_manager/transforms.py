@@ -60,7 +60,7 @@ if __name__ == "__main__":
 	start = random.randint(0, length_adj) if length_adj > 0 else 0
 	wav = wav[start:start + unit_length]
 
-	torchaudio.save('wav.wav', wav1.unsqueeze(0), sample_rate=16000)
+	torchaudio.save('wav.wav', wav.unsqueeze(0), sample_rate=16000)
 	wav_tf1 = wav_transform(wav.numpy(), sample_rate=16000)
 	wav_tf1 = torch.tensor(wav_tf1)
 	wav_tf2 = wav_transform(wav.numpy(), sample_rate=16000)
