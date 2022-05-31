@@ -1,8 +1,7 @@
 # Repo specific files
-data/
+data
 proj_venv
 condor
-misc/
 */__init__.py
 checkpoint
 slurm
