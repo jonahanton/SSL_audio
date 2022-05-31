@@ -21,6 +21,7 @@ import sys
 import math
 import os
 from pathlib import Path
+from pprint import pprint 
 
 from utils import utils
 from data_manager.audioset import AudioSetLoader
@@ -41,6 +42,10 @@ class BarlowTwinsTrainer:
 		self.ckpt_path = self.cfg.checkpoint.ckpt_path.format(
 			self.time_stamp, self.cfg.model.encoder.type, {}
 		)
+
+		print(f'Loaded model: \n{self.model}')
+		print(f'Config parameters:')
+		pprint(self.cfg)
 
 
 	def construct_model(self):

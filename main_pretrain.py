@@ -27,6 +27,7 @@ def get_args_parser():
 def train(cfg):
 
     trainer = BarlowTwinsTrainer(cfg)
+    print(f'Starting training for {cfg.optimizer.epochs} epochs')
     for epoch in range(cfg.optimizer.epochs):
         trainer.train_one_epoch(epoch)
 
