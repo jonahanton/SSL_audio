@@ -8,6 +8,7 @@ References:
 import argparse
 from pprint import pprint
 import os
+import datetime
 
 import torch
 import torch.distributed as dist
@@ -26,9 +27,9 @@ def get_args_parser():
     return parser
 
 
-def train(cfg, log_writer=None):
+def train(cfg, log_writer):
 
-    trainer = BarlowTwinsTrainer(cfg, log_writer=log_writer)
+    trainer = BarlowTwinsTrainer(cfg, log_writer)
     print(f'Starting training for {cfg.optimizer.epochs} epochs')
     for epoch in range(cfg.optimizer.epochs):
         trainer.train_one_epoch(epoch)
@@ -43,11 +44,14 @@ def main():
     # update config with any remaining arguments from args
     utils.update_cfg_from_args(cfg, args)
 
+    # time stamp
+    cfg.time_stamp = datetime.datetime.now().strftime('%m%d_%H-%M')
+
     # update path for logging
-    name = (f'{cfg.model.encoder.type}-ps{cfg.model.encoder.ps[0]}x{cfg.model.encoder.ps[1]}'
-            f'-maskratio{cfg.model.encoder.mask_ratio}')
-    cfg.logging.log_path = cfg.logging.log_path.format(name)
-    os.makedirs(cfg.logging.log_path, exists_ok=True)
+    name = (f'{cfg.time_stamp}-model={cfg.model.encoder.type}-ps={cfg.model.encoder.ps[0]}x{cfg.model.encoder.ps[1]}'
+            f'-maskratio={cfg.model.encoder.mask_ratio}')
+    cfg.logging.log_dir = cfg.logging.log_dir.format(name)
+    os.makedirs(cfg.logging.log_dir, exist_ok=True)
 
 
     """set-up DDP"""
@@ -57,13 +61,13 @@ def main():
     cudnn.benchmark = True
 
     # logging 
-    if utils.is_main_process():
-        log_writer = SummaryWriter(log_dir=cfg.logging.log_path)
+    if cfg.rank == 0:
+        log_writer = SummaryWriter(log_dir=cfg.logging.log_dir)
     else:
         log_writer = None
     
     # run training
-    train(cfg, log_writer=log_writer)
+    train(cfg, log_writer)
 
 
 

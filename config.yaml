@@ -48,5 +48,5 @@ checkpoint:
   save_epoch: 1
   ckpt_path: checkpoint/models/{}_{}_{}.pth.tar
 logging:
-  log_path: checkpoint/logs/{}_log.txt
+  log_dir: checkpoint/logs/{}
 dist_url: env://

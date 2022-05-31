@@ -30,26 +30,22 @@ from models.mst import get_mst_model
 
 class BarlowTwinsTrainer:
 
-	def __init__(cfg, log_writer=None, printer=print):
+	def __init__(self, cfg, log_writer, printer=print):
 		
 		self.cfg = cfg
 		self.log_writer = log_writer
 		self.printer = printer
 
-		self.time_stamp = self.cfg.checkpoint.get('time_stamp',
-			datetime.datetime.now().strftime('%m%d_%H-%M'))
-
-		self.contruct_model()
-
 		# checkpoint path
 		self.ckpt_path = self.cfg.checkpoint.ckpt_path.format(
-			self.time_stamp, self.cfg.model.encoder.type, {}
+			self.cfg.time_stamp, self.cfg.model.encoder.type, {}
 		)
+
+		self.construct_model()
 
 		self.printer(f'Loaded model: \n{self.model}')
 		self.printer(f'Config parameters: \n{self.cfg}')
 		
-
 
 	def construct_model(self):
 
@@ -83,7 +79,7 @@ class BarlowTwinsTrainer:
 		self.model_without_ddp = self.model.module
 		
 		"""*****prepare optimizer*****"""
-		param_groups = utils.get_params_groups(self.model)
+		params_groups = utils.get_params_groups(self.model)
 		if self.cfg.optimizer.type == 'adamw':
 			self.optimizer = torch.optim.AdamW(params_groups)  # to use with ViTs
 		# for mixed precision training
