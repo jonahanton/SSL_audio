@@ -15,7 +15,8 @@ import os
 from pathlib import Path
 from easydict import EasyDict
 import yaml
-from collections import deque
+from collections import deque, defaultdict
+import builtins
 from pprint import pprint
 
 
@@ -246,15 +247,17 @@ def setup_for_distributed(is_master):
     """
     This function disables printing when not in master process
     """
-    import builtins as __builtin__
-    builtin_print = __builtin__.print
+    builtin_print = builtins.print
 
     def print(*args, **kwargs):
         force = kwargs.pop('force', False)
+        force = force or (get_world_size() > 8)
         if is_master or force:
+            now = datetime.datetime.now().time()
+            builtin_print('[{}] '.format(now), end='')  # print with time stamp
             builtin_print(*args, **kwargs)
 
-    __builtin__.print = print
+    builtins.print = print
 
 
 def save_on_master(*args, **kwargs):

@@ -61,6 +61,7 @@ def main():
     cudnn.benchmark = True
 
     # logging 
+    print(f'Rank: {cfg.rank}')
     if cfg.rank == 0:
         log_writer = SummaryWriter(log_dir=cfg.logging.log_dir)
     else:
