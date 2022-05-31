@@ -5,6 +5,7 @@ condor
 */__init__.py
 checkpoint
 slurm
+misc
 
 
 # Byte-compiled / optimized / DLL files
