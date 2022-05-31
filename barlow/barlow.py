@@ -66,12 +66,13 @@ class BarlowTwinsTrainer:
 			lambd=self.cfg.model.lambd,
 			mask_ratio=self.cfg.model.encoder.mask_ratio,
 		)
-		# move model to (current) gpu
-		self.model = self.model.cuda()
+		# move model to gpu
+		self.model = self.model.cuda(self.cfg.gpu)
 		# synchronize batch norms
 		self.model = nn.SyncBatchNorm.convert_sync_batchnorm(self.model)
 		# wrap model with ddp
 		self.model = nn.parallel.DistributedDataParallel(self.model, device_ids=[self.cfg.gpu])
+		self.model_without_ddp = self.model.module
 		
 		"""*****prepare optimizer*****"""
 		param_groups = utils.get_params_groups(self.model)

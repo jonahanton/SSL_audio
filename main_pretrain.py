@@ -19,13 +19,21 @@ from utils import utils
 def get_args_parser():
     
     parser = argparse.ArgumentParser(description='Barlow Twins Training', add_help=False)
-    parser.add_argument('-cp', '--config-path', type=str, default='./config.yaml',
+    parser.add_argument('--config-path', type=str, default='./config.yaml',
                         help='path to .yaml config file')
-    
     return parser
 
 
-def train_bt(args):
+def train(cfg):
+
+    trainer = BarlowTwinsTrainer(cfg)
+    for epoch in range(cfg.optimizer.epochs):
+        trainer.train_one_epoch(epoch)
+
+
+def main():
+    parser = argparse.ArgumentParser('BT-A', parents=[get_args_parser()])
+    args = parser.parse_args()
 
     # load training params from .ymal config file
     cfg = utils.load_yaml_config(args.config_path)
@@ -37,18 +45,17 @@ def train_bt(args):
             f'-maskratio{cfg.model.encoder.mask_ratio}')
     cfg.logging.log_path = cfg.logging.log_path.format(name)
 
-    # set up ddp
+
+    """set-up DDP"""
     utils.init_distributed_mode(cfg)
     # fix random seeds
     utils.fix_random_seeds(cfg.meta.seed)
     cudnn.benchmark = True
+    
+    # run training
+    train(cfg)
 
-    trainer = BarlowTwinsTrainer(cfg)
-    for epoch in range(cfg.optimizer.epochs):
-        trainer.train_one_epoch(epoch)
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser('BT-A', parents=[get_args_parser()])
-    args = parser.parse_args()
-    train_bt(args)
+    main()

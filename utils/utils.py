@@ -281,14 +281,15 @@ def get_rank():
 def init_distributed_mode(cfg):
 
     # launced with torch.distributed.launch
-    if 'RANK' in os.environ and 'WORLD_SIZE' in os.environ:
+    if 'RANK' in os.environ:
         cfg.rank = int(os.environ['RANK'])
-        cfg.world_size = int(os.environ['WORLD_SIZE'])
         cfg.gpu = int(os.environ['LOCAL_RANK'])
-    # launched with submitit on a slurm cluster
+        cfg.world_size = int(os.environ['WORLD_SIZE'])
+    # launched with a slurm scheduler
     elif 'SLURM_PROCID' in os.environ:
         cfg.rank = int(os.environ['SLURM_PROCID'])
         cfg.gpu = cfg.rank % torch.cuda.device_count()
+        cfg.world_size = int(os.environ['WORLD_SIZE'])
     # launched naively with `python main_pretrain.py`
     # manually add MASTER_ADDR and MASTER_PORT to env variables
     elif torch.cuda.is_available():
