@@ -30,11 +30,10 @@ from models.mst import get_mst_model
 
 class BarlowTwinsTrainer:
 
-	def __init__(self, cfg, log_writer, printer=print):
+	def __init__(self, cfg, log_writer):
 		
 		self.cfg = cfg
 		self.log_writer = log_writer
-		self.printer = printer
 
 		# checkpoint path
 		self.ckpt_path = self.cfg.checkpoint.ckpt_path.format(
@@ -43,8 +42,8 @@ class BarlowTwinsTrainer:
 
 		self.construct_model()
 
-		self.printer(f'Loaded model: \n{self.model}')
-		self.printer(f'Config parameters: \n{self.cfg}')
+		print(f'Loaded model: \n{self.model}')
+		print(f'Config parameters: \n{self.cfg}')
 		
 
 	def construct_model(self):
@@ -125,7 +124,7 @@ class BarlowTwinsTrainer:
 				loss = self.model(y1, y2)
 			
 			if not math.isfinite(loss.item()):
-				self.printer(f"Loss is {loss.item()}, stopping training", force=True)
+				print(f"Loss is {loss.item()}, stopping training", force=True)
 				sys.exit(1)
 
 			# gradient update
@@ -156,7 +155,7 @@ class BarlowTwinsTrainer:
 		
 		# gather the stats from all processes
 		metric_logger.synchronize_between_processes()
-		self.printer("Averaged stats:", metric_logger)
+		print("Averaged stats:", metric_logger)
 
 		# return training stats
 		train_stats = {k: meter.global_avg for k, meter in metric_logger.meters.items()}
