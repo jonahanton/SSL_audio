@@ -287,11 +287,14 @@ def init_distributed_mode(cfg):
         cfg.rank = int(os.environ['SLURM_PROCID'])
         cfg.gpu = cfg.rank % torch.cuda.device_count()
         cfg.world_size = int(os.environ['WORLD_SIZE'])
-    # launched naively with `python main_pretrain.py`
-    # manually add MASTER_ADDR and MASTER_PORT to env variables
 
     if cfg.world_size > 1:
         cfg.meta.distributed = True
+
+        if cfg.dist_init == 'file':
+            if os.path.exists(cfg.dist_url):
+                os.remove(cfg.dist_url)
+                
         dist.init_process_group(
             backend='nccl',
             init_method=cfg.dist_url,

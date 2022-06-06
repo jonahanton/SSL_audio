@@ -42,15 +42,16 @@ optimizer:
   weight_decay: 0.04
   final_weight_decay: 0.4
   epochs: 2
-  batch_size_per_gpu: 32
+  batch_size_per_gpu: 16
 meta:
   distributed:
   seed: 32
   use_fp16: false
 checkpoint:
-  print_it: 10
+  print_it: 100
   save_epoch: 1
   ckpt_path:
 logging:
   log_dir: checkpoint/{}
 dist_url: env://
+dist_init: file

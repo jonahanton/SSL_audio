@@ -28,17 +28,19 @@ def get_args_parser():
     return parser
 
 
-def train(cfg, log_writer):
+def train(cfg, wandb_run):
 
-    trainer = BarlowTwinsTrainer(cfg, log_writer)
+    trainer = BarlowTwinsTrainer(cfg, wandb_run)
     print(f'Starting training for {cfg.optimizer.epochs} epochs')
     for epoch in range(cfg.optimizer.epochs):
         trainer.train_one_epoch(epoch)
 
 
-def main():
-    parser = argparse.ArgumentParser('BT-A', parents=[get_args_parser()])
-    args = parser.parse_args()
+def pretrain_btaudio(args=None):
+
+    if args is None:
+        parser = argparse.ArgumentParser('BT-A', parents=[get_args_parser()])
+        args = parser.parse_args()
 
     # load training params from .ymal config file
     cfg = utils.load_yaml_config(args.config_path)
@@ -47,6 +49,10 @@ def main():
 
     # time stamp
     cfg.time_stamp = datetime.datetime.now().strftime('%d%m_%H-%M')
+
+    # shared file-system initialization for torch distributed (https://pytorch.org/docs/stable/distributed.html)
+    if cfg.dist_init == 'file':
+        cfg.dist_url = 'file:///vol/bitbucket/jla21/proj/slurm/sharedfile'
 
     # update path for logging
     name = (f'{cfg.time_stamp}-model={cfg.model.encoder.type}_{cfg.model.encoder.size}-ps={cfg.model.encoder.ps[0]}x{cfg.model.encoder.ps[1]}'
@@ -79,4 +85,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    pretrain_btaudio()

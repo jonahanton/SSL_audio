@@ -159,11 +159,7 @@ class AudioSetLoader:
 		dataset = AudioSet(self.cfg, wav_transform=wav_transform, lms_transform=lms_transform)
 
 		if self.cfg.meta.distributed:
-			sampler = torch.utils.data.distributed.DistributedSampler(
-				dataset,
-				num_replicas=self.cfg.world_size,
-				rank=self.cfg.rank,
-			)
+			sampler = torch.utils.data.distributed.DistributedSampler(dataset)
 			
 			loader = DataLoader(
 				dataset=dataset,

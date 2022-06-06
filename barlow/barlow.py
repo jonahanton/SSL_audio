@@ -160,12 +160,12 @@ class BarlowTwinsTrainer:
 
 			if self.wandb_run is not None:
 				self.wandb_run.log({
-					'train_loss': loss.item(),
+					'train_loss': metric_logger.meters['loss'].avg,
 					'lr': lr,
 					'wd': wd,
-					'data_time' : metric_logger.meters['data_time'].global_avg,
-					'forward_time' : metric_logger.meters['forward_time'].global_avg,
-					'backward_time' : metric_logger.meters['backward_time'].global_avg,
+					'data_time' : metric_logger.meters['data_time'].avg,
+					'forward_time' : metric_logger.meters['forward_time'].avg,
+					'backward_time' : metric_logger.meters['backward_time'].avg,
 				})
 
 			end = time.time()
@@ -185,7 +185,7 @@ class BarlowTwinsTrainer:
 	
 	def save_checkpoint(self, epoch, train_stats):
 		save_dict = {
-			'backbone': self.model.backbone.state_dict(),
+			'model': self.model.state_dict(),
 			'opt': self.optimizer.state_dict(),
 			'epoch': epoch,
 			'config': self.cfg,
