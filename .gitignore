@@ -6,6 +6,8 @@ condor
 checkpoint
 slurm
 misc
+wandb
+tests
 
 
 # Byte-compiled / optimized / DLL files

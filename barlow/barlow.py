@@ -22,6 +22,7 @@ import math
 import os
 from pathlib import Path
 from pprint import pprint 
+import json
 
 from utils import utils
 from data_manager.audioset import AudioSetLoader
@@ -30,26 +31,25 @@ from models.mst import get_mst_model
 
 class BarlowTwinsTrainer:
 
-	def __init__(self, cfg, log_writer):
+	def __init__(self, cfg, wandb_run):
 		
 		self.cfg = cfg
-		self.log_writer = log_writer
+		self.wandb_run = wandb_run
 
 		# checkpoint path
-		self.ckpt_path = self.cfg.checkpoint.ckpt_path.format(
-			self.cfg.time_stamp, self.cfg.model.encoder.type, {}
-		)
+		self.ckpt_path = os.path.join(self.cfg.checkpoint.ckpt_path, '{}.pth.tar')
 
 		self.construct_model()
 
-		print(f'Loaded model: \n{self.model}')
 		print(f'Config parameters: \n{self.cfg}')
 		
 
 	def construct_model(self):
 
 		"""*****data loader*****"""
+		print(f'Loading AudioSet')
 		self.data_loader = AudioSetLoader(self.cfg).get_loader() 
+		print(f'Loaded AudioSet, with {len(self.data_loader) * self.cfg.optimizer.batch_size_per_gpu * self.cfg.world_size} data points')
 
 		"""*****build model*****"""
 		if self.cfg.model.encoder.type == 'transformer':
@@ -57,13 +57,13 @@ class BarlowTwinsTrainer:
 				size=self.cfg.model.encoder.size,
 				patch_size=(self.cfg.model.encoder.ps[0], self.cfg.model.encoder.ps[1])
 			)
-
 			embed_dim = backbone.embed_dim
 			
 		if self.cfg.model.projection.sizes is None:
 			self.cfg.model.projection.sizes = [embed_dim, 4*embed_dim, 4*embed_dim, 4*embed_dim]
 	
 		self.model = BarlowTwins(
+			cfg=self.cfg,
 			backbone=backbone,
 			projection_sizes=self.cfg.model.projection.sizes,
 			lambd=self.cfg.model.lambd,
@@ -71,11 +71,12 @@ class BarlowTwinsTrainer:
 		)
 		# move model to gpu
 		self.model = self.model.cuda(self.cfg.gpu)
-		# synchronize batch norms
-		self.model = nn.SyncBatchNorm.convert_sync_batchnorm(self.model)
-		# wrap model with ddp
-		self.model = nn.parallel.DistributedDataParallel(self.model, device_ids=[self.cfg.gpu])
-		self.model_without_ddp = self.model.module
+		if self.cfg.meta.distributed:
+			# synchronize batch norms
+			self.model = nn.SyncBatchNorm.convert_sync_batchnorm(self.model)
+			# wrap model with ddp
+			self.model = nn.parallel.DistributedDataParallel(self.model, device_ids=[self.cfg.gpu])
+			self.model_without_ddp = self.model.module
 		
 		"""*****prepare optimizer*****"""
 		param_groups = utils.get_param_groups(self.model)
@@ -88,7 +89,7 @@ class BarlowTwinsTrainer:
 		
 		"""*****init schedulers*****"""
 		self.lr_schedule = utils.cosine_scheduler(
-			base_value=self.cfg.optimizer.base_lr * (self.cfg.optimizer.batch_size_per_gpu * utils.get_world_size() / 256.),  # linear scaling rule
+			base_value=self.cfg.optimizer.base_lr * (self.cfg.optimizer.batch_size_per_gpu * self.cfg.world_size / 256.),  # linear scaling rule
 			final_value=self.cfg.optimizer.final_lr,
 			epochs=self.cfg.optimizer.epochs, 
 			niter_per_ep=len(self.data_loader),
@@ -107,9 +108,14 @@ class BarlowTwinsTrainer:
 		metric_logger = utils.MetricLogger(delimiter=" ")
 		header = f'Epoch: [{epoch}/{self.cfg.optimizer.epochs}]'
 
-		for iteration, (y1, y2) in enumerate(metric_logger.log_every(self.data_loader, 10, header)):
+		end = time.time()
+		for iteration, (y1, y2) in enumerate(metric_logger.log_every(self.data_loader, self.cfg.checkpoint.print_it, header)):
+			# measure data loading time
+			metric_logger.update(data_time=(time.time()-end))
+
 			# update weight decay and learning rate according to their schedule 
 			iteration = len(self.data_loader) * epoch + iteration  # global training iteration
+			
 			for i, param_group in enumerate(self.optimizer.param_groups):
 				param_group["lr"] = self.lr_schedule[iteration]
 				if i == 0:  # only the first group is regularized
@@ -119,14 +125,17 @@ class BarlowTwinsTrainer:
 			y1 = y1.cuda(non_blocking=True)
 			y2 = y2.cuda(non_blocking=True)
 
+			tflag = time.time()
 			# forward passes + compute barlow twins loss
-			with torch.cuda.amp.autocast(self.fp16_scaler is not None):
+			with torch.cuda.amp.autocast(enabled=(self.fp16_scaler is not None)):
 				loss = self.model(y1, y2)
+			metric_logger.update(forward_time=time.time()-tflag)
 			
 			if not math.isfinite(loss.item()):
-				print(f"Loss is {loss.item()}, stopping training", force=True)
+				print(f"Loss is {loss.item()}, stopping training")
 				sys.exit(1)
-
+			
+			tflag = time.time()
 			# gradient update
 			self.optimizer.zero_grad()
 			if self.fp16_scaler is None:
@@ -136,9 +145,11 @@ class BarlowTwinsTrainer:
 				self.fp16_scaler.scale(loss).backward()
 				self.fp16_scaler.step(self.optimizer)
 				self.fp16_scaler.update()
+			metric_logger.update(backward_time=(time.time()-tflag))
 
 			# logging 
-			torch.cuda.synchronize()
+			if self.cfg.meta.distributed:
+				torch.cuda.synchronize()
 			loss_val = loss.item()
 			lr = self.optimizer.param_groups[0]["lr"]
 			wd = self.optimizer.param_groups[0]["weight_decay"]
@@ -147,14 +158,21 @@ class BarlowTwinsTrainer:
 			metric_logger.update(wd=wd)
 
 
-			if self.log_writer is not None:
-				self.log_writer.add_scalar('train_loss', utils.all_reduce_mean(loss_val), iteration)
-				self.log_writer.add_scalar('lr', lr, iteration)
-				self.log_writer.add_scalar('wd', wd, iteration)
+			if self.wandb_run is not None:
+				self.wandb_run.log({
+					'train_loss': loss.item(),
+					'lr': lr,
+					'wd': wd,
+					'data_time' : metric_logger.meters['data_time'].global_avg,
+					'forward_time' : metric_logger.meters['forward_time'].global_avg,
+					'backward_time' : metric_logger.meters['backward_time'].global_avg,
+				})
 
-		
-		# gather the stats from all processes
-		metric_logger.synchronize_between_processes()
+			end = time.time()
+
+		if self.cfg.meta.distributed:
+			# gather the stats from all processes
+			metric_logger.synchronize_between_processes()
 		print("Averaged stats:", metric_logger)
 
 		# return training stats
@@ -169,28 +187,34 @@ class BarlowTwinsTrainer:
 		save_dict = {
 			'backbone': self.model.backbone.state_dict(),
 			'opt': self.optimizer.state_dict(),
-			'epoch': epoch + 1,
+			'epoch': epoch,
 			'config': self.cfg,
 		}
 		if self.fp16_scaler is not None:
 			save_dict['fp16_scaler'] = self.fp16_scaler.state_dict()
-		
-		utils.save_on_master(save_dict, self.ckpt_path.format(f'epoch-{epoch+1}'))
-		
+
 		log_stats = {
 			**{f'train_{k}': v for k, v in train_stats.items()},
 			'epoch': epoch,
 		}
-		if utils.is_main_process():
-			with (Path(self.cfg.logging.log_path)).open("a") as f:
-				f.write(json.dumps(log_stats) + "\n")
-
+		
+		if self.cfg.meta.distributed:
+			utils.save_on_master(save_dict, self.ckpt_path.format(f'epoch-{epoch}'))
+			if utils.is_main_process():
+				with (Path(f'{self.cfg.logging.log_dir}/log.txt')).open("a") as f:
+					f.write(json.dumps(log_stats) + "\n")
+		else:
+			torch.save(save_dict, self.ckpt_path.format(f'epoch-{epoch}'))
+			with (Path(f'{self.cfg.logging.log_dir}/log.txt')).open("a") as f:
+					f.write(json.dumps(log_stats) + "\n")
+					
 
 class BarlowTwins(nn.Module):
 	
-	def __init__(self, backbone, projection_sizes, lambd, mask_ratio):
+	def __init__(self, cfg, backbone, projection_sizes, lambd, mask_ratio):
 		
 		super().__init__()
+		self.cfg = cfg
 		self.backbone = backbone
 		self.lambd = lambd
 		self.mask_ratio = mask_ratio
@@ -218,7 +242,8 @@ class BarlowTwins(nn.Module):
 		
 		# sum the cross-correlation matrix between all gpus
 		c.div_(z1.shape[0])
-		torch.distributed.all_reduce(c)
+		if self.cfg.meta.distributed:
+			torch.distributed.all_reduce(c)
 		
 		on_diag = torch.diagonal(c).add_(-1).pow_(2).sum()
 		off_diag = off_diagonal(c).pow_(2).sum()

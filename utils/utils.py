@@ -189,7 +189,6 @@ class MetricLogger(object):
         start_time = time.time()
         end = time.time()
         iter_time = SmoothedValue(fmt='{avg:.6f}')
-        data_time = SmoothedValue(fmt='{avg:.6f}')
         space_fmt = ':' + str(len(str(len(iterable)))) + 'd'
         if torch.cuda.is_available():
             log_msg = self.delimiter.join([
@@ -197,9 +196,7 @@ class MetricLogger(object):
                 '[{0' + space_fmt + '}/{1}]',
                 'eta: {eta}',
                 '{meters}',
-                'time: {time}',
-                'data: {data}',
-                'max mem: {memory:.0f}'
+                'max mem: {memory:.0f}',
             ])
         else:
             log_msg = self.delimiter.join([
@@ -207,12 +204,9 @@ class MetricLogger(object):
                 '[{0' + space_fmt + '}/{1}]',
                 'eta: {eta}',
                 '{meters}',
-                'time: {time}',
-                'data: {data}'
             ])
         MB = 1024.0 * 1024.0
         for obj in iterable:
-            data_time.update(time.time() - end)
             yield obj
             iter_time.update(time.time() - end)
             if i % print_freq == 0 or i == len(iterable) - 1:
@@ -222,13 +216,11 @@ class MetricLogger(object):
                     print(log_msg.format(
                         i, len(iterable), eta=eta_string,
                         meters=str(self),
-                        time=str(iter_time), data=str(data_time),
                         memory=torch.cuda.max_memory_allocated() / MB))
                 else:
                     print(log_msg.format(
                         i, len(iterable), eta=eta_string,
-                        meters=str(self),
-                        time=str(iter_time), data=str(data_time)))
+                        meters=str(self)))
             i += 1
             end = time.time()
         total_time = time.time() - start_time
@@ -297,24 +289,27 @@ def init_distributed_mode(cfg):
         cfg.world_size = int(os.environ['WORLD_SIZE'])
     # launched naively with `python main_pretrain.py`
     # manually add MASTER_ADDR and MASTER_PORT to env variables
-    elif torch.cuda.is_available():
-        print('Will run the code on one GPU.')
-        cfg.rank, cfg.gpu, cfg.world_size = 0, 0, 1
-        os.environ['MASTER_ADDR'] = '127.0.0.1'
-        os.environ['MASTER_PORT'] = '29500'
-    else:
-        print('Does not support training without GPU.')
-        sys.exit(1)
 
-    dist.init_process_group(
-        backend='nccl',
-        init_method=cfg.dist_url,
-        world_size=cfg.world_size,
-        rank=cfg.rank,
-    )
-    torch.cuda.set_device(cfg.gpu)
-    dist.barrier()
-    setup_for_distributed(cfg.rank == 0)
+    if cfg.world_size > 1:
+        cfg.meta.distributed = True
+        dist.init_process_group(
+            backend='nccl',
+            init_method=cfg.dist_url,
+            world_size=cfg.world_size,
+            rank=cfg.rank,
+        )
+        torch.cuda.set_device(cfg.gpu)
+        dist.barrier()
+        setup_for_distributed(cfg.rank == 0)
+    else:
+        if torch.cuda.is_available():
+            print('Will run the code on one GPU.')
+            cfg.meta.distributed = False
+            cfg.rank, cfg.gpu, cfg.world_size = 0, 0, 1
+            torch.cuda.set_device(cfg.gpu)
+        else:
+            print('Does not support training without GPU.')
+            sys.exit(1)
 
 
 def all_reduce_mean(x):

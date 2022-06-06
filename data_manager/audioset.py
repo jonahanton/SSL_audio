@@ -19,6 +19,7 @@ import librosa
 import random
 import pandas as pd
 import multiprocessing
+import time
 
 from data_manager.transforms import make_transforms
 
@@ -55,7 +56,11 @@ class AudioSet(Dataset):
 			os.path.join(self.base_dir, "balanced_train_segments-downloaded.csv"), 
 			header=None
 		)
-		self.combined_df = pd.concat([self.unbalanced_df, self.balanced_df], ignore_index=True)
+		
+		if cfg.data.audioset.balanced_only:
+			self.combined_df = self.balanced_df
+		else:
+			self.combined_df = pd.concat([self.unbalanced_df, self.balanced_df], ignore_index=True)
 		
 		# first column contains the audio fnames
 		self.audio_fnames = np.asarray(self.combined_df.iloc[:, 0])
@@ -76,7 +81,7 @@ class AudioSet(Dataset):
 			audio_fpath = os.path.join(os.path.join(*[self.base_dir, "balanced_train_segments", f"{audio_fname}.wav"]))
 		else:
 			audio_fpath = os.path.join(os.path.join(*[self.base_dir, "unbalanced_train_segments", f"{audio_fname}.wav"]))
-			
+
 		wav, sr = torchaudio.load(audio_fpath)
 		assert sr == self.cfg.data.preprocess.sample_rate, f"Convert .wav files to {self.cfg.data.preprocess.sample_rate} Hz. {audio_fname}.wav has {sr} Hz."
 		
@@ -95,26 +100,53 @@ class AudioSet(Dataset):
 		length_adj = len(wav) - self.unit_length
 		start = random.randint(0, length_adj) if length_adj > 0 else 0
 		wav = wav[start:start + self.unit_length]
+		wav = wav.unsqueeze(0)
+
 		
 		# transforms to raw waveform (must convert wav to np array)
 		# note that transforms to raw waveform don't have cuda compatibility (done via audiomentations package, which uses librosa)
+		
 		if self.wav_transform:
-			wav_tf1 = self.wav_transform(samples=wav.numpy(), sample_rate=self.cfg.data.preprocess.sample_rate)
-			wav_tf1 = torch.tensor(wav_tf1)
-			wav_tf2 = self.wav_transform(samples=wav.numpy(), sample_rate=self.cfg.data.preprocess.sample_rate)
-			wav_tf2 = torch.tensor(wav_tf2)
+			wav = self.transform_wav(wav, n_views=2)
+		else:
+			wav = [wav]
 
 		# to log mel spectogram -> (1, n_mels, time)
-		lms_tf1 = (self.to_melspecgram(wav_tf1) + torch.finfo().eps).log().unsqueeze(0)
-		lms_tf2 = (self.to_melspecgram(wav_tf2) + torch.finfo().eps).log().unsqueeze(0)
+		lms = self.convert_to_melspecgram(wav)
 		
-		# transform to lms
+		# transforms to lms
 		if self.lms_transform:
-			lms_tf1 = self.lms_transform(lms_tf1)
-			lms_tf2 = self.lms_transform(lms_tf2)
-		
-		# returns 2 lms's
-		return lms_tf1, lms_tf2
+			lms = self.transform_lms(lms)
+
+		if len(lms) == 1:
+			return lms[0]
+		else:
+			return lms
+
+	
+	def transform_wav(self, wav, n_views=2):
+		out = []
+		for n in range(n_views):
+			w_tf = self.wav_transform(samples=wav.numpy(), sample_rate=self.cfg.data.preprocess.sample_rate)
+			w_tf = torch.tensor(w_tf)
+			out.append(w_tf)
+		return out
+
+	
+	def convert_to_melspecgram(self, wav):
+		out = []
+		for w in wav:
+			lms = self.to_melspecgram(w)
+			out.append(lms)
+		return out
+
+	
+	def transform_lms(self, lms):
+		out = []
+		for l in lms:
+			l_tf = self.lms_transform(l)
+			out.append(l)
+		return out
 		
 			
 class AudioSetLoader:
@@ -126,20 +158,32 @@ class AudioSetLoader:
 		wav_transform, lms_transform = make_transforms(self.cfg)
 		dataset = AudioSet(self.cfg, wav_transform=wav_transform, lms_transform=lms_transform)
 
-		sampler = torch.utils.data.distributed.DistributedSampler(
-			dataset,
-			num_replicas=self.cfg.world_size,
-			rank=self.cfg.rank,
-		)
-		
-		loader = DataLoader(
-			dataset=dataset,
-			batch_size=self.cfg.optimizer.batch_size_per_gpu,
-			shuffle=False,
-			num_workers=multiprocessing.cpu_count(),
-			pin_memory=True,
-			sampler=sampler,
-			drop_last=True,
-		)
+		if self.cfg.meta.distributed:
+			sampler = torch.utils.data.distributed.DistributedSampler(
+				dataset,
+				num_replicas=self.cfg.world_size,
+				rank=self.cfg.rank,
+			)
+			
+			loader = DataLoader(
+				dataset=dataset,
+				batch_size=self.cfg.optimizer.batch_size_per_gpu,
+				shuffle=False,
+				num_workers=4,
+				pin_memory=True,
+				sampler=sampler,
+				drop_last=True,
+			)
+		else:
+			loader = DataLoader(
+				dataset=dataset,
+				batch_size=self.cfg.optimizer.batch_size_per_gpu,
+				shuffle=True,
+				num_workers=4,
+				pin_memory=True,
+				drop_last=True,
+			)
 
 		return loader
+
+

@@ -14,7 +14,8 @@ import torch
 import torch.distributed as dist
 import torch.backends.cudnn as cudnn
 import torch.multiprocessing as mp
-from torch.utils.tensorboard import SummaryWriter
+
+import wandb
 
 from barlow.barlow import BarlowTwinsTrainer
 from utils import utils
@@ -45,13 +46,15 @@ def main():
     utils.update_cfg_from_args(cfg, args)
 
     # time stamp
-    cfg.time_stamp = datetime.datetime.now().strftime('%m%d_%H-%M')
+    cfg.time_stamp = datetime.datetime.now().strftime('%d%m_%H-%M')
 
     # update path for logging
-    name = (f'{cfg.time_stamp}-model={cfg.model.encoder.type}-ps={cfg.model.encoder.ps[0]}x{cfg.model.encoder.ps[1]}'
+    name = (f'{cfg.time_stamp}-model={cfg.model.encoder.type}_{cfg.model.encoder.size}-ps={cfg.model.encoder.ps[0]}x{cfg.model.encoder.ps[1]}'
             f'-maskratio={cfg.model.encoder.mask_ratio}')
     cfg.logging.log_dir = cfg.logging.log_dir.format(name)
+    cfg.checkpoint.ckpt_path = os.path.join(cfg.logging.log_dir, 'models')
     os.makedirs(cfg.logging.log_dir, exist_ok=True)
+    os.makedirs(cfg.checkpoint.ckpt_path, exist_ok=True)
 
 
     """set-up DDP"""
@@ -63,12 +66,15 @@ def main():
     # logging 
     print(f'Rank: {cfg.rank}')
     if cfg.rank == 0:
-        log_writer = SummaryWriter(log_dir=cfg.logging.log_dir)
+        wandb_run = wandb.init(
+            project='BT-Audio-pretrain',
+            config=cfg,
+        )
     else:
-        log_writer = None
+        wandb_run = None
     
     # run training
-    train(cfg, log_writer)
+    train(cfg, wandb_run)
 
 
 

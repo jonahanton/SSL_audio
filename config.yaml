@@ -1,4 +1,6 @@
 data:
+  audioset:
+    balanced_only: true
   preprocess:
     # Unit duration in seconds for one audio segment
     unit_sec: 0.95
@@ -26,7 +28,7 @@ data:
 model:
   encoder:
     type: transformer
-    size: tiny
+    size: base
     ps: [16,16]
     mask_ratio: 0.75
   projection:
@@ -36,17 +38,19 @@ optimizer:
   type: adamw
   base_lr: 1.0e-4
   final_lr: 1.0e-6
-  warmup_epochs: 1
+  warmup_epochs: 0
   weight_decay: 0.04
   final_weight_decay: 0.4
-  epochs: 10
-  batch_size_per_gpu: 512
+  epochs: 2
+  batch_size_per_gpu: 32
 meta:
+  distributed:
   seed: 32
-  use_fp16: true
+  use_fp16: false
 checkpoint:
+  print_it: 10
   save_epoch: 1
-  ckpt_path: checkpoint/models/{}_{}_{}.pth.tar
+  ckpt_path:
 logging:
-  log_dir: checkpoint/logs/{}
+  log_dir: checkpoint/{}
 dist_url: env://
