@@ -21,7 +21,7 @@ import pandas as pd
 import multiprocessing
 import time
 
-from data_manager.transforms import make_transforms_pretrain, make_transforms_downstream
+from data_manager.transforms import make_transforms_pretrain, make_transforms_eval
 
 
 class AudioSet(Dataset):
@@ -173,7 +173,7 @@ class AudioSetLoader:
 			dataset = AudioSet(self.cfg, n_views=2, wav_transform=wav_transform, lms_transform=lms_transform)
 		else:
 			if not test:
-				wav_transform, lms_transform = make_transforms_downstream(self.cfg)
+				wav_transform, lms_transform = make_transforms_eval(self.cfg)
 				dataset = AudioSet(self.cfg, n_views=1, wav_transform=wav_transform, lms_transform=lms_transform)
 			else:
 				dataset = AudioSet(self.cfg, n_views=1, wav_transform=None, lms_transform=None, test=True)

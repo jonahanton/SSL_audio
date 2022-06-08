@@ -21,22 +21,22 @@ from utils import utils
 from data_manager.audioset import AudioSetLoader
 from models.mst import get_mst_model
 
+
 class LinearTrainer:
-
-	def __init__(self, cfg, wandb_run):
-		
-		self.cfg = cfg
-		self.wandb_run = wandb_run
-
-		self.construct_model()
-
     
+    def __init__(self, cfg, wandb_run):
+        
+        self.cfg = cfg
+        self.wandb_run = wandb_run
+        self.construct_model()
+
+
     def construct_model(self):
         
         """*****data loaders*****"""
-		print(f'Loading AudioSet-20K')
-		self.data_loader_train = AudioSetLoader(cfg=self.cfg, pretrain=False).get_loader() 
-		print(f'Loaded AudioSet-20K, with {len(self.data_loader_train) * self.cfg.optimizer.batch_size_per_gpu * self.cfg.world_size} data points')
+        print(f'Loading AudioSet-20K')
+        self.data_loader_train = AudioSetLoader(cfg=self.cfg, pretrain=False).get_loader() 
+        print(f'Loaded AudioSet-20K, with {len(self.data_loader_train) * self.cfg.optimizer.batch_size_per_gpu * self.cfg.world_size} data points')
         
         print(f'Loading AudioSet evaluation set')
         self.data_loader_test = AudioSetLoader(cfg=self.cfg, pretrain=False).get_loader(test=True) 
@@ -58,3 +58,5 @@ class LinearTrainer:
 
 
 
+if __name__ == "__main__":
+    pass
