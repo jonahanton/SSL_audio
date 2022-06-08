@@ -8,7 +8,7 @@ from audiomentations import Compose, TimeStretch, PitchShift
 from data_manager.augmentations import Mixup, MixGaussianNoise
 
 
-def make_transforms(cfg):
+def make_transforms_pretrain(cfg):
 	
 	# transforms to raw waveform (.wav) -> time strech, pitch shift
 	wav_transform = Compose([
@@ -33,4 +33,7 @@ def make_transforms(cfg):
 	lms_transform = nn.Sequential(*lms_transform)
 	
 	return wav_transform, lms_transform
+	
+
+def make_transforms_downstream(cfg):
 	

@@ -324,3 +324,13 @@ def all_reduce_mean(x):
         return x_reduce.item()
     else:
         return x
+
+
+def load_pretrained_weights(model, weight_file):
+    state_dict = torch.load(pretrained_weights, map_location='cpu')
+    state_dict = state_dict['model']
+    # remove `module.` prefix
+    state_dict = {k.replace('module.', ''): v for k, v in state_dict.items()}
+    # remove `backbone.` prefix induced by BarlowTwins wrapper
+    state_dict = {k.replace('backbone.', ''): v for k, v in state_dict.items()}
+    model.load_state_dict(state_dict, strict=False)

@@ -21,17 +21,18 @@ import pandas as pd
 import multiprocessing
 import time
 
-from data_manager.transforms import make_transforms
+from data_manager.transforms import make_transforms_pretrain, make_transforms_downstream
 
 
 class AudioSet(Dataset):
 	
-	def __init__(self, cfg, base_dir="data/audioset", wav_transform=None, lms_transform=None):
+	def __init__(self, cfg, n_views=2, base_dir="data/audioset", wav_transform=None, lms_transform=None, test=False):
 		
 		super().__init__()
 		
 		# initializations
 		self.cfg = cfg
+		self.n_views = n_views
 		self.base_dir = base_dir
 		self.wav_transform = wav_transform 
 		self.lms_transform = lms_transform
@@ -56,12 +57,19 @@ class AudioSet(Dataset):
 			os.path.join(self.base_dir, "balanced_train_segments-downloaded.csv"), 
 			header=None
 		)
-		
-		if cfg.data.audioset.balanced_only:
-			self.combined_df = self.balanced_df
+		self.eval_df = pd.read_csv(
+			os.path.join(self.base_dir, "eval_segments-downloaded.csv"),
+			header=None
+		)
+
+		if test:
+			self.combined_df = eval_df
 		else:
-			self.combined_df = pd.concat([self.unbalanced_df, self.balanced_df], ignore_index=True)
-		
+			if cfg.data.audioset.balanced_only:
+				self.combined_df = self.balanced_df
+			else:
+				self.combined_df = pd.concat([self.unbalanced_df, self.balanced_df], ignore_index=True)
+			
 		# first column contains the audio fnames
 		self.audio_fnames = np.asarray(self.combined_df.iloc[:, 0])
 		# second column contains the labels (separated by # for multi-label)
@@ -77,10 +85,13 @@ class AudioSet(Dataset):
 	def __getitem__(self, idx):
 		# load .wav audio
 		audio_fname = self.audio_fnames[idx]
-		if self.ident[idx] == "balanced_train_segments":
+		ident = self.ident[idx]
+		if ident == "balanced_train_segments":
 			audio_fpath = os.path.join(os.path.join(*[self.base_dir, "balanced_train_segments", f"{audio_fname}.wav"]))
-		else:
+		elif ident == "unbalanced_train_segments":
 			audio_fpath = os.path.join(os.path.join(*[self.base_dir, "unbalanced_train_segments", f"{audio_fname}.wav"]))
+		elif ident == "eval_segments":
+			audio_fpath = os.path.join(os.path.join(*[self.base_dir, "eval_segments", f"{audio_fname}.wav"]))
 
 		wav, sr = torchaudio.load(audio_fpath)
 		assert sr == self.cfg.data.preprocess.sample_rate, f"Convert .wav files to {self.cfg.data.preprocess.sample_rate} Hz. {audio_fname}.wav has {sr} Hz."
@@ -107,7 +118,7 @@ class AudioSet(Dataset):
 		# note that transforms to raw waveform don't have cuda compatibility (done via audiomentations package, which uses librosa)
 		
 		if self.wav_transform:
-			wav = self.transform_wav(wav, n_views=2)
+			wav = self.transform_wav(wav, n_views=self.n_views)
 		else:
 			wav = [wav]
 
@@ -124,7 +135,7 @@ class AudioSet(Dataset):
 			return lms
 
 	
-	def transform_wav(self, wav, n_views=2):
+	def transform_wav(self, wav, n_views):
 		out = []
 		for n in range(n_views):
 			w_tf = self.wav_transform(samples=wav.numpy(), sample_rate=self.cfg.data.preprocess.sample_rate)
@@ -151,12 +162,21 @@ class AudioSet(Dataset):
 			
 class AudioSetLoader:
 
-	def __init__(self, cfg):
+	def __init__(self, cfg, pretrain=True):
 		self.cfg = cfg
+		self.pretrain = pretrain
 
-	def get_loader(self):
-		wav_transform, lms_transform = make_transforms(self.cfg)
-		dataset = AudioSet(self.cfg, wav_transform=wav_transform, lms_transform=lms_transform)
+	def get_loader(self, test=False):
+		# pretrain or downstream eval?
+		if self.pretrain:
+			wav_transform, lms_transform = make_transforms_pretrain(self.cfg)
+			dataset = AudioSet(self.cfg, n_views=2, wav_transform=wav_transform, lms_transform=lms_transform)
+		else:
+			if not test:
+				wav_transform, lms_transform = make_transforms_downstream(self.cfg)
+				dataset = AudioSet(self.cfg, n_views=1, wav_transform=wav_transform, lms_transform=lms_transform)
+			else:
+				dataset = AudioSet(self.cfg, n_views=1, wav_transform=None, lms_transform=None, test=True)
 
 		if self.cfg.meta.distributed:
 			sampler = torch.utils.data.distributed.DistributedSampler(dataset)

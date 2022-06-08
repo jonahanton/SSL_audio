@@ -8,7 +8,7 @@ slurm
 misc
 wandb
 tests
-
+utils/torch_mlp_clf.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

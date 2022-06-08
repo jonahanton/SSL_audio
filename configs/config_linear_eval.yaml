@@ -1,0 +1,15 @@
+weight_file: checkpoint/0606_13-09-model=transformer_base-ps=16x16-maskratio=0.75/models/epoch-1.pth.tar
+task: audioset
+data:
+  preprocess:
+    unit_sec: 0.95
+model:
+  encoder:
+    type: transformer
+    size: base
+    ps: [16,16]
+meta:
+  seed:
+    32
+dist_url: env://
+dist_init: file

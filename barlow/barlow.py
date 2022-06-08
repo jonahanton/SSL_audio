@@ -48,7 +48,7 @@ class BarlowTwinsTrainer:
 
 		"""*****data loader*****"""
 		print(f'Loading AudioSet')
-		self.data_loader = AudioSetLoader(self.cfg).get_loader() 
+		self.data_loader = AudioSetLoader(cfg=self.cfg, pretrain=True).get_loader() 
 		print(f'Loaded AudioSet, with {len(self.data_loader) * self.cfg.optimizer.batch_size_per_gpu * self.cfg.world_size} data points')
 
 		"""*****build model*****"""
