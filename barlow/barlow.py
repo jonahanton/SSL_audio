@@ -35,10 +35,8 @@ class BarlowTwinsTrainer:
 		
 		self.cfg = cfg
 		self.wandb_run = wandb_run
-
 		# checkpoint path
 		self.ckpt_path = os.path.join(self.cfg.checkpoint.ckpt_path, '{}.pth.tar')
-
 		self.construct_model()
 
 		print(f'Config parameters: \n{self.cfg}')
@@ -109,7 +107,7 @@ class BarlowTwinsTrainer:
 		header = f'Epoch: [{epoch}/{self.cfg.optimizer.epochs}]'
 
 		end = time.time()
-		for iteration, (y1, y2) in enumerate(metric_logger.log_every(self.data_loader, self.cfg.checkpoint.print_it, header)):
+		for iteration, ((y1, y2), _) in enumerate(metric_logger.log_every(self.data_loader, self.cfg.checkpoint.print_it, header)):
 			# measure data loading time
 			metric_logger.update(data_time=(time.time()-end))
 

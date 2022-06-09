@@ -1,8 +1,9 @@
 """
 PyTorch dataset wrapper for the AudioSet dataset [Gemmeke et al., 2017]. 
 
-Adapted from https://github.com/nttcslab/byol-a/blob/master/byol_a/dataset.py.
-
+References: 
+	https://github.com/nttcslab/byol-a/blob/master/byol_a/dataset.py
+	https://github.com/YuanGongND/ssast/tree/main
 """
 
 import torch
@@ -18,10 +19,23 @@ import numpy as np
 import librosa
 import random
 import pandas as pd
+import csv
 import multiprocessing
 import time
+from pprint import pprint
 
-from data_manager.transforms import make_transforms_pretrain, make_transforms_eval
+from data_manager.transforms import make_transforms_pretrain, make_transforms_lineval
+
+
+def make_index_dict(label_csv):
+    index_lookup = {}
+    with open(label_csv, 'r') as f:
+        csv_reader = csv.DictReader(f)
+        line_count = 0
+        for row in csv_reader:
+            index_lookup[row['mid']] = row['index']
+            line_count += 1
+    return index_lookup
 
 
 class AudioSet(Dataset):
@@ -76,16 +90,29 @@ class AudioSet(Dataset):
 		self.labels = np.asarray(self.combined_df.iloc[:, 1])
 		# third column contains the identifier (balanced_train_segments or unbalanced_train_segments)
 		self.ident = np.asarray(self.combined_df.iloc[:, 2])
-	
+
+		# load in class labels and create label -> index look-up dict 
+		self.index_dict = make_index_dict(os.path.join(self.base_dir, "class_labels_indices.csv"))
+		self.label_num = len(self.index_dict)
+
 
 	def __len__(self):
 		return len(self.audio_fnames)
 		
 		
 	def __getitem__(self, idx):
-		# load .wav audio
 		audio_fname = self.audio_fnames[idx]
+		labels = self.labels[idx]
 		ident = self.ident[idx]
+
+		# initialize the label
+		label_indices = np.zeros(self.label_num)
+        # add sample labels
+		for label_str in labels.split('#'):
+			label_indices[int(self.index_dict[label_str])] = 1.0
+		label_indices = torch.FloatTensor(label_indices)
+
+		# load .wav raw audio
 		if ident == "balanced_train_segments":
 			audio_fpath = os.path.join(os.path.join(*[self.base_dir, "balanced_train_segments", f"{audio_fname}.wav"]))
 		elif ident == "unbalanced_train_segments":
@@ -113,10 +140,8 @@ class AudioSet(Dataset):
 		wav = wav[start:start + self.unit_length]
 		wav = wav.unsqueeze(0)
 
-		
 		# transforms to raw waveform (must convert wav to np array)
-		# note that transforms to raw waveform don't have cuda compatibility (done via audiomentations package, which uses librosa)
-		
+		# note that transforms to raw waveform don't have cuda compatibility (done via audiomentations package, which uses librosa)		
 		if self.wav_transform:
 			wav = self.transform_wav(wav, n_views=self.n_views)
 		else:
@@ -130,9 +155,9 @@ class AudioSet(Dataset):
 			lms = self.transform_lms(lms)
 
 		if len(lms) == 1:
-			return lms[0]
+			return lms[0], label_indices
 		else:
-			return lms
+			return lms, label_indices
 
 	
 	def transform_wav(self, wav, n_views):
@@ -167,13 +192,15 @@ class AudioSetLoader:
 		self.pretrain = pretrain
 
 	def get_loader(self, test=False):
-		# pretrain or downstream eval?
+		# pretrain or downstream eval
 		if self.pretrain:
+			drop_last = True
 			wav_transform, lms_transform = make_transforms_pretrain(self.cfg)
 			dataset = AudioSet(self.cfg, n_views=2, wav_transform=wav_transform, lms_transform=lms_transform)
 		else:
+			drop_last = False
 			if not test:
-				wav_transform, lms_transform = make_transforms_eval(self.cfg)
+				wav_transform, lms_transform = make_transforms_lineval(self.cfg)
 				dataset = AudioSet(self.cfg, n_views=1, wav_transform=wav_transform, lms_transform=lms_transform)
 			else:
 				dataset = AudioSet(self.cfg, n_views=1, wav_transform=None, lms_transform=None, test=True)
@@ -188,7 +215,7 @@ class AudioSetLoader:
 				num_workers=12,
 				pin_memory=True,
 				sampler=sampler,
-				drop_last=True,
+				drop_last=drop_last,
 			)
 		else:
 			loader = DataLoader(
@@ -197,9 +224,23 @@ class AudioSetLoader:
 				shuffle=True,
 				num_workers=12,
 				pin_memory=True,
-				drop_last=True,
+				drop_last=drop_last,
 			)
 
 		return loader
 
 
+
+if __name__ == "__main__":
+	
+	base_dir="data/audioset"
+	index_dict = make_index_dict(os.path.join(base_dir, "class_labels_indices.csv"))
+	label_num = len(index_dict)
+	labels = "/m/01v_m0#/m/0hdsk"
+	# initialize the label
+	label_indices = np.zeros(label_num)
+	# add sample labels
+	for label_str in labels.split('#'):
+		label_indices[int(index_dict[label_str])] = 1.0
+	label_indices = torch.FloatTensor(label_indices)
+	pprint(label_indices)

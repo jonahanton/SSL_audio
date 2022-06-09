@@ -40,6 +40,6 @@ meta:
 checkpoint:
   print_it: 10
 logging:
-  log_dir: checkpoint/eval/{}
+  log_dir: 
 dist_url: env://
 dist_init: file

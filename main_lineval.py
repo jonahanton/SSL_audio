@@ -22,7 +22,7 @@ from evaluate.linear import LinearTrainer
 def get_args_parser():
     
     parser = argparse.ArgumentParser(description='Linear Evaluation', add_help=False)
-    parser.add_argument('--config-path', type=str, default='./configs/config_linear_eval.yaml',
+    parser.add_argument('--config-path', type=str, default='./configs/config_lineval.yaml',
                         help='path to .yaml config file')
     return parser
 
@@ -52,6 +52,11 @@ def eval_linear(args=None):
     # shared file-system initialization for torch distributed (https://pytorch.org/docs/stable/distributed.html)
     if cfg.dist_init == 'file':
         cfg.dist_url = 'file:///vol/bitbucket/jla21/proj/slurm/sharedfile'
+
+    # set-up path for logging
+    if cfg.logging.log_dir is None:
+        cfg.logging.log_dir = '/'.join(cfg.weigth_file.split('/')[:-2]) + '/eval'
+    os.makedirs(cfg.logging.log_dir, exist_ok=True)
 
     """set-up DDP"""
     utils.init_distributed_mode(cfg)
