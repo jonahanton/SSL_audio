@@ -12,8 +12,6 @@ import torch.nn as nn
 import torch.nn.functional as F 
 import torch.backends.cudnn as cudnn
 
-from sklearn.metrics import average_precision_score
-
 import time
 import datetime
 import numpy as np
@@ -25,6 +23,7 @@ from pprint import pprint
 import json
 
 from utils import utils
+from utils.stats import calculate_stats
 from data_manager.audioset import AudioSetLoader
 from models.mst import get_mst_model
 
@@ -43,16 +42,16 @@ class LinearTrainer:
         """*****data loaders*****"""
         print(f'Loading AudioSet-20K')
         self.data_loader_train = AudioSetLoader(cfg=self.cfg, pretrain=False).get_loader() 
-        print(f'Loaded AudioSet-20K, with {len(self.data_loader_train) * self.cfg.optimizer.batch_size_per_gpu * self.cfg.world_size} data points')
+        print(f'Loaded AudioSet-20K, with ~{len(self.data_loader_train) * self.cfg.optimizer.batch_size_per_gpu * self.cfg.world_size} data points')
         
         print(f'Loading AudioSet evaluation set')
         self.data_loader_test = AudioSetLoader(cfg=self.cfg, pretrain=False).get_loader(test=True) 
-        print(f'Loaded AudioSet evaluation set, with {len(self.data_loader_test) * self.cfg.optimizer.batch_size_per_gpu * self.cfg.world_size} data points')
+        print(f'Loaded AudioSet evaluation set, with ~{len(self.data_loader_test) * self.cfg.optimizer.batch_size_per_gpu * self.cfg.world_size} data points')
 
         
     
         """*****load pre-trained weights*****"""
-        sd = torch.load(cfg.weight_file, map_location='cpu')
+        sd = torch.load(self.cfg.weight_file, map_location='cpu')
         sd = sd['model']
         # remove `module.` prefix
         sd = {k.replace("module.", ""): v for k, v in sd.items()}
@@ -60,15 +59,15 @@ class LinearTrainer:
         sd = {k.replace("backbone.", ""): v for k, v in sd.items()}
 
         # get patch size
-        self.cfg.model.encoder.ps = sd['patch_embed.proj.weight'].shape[2:] 
+        encoder_ps = sd['patch_embed.proj.weight'].shape[2:] 
         # get embedding dim 
         embed_dim = sd['pos_embed'].shape[2]
 
         """*****build encoder*****"""
-        self.cfg.model.encoder.size = 'tiny' if embed_dim == 192 else 'small' if embed_dim == 384 else 'base'
+        encoder_size = 'tiny' if embed_dim == 192 else 'small' if embed_dim == 384 else 'base'
         self.encoder = get_mst_model(
-            size=self.cfg.model.encoder.size,
-            patch_size=(self.cfg.model.encoder.ps[0], self.cfg.model.encoder.ps[1]),
+            size=encoder_size,
+            patch_size=(encoder_ps[0], encoder_ps[1]),
         )
         # load in weights
         self.encoder.load_state_dict(sd, strict=False)
@@ -144,8 +143,11 @@ class LinearTrainer:
                 sys.exit(1)
 
             # calculate mAP score per batch (to track during training)
-            mAP = average_precision_score(labels.cpu().numpy(), outputs.sigmoid().detach().cpu().numpy())
-            metric_logger.update(mAP=mAP)
+            # stats = calculate_stats(output=outputs.sigmoid().detach().cpu(), target=labels.cpu())
+            # mAP = np.mean([stat['AP'] for stat in stats])
+            # mAUC = np.mean([stat['auc'] for stat in stats])
+            # metric_logger.update(mAP=mAP)
+            # metric_logger.update(mAUC=mAUC)
 
             tflag = time.time()
 			# gradient update
@@ -172,7 +174,7 @@ class LinearTrainer:
                 self.wandb_run.log({
 					'train_loss': metric_logger.meters['loss'].avg,
 					'lr': lr,
-                    'train_mAP': metric_logger.meters['mAP'].avg,
+                    # 'train_mAP': metric_logger.meters['mAP'].avg,
 					'data_time' : metric_logger.meters['data_time'].avg,
 					'forward_time' : metric_logger.meters['forward_time'].avg,
 					'backward_time' : metric_logger.meters['backward_time'].avg,
@@ -185,23 +187,25 @@ class LinearTrainer:
         if self.cfg.meta.distributed:
 			# gather the stats from all processes
             metric_logger.synchronize_between_processes()
-        print("Averaged stats:", metric_logger)
+        print('Averaged stats:', metric_logger)
 
 		# return training stats
         train_stats = {k: meter.global_avg for k, meter in metric_logger.meters.items()}
 
         # evaluate on test set (AudioSet eval segments)
         if epoch % self.cfg.val_freq == 0 or epoch == self.cfg.optimizer.epochs - 1:
-            test_stats = self.validate()
-            test_mAP = test_stats['mAP']
+            test_loss, test_stats = self.validate()
+            # test_mAP = np.mean([stat['AP'] for stat in test_stats])
             if self.cfg.meta.distributed:
-                test_mAP = utils.AllReduce.apply(test_mAP)
-            print(f"Test mAP: {test_mAP:.3f}")
-            
+                # test_mAP = utils.AllReduce.apply(test_mAP)
+                test_loss = utils.AllReduce.apply(test_loss)
+            # print(f"Test mAP: {test_mAP:.6f}")
+            print(f'Test loss: {test_loss:.6f}')
             log_stats = {
                 **{f'train_{k}': v for k, v in train_stats.items()},
                 'epoch': epoch,
-                'test mAP': test_mAP,
+                'test loss': test_loss, 
+                # 'test mAP': test_mAP,
             }
 
             if self.cfg.meta.distributed:
@@ -217,12 +221,11 @@ class LinearTrainer:
     def validate(self):
         self.linear_classifier.eval()
 
-        stats = {}
         all_targets, all_preds = [], []
         val_loss = 0
         for (inputs, labels) in self.data_loader_test:
             
-            all_targets.extend(labels.numpy())
+            all_targets.append(labels)
             # move to gpu
             inputs = inputs.cuda(non_blocking=True)
             labels = labels.cuda(non_blocking=True)
@@ -235,13 +238,13 @@ class LinearTrainer:
             loss = self.criterion(outputs, labels)
             val_loss += loss.item()
 
-            all_preds.extend(outputs.sigmoid().detach().cpu().numpy())
+            all_preds.append(outputs.sigmoid().detach().cpu())
         
         val_loss /= len(self.data_loader_test)
-        stats['loss'] = val_loss
-        stats['mAP'] = average_precision_score(np.array(all_targets), np.array(all_preds)) 
-        
-        return stats
+        # stats = calculate_stats(output=torch.cat(all_preds), target=torch.cat(all_targets))
+        stats = None
+
+        return val_loss, stats
 
 
 class LinearClassifier(nn.Module):

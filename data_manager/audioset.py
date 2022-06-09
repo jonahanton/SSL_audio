@@ -77,7 +77,7 @@ class AudioSet(Dataset):
 		)
 
 		if test:
-			self.combined_df = eval_df
+			self.combined_df = self.eval_df
 		else:
 			if cfg.data.audioset.balanced_only:
 				self.combined_df = self.balanced_df
@@ -212,7 +212,7 @@ class AudioSetLoader:
 				dataset=dataset,
 				batch_size=self.cfg.optimizer.batch_size_per_gpu,
 				shuffle=False,
-				num_workers=12,
+				num_workers=4,
 				pin_memory=True,
 				sampler=sampler,
 				drop_last=drop_last,
@@ -222,7 +222,7 @@ class AudioSetLoader:
 				dataset=dataset,
 				batch_size=self.cfg.optimizer.batch_size_per_gpu,
 				shuffle=True,
-				num_workers=12,
+				num_workers=4,
 				pin_memory=True,
 				drop_last=drop_last,
 			)

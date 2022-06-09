@@ -1,8 +1,10 @@
-weight_file: checkpoint/0606_13-09-model=transformer_base-ps=16x16-maskratio=0.75/models/epoch-1.pth.tar
+weight_file: checkpoint/0606_16-25-model=transformer_base-ps=16x16-maskratio=0.75/models/epoch-1.pth.tar
 task: audioset
 num_classes: 527
 val_freq: 1
 data:
+  audioset:
+    balanced_only: true
   preprocess:
     # Unit duration in seconds for one audio segment
     unit_sec: 0.95
@@ -31,7 +33,7 @@ optimizer:
   type: sgd
   lr: 1.0e-3
   epochs: 2
-  batch_size_per_gpu: 32
+  batch_size_per_gpu: 512
   normalize: true
 meta:
   distributed: 

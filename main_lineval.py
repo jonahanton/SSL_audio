@@ -55,7 +55,7 @@ def eval_linear(args=None):
 
     # set-up path for logging
     if cfg.logging.log_dir is None:
-        cfg.logging.log_dir = '/'.join(cfg.weigth_file.split('/')[:-2]) + '/eval'
+        cfg.logging.log_dir = '/'.join(cfg.weight_file.split('/')[:-2]) + '/eval'
     os.makedirs(cfg.logging.log_dir, exist_ok=True)
 
     """set-up DDP"""
@@ -68,7 +68,7 @@ def eval_linear(args=None):
     print(f'Rank: {cfg.rank}')
     if cfg.rank == 0:
         wandb_run = wandb.init(
-            project='BT-Audio-linear_eval',
+            project='BT-Audio-lineval',
             config=cfg,
         )
     else:
