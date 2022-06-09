@@ -185,7 +185,7 @@ class AudioSetLoader:
 				dataset=dataset,
 				batch_size=self.cfg.optimizer.batch_size_per_gpu,
 				shuffle=False,
-				num_workers=4,
+				num_workers=12,
 				pin_memory=True,
 				sampler=sampler,
 				drop_last=True,
@@ -195,7 +195,7 @@ class AudioSetLoader:
 				dataset=dataset,
 				batch_size=self.cfg.optimizer.batch_size_per_gpu,
 				shuffle=True,
-				num_workers=4,
+				num_workers=12,
 				pin_memory=True,
 				drop_last=True,
 			)

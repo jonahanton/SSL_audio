@@ -33,8 +33,6 @@ def train_and_test(cfg, wandb_run):
     print(f'Starting training for {cfg.optimizer.epochs} epochs')
     for epoch in range(cfg.optimizer.epochs):
         trainer.train_one_epoch(epoch)
-    print(f'Evaluating on test set')
-    trainer.evaluate()
 
 
 def eval_linear(args=None):
