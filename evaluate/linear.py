@@ -67,15 +67,16 @@ class LinearTrainer:
         """*****build encoder*****"""
         self.cfg.model.encoder.size = 'tiny' if embed_dim == 192 else 'small' if embed_dim == 384 else 'base'
         self.encoder = get_mst_model(
-            size=cfg.model.encoder.size,
-            patch_size=(cfg.model.encoder.ps[0], cfg.model.encoder.ps[1]),
+            size=self.cfg.model.encoder.size,
+            patch_size=(self.cfg.model.encoder.ps[0], self.cfg.model.encoder.ps[1]),
         )
         # load in weights
         self.encoder.load_state_dict(sd, strict=False)
-        print(f'Loaded in pre-trained weights from file {cfg.weight_file}')
+        print(f'Loaded in pre-trained weights from file {self.cfg.weight_file}')
         del sd
         # move encoder to gpu
-		self.encoder = self.encoder.cuda(self.cfg.gpu)
+        
+        self.encoder = self.encoder.cuda(self.cfg.gpu)
         self.encoder.eval()
 
         """*****build linear classifier*****"""
@@ -87,7 +88,7 @@ class LinearTrainer:
         self.linear_classifier = self.linear_classifier.cuda(self.cfg.gpu)
         if self.cfg.meta.distributed:
             # wrap linear classifier with ddp
-			self.linear_classifier = nn.parallel.DistributedDataParallel(self.linear_classifier, device_ids=[self.cfg.gpu])
+            self.linear_classifier = nn.parallel.DistributedDataParallel(self.linear_classifier, device_ids=[self.cfg.gpu])
 
         """*****prepare optimizer*****"""
         if self.cfg.optimizer.type == 'sgd':
@@ -98,10 +99,11 @@ class LinearTrainer:
                 weight_decay=0,
                 nesterov=True,
             )
+        
         # for mixed precision training
-		self.fp16_scaler = None
-		if self.cfg.meta.use_fp16:
-			self.fp16_scaler = torch.cuda.amp.GradScaler()
+        self.fp16_scaler = None
+        if self.cfg.meta.use_fp16:
+            self.fp16_scaler = torch.cuda.amp.GradScaler()
         
         """*****init schedulers*****"""
         self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, self.cfg.optimizer.epochs, eta_min=0)
@@ -110,19 +112,19 @@ class LinearTrainer:
         self.criterion = nn.BCEWithLogitsLoss()
 
     
-    def train_one_epoch(self, epochs):
+    def train_one_epoch(self, epoch):
         
         self.linear_classifier.train()
 
         metric_logger = utils.MetricLogger(delimiter=" ")
-		header = f'Epoch: [{epoch}/{self.cfg.optimizer.epochs}]'
+        header = f'Epoch: [{epoch}/{self.cfg.optimizer.epochs}]'
         metric_logger.add_meter('lr', utils.SmoothedValue(window_size=1, fmt='{value:.6f}'))
 
-		end = time.time()
+        end = time.time()
         for (inputs, labels) in metric_logger.log_every(self.data_loader_train, self.cfg.checkpoint.print_it, header):
             
             # measure data loading time
-			metric_logger.update(data_time=(time.time()-end))
+            metric_logger.update(data_time=(time.time()-end))
 
             # move to gpu
             inputs = inputs.cuda(non_blocking=True)
@@ -133,13 +135,13 @@ class LinearTrainer:
             with torch.cuda.amp.autocast(enabled=(self.fp16_scaler is not None)):
                 with torch.no_grad():
                     outputs = self.encoder(inputs)
-			outputs = self.linear_classifier(outputs)
+            outputs = self.linear_classifier(outputs)
             loss = self.criterion(outputs, labels)
-			metric_logger.update(forward_time=time.time()-tflag)
+            metric_logger.update(forward_time=time.time()-tflag)
 			
-			if not math.isfinite(loss.item()):
-				print(f"Loss is {loss.item()}, stopping training")
-				sys.exit(1)
+            if not math.isfinite(loss.item()):
+                print(f"Loss is {loss.item()}, stopping training")
+                sys.exit(1)
 
             # calculate mAP score per batch (to track during training)
             mAP = average_precision_score(labels.cpu().numpy(), outputs.sigmoid().detach().cpu().numpy())
@@ -147,27 +149,27 @@ class LinearTrainer:
 
             tflag = time.time()
 			# gradient update
-			self.optimizer.zero_grad()
-			if self.fp16_scaler is None:
-				loss.backward()
-				self.optimizer.step()
-			else:
-				self.fp16_scaler.scale(loss).backward()
-				self.fp16_scaler.step(self.optimizer)
-				self.fp16_scaler.update()
-			metric_logger.update(backward_time=(time.time()-tflag))
+            self.optimizer.zero_grad()
+            if self.fp16_scaler is None:
+                loss.backward()
+                self.optimizer.step()
+            else:
+                self.fp16_scaler.scale(loss).backward()
+                self.fp16_scaler.step(self.optimizer)
+                self.fp16_scaler.update()
+            metric_logger.update(backward_time=(time.time()-tflag))
 
 
             # logging 
-			if self.cfg.meta.distributed:
-				torch.cuda.synchronize()
-			loss_val = loss.item()
-			lr = self.optimizer.param_groups[0]["lr"]
-			metric_logger.update(loss=loss_val)
-			metric_logger.update(lr=lr)
+            if self.cfg.meta.distributed:
+                torch.cuda.synchronize()
+            loss_val = loss.item()
+            lr = self.optimizer.param_groups[0]["lr"]
+            metric_logger.update(loss=loss_val)
+            metric_logger.update(lr=lr)
 
-			if self.wandb_run is not None:
-				self.wandb_run.log({
+            if self.wandb_run is not None:
+                self.wandb_run.log({
 					'train_loss': metric_logger.meters['loss'].avg,
 					'lr': lr,
                     'train_mAP': metric_logger.meters['mAP'].avg,
@@ -176,17 +178,17 @@ class LinearTrainer:
 					'backward_time' : metric_logger.meters['backward_time'].avg,
 				})
 
-			end = time.time()
+            end = time.time()
 
         self.scheduler.step()
 
-		if self.cfg.meta.distributed:
+        if self.cfg.meta.distributed:
 			# gather the stats from all processes
-			metric_logger.synchronize_between_processes()
-		print("Averaged stats:", metric_logger)
+            metric_logger.synchronize_between_processes()
+        print("Averaged stats:", metric_logger)
 
 		# return training stats
-		train_stats = {k: meter.global_avg for k, meter in metric_logger.meters.items()}
+        train_stats = {k: meter.global_avg for k, meter in metric_logger.meters.items()}
 
         # evaluate on test set (AudioSet eval segments)
         if epoch % self.cfg.val_freq == 0 or epoch == self.cfg.optimizer.epochs - 1:
@@ -229,7 +231,7 @@ class LinearTrainer:
             with torch.cuda.amp.autocast(enabled=(self.fp16_scaler is not None)):
                 with torch.no_grad():
                     outputs = self.encoder(inputs)
-			outputs = self.linear_classifier(outputs)
+            outputs = self.linear_classifier(outputs)
             loss = self.criterion(outputs, labels)
             val_loss += loss.item()
 
