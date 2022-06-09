@@ -326,6 +326,25 @@ def all_reduce_mean(x):
         return x
 
 
+
+class AllReduce(torch.autograd.Function):
+
+    @staticmethod
+    def forward(ctx, x):
+        if (
+            dist.is_available()
+            and dist.is_initialized()
+            and (dist.get_world_size() > 1)
+        ):
+            x = x.contiguous() / dist.get_world_size()
+            dist.all_reduce(x)
+        return x
+
+    @staticmethod
+    def backward(ctx, grads):
+        return grads
+
+
 def load_pretrained_weights(model, weight_file):
     state_dict = torch.load(pretrained_weights, map_location='cpu')
     state_dict = state_dict['model']

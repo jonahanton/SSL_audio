@@ -32,6 +32,7 @@ optimizer:
   lr: 1.0e-3
   epochs: 2
   batch_size_per_gpu: 128
+  normalize: true
 meta:
   distributed: 
   seed: 32

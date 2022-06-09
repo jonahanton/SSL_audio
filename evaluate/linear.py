@@ -4,12 +4,15 @@ References:
     https://github.com/facebookresearch/msn/blob/main/linear_eval.py
     https://github.com/facebookresearch/dino/blob/main/eval_linear.py
     https://github.com/nttcslab/byol-a
+    https://github.com/daisukelab/general-learning/blob/master/MLP/torch_mlp_clf.py
 """
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F 
 import torch.backends.cudnn as cudnn
+
+from sklearn.metrics import average_precision_score
 
 import time
 import datetime
@@ -65,7 +68,7 @@ class LinearTrainer:
         self.cfg.model.encoder.size = 'tiny' if embed_dim == 192 else 'small' if embed_dim == 384 else 'base'
         self.encoder = get_mst_model(
             size=cfg.model.encoder.size,
-            patch_size=(cfg.model.encoder.ps[0], cfg.model.encoder.ps[1])
+            patch_size=(cfg.model.encoder.ps[0], cfg.model.encoder.ps[1]),
         )
         # load in weights
         self.encoder.load_state_dict(sd, strict=False)
@@ -76,7 +79,12 @@ class LinearTrainer:
         self.encoder.eval()
 
         """*****build linear classifier*****"""
-        self.linear_classifier = LinearClassifier(embed_dim, self.cfg.num_classes).cuda(self.cfg.gpu)
+        self.linear_classifier = LinearClassifier(
+            dim=embed_dim,
+            num_classes=self.cfg.num_classes,
+            normalize=self.cfg.optimizer.normalize,
+        )
+        self.linear_classifier = self.linear_classifier.cuda(self.cfg.gpu)
         if self.cfg.meta.distributed:
             # wrap linear classifier with ddp
 			self.linear_classifier = nn.parallel.DistributedDataParallel(self.linear_classifier, device_ids=[self.cfg.gpu])
@@ -133,6 +141,10 @@ class LinearTrainer:
 				print(f"Loss is {loss.item()}, stopping training")
 				sys.exit(1)
 
+            # calculate mAP score per batch (to track during training)
+            mAP = average_precision_score(labels.cpu().numpy(), outputs.sigmoid().detach().cpu().numpy())
+            metric_logger.update(mAP=mAP)
+
             tflag = time.time()
 			# gradient update
 			self.optimizer.zero_grad()
@@ -158,6 +170,7 @@ class LinearTrainer:
 				self.wandb_run.log({
 					'train_loss': metric_logger.meters['loss'].avg,
 					'lr': lr,
+                    'train_mAP': metric_logger.meters['mAP'].avg,
 					'data_time' : metric_logger.meters['data_time'].avg,
 					'forward_time' : metric_logger.meters['forward_time'].avg,
 					'backward_time' : metric_logger.meters['backward_time'].avg,
@@ -178,17 +191,36 @@ class LinearTrainer:
         # evaluate on test set (AudioSet eval segments)
         if epoch % self.cfg.val_freq == 0 or epoch == self.cfg.optimizer.epochs - 1:
             test_stats = self.validate()
+            test_mAP = test_stats['mAP']
+            if self.cfg.meta.distributed:
+                test_mAP = utils.AllReduce.apply(test_mAP)
+            print(f"Test mAP: {test_mAP:.3f}")
+            
+            log_stats = {
+                **{f'train_{k}': v for k, v in train_stats.items()},
+                'epoch': epoch,
+                'test mAP': test_mAP,
+            }
+
+            if self.cfg.meta.distributed:
+                if utils.is_main_process():
+                    with (Path(f'{self.cfg.logging.log_dir}/log.txt')).open("a") as f:
+                        f.write(json.dumps(log_stats) + "\n")
+            else:
+                with (Path(f'{self.cfg.logging.log_dir}/log.txt')).open("a") as f:
+                    f.write(json.dumps(log_stats) + "\n")
 
 
     @torch.no_grad()
     def validate(self):
-        
         self.linear_classifier.eval()
-        metric_logger = utils.MetricLogger(delimeter=" ")
-        header = 'Test:'
 
-        for (inputs, labels) in metric_logger.log_every(self.data_loader_test, self.cfg.checkpoint.print_it, header):
-
+        stats = {}
+        all_targets, all_preds = [], []
+        val_loss = 0
+        for (inputs, labels) in self.data_loader_test:
+            
+            all_targets.extend(labels.numpy())
             # move to gpu
             inputs = inputs.cuda(non_blocking=True)
             labels = labels.cuda(non_blocking=True)
@@ -199,17 +231,23 @@ class LinearTrainer:
                     outputs = self.encoder(inputs)
 			outputs = self.linear_classifier(outputs)
             loss = self.criterion(outputs, labels)
+            val_loss += loss.item()
 
-            metric_logger.update(loss=loss.item())
-
-        return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
+            all_preds.extend(outputs.sigmoid().detach().cpu().numpy())
+        
+        val_loss /= len(self.data_loader_test)
+        stats['loss'] = val_loss
+        stats['mAP'] = average_precision_score(np.array(all_targets), np.array(all_preds)) 
+        
+        return stats
 
 
 class LinearClassifier(nn.Module):
 
-    def __init__(self, dim, num_classes=527):
+    def __init__(self, dim, num_classes=527, normalize=True):
         super().__init__()
 
+        self.normalize = normalize
         self.norm = nn.LayerNorm(dim)
         self.linear = nn.Linear(dim, num_classes)
         self.linear.weight.data.normal_(mean=0.0, std=0.01)
@@ -219,9 +257,9 @@ class LinearClassifier(nn.Module):
     def forward(self, x):
         x = x.view(x.size(0), -1)  # flatten
         x = self.norm(x)
+        if self.normalize:  # normalize inputs for linear classifier 
+            x = F.normalize(x)
         return self.linear(x)
-
-
 
 
 
