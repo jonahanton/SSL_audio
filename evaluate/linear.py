@@ -1,5 +1,9 @@
 """
 Linear evaluation of pre-trained model on AudioSet-20K.
+References:
+    https://github.com/facebookresearch/msn/blob/main/linear_eval.py
+    https://github.com/facebookresearch/dino/blob/main/eval_linear.py
+    https://github.com/nttcslab/byol-a
 """
 
 import torch
