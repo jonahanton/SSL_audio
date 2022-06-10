@@ -1,4 +1,4 @@
-weight_file: checkpoint/0606_16-25-model=transformer_base-ps=16x16-maskratio=0.75/models/epoch-1.pth.tar
+weight_file: 
 task: audioset
 num_classes: 527
 val_freq: 1

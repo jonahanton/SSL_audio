@@ -23,7 +23,7 @@ from utils import utils
 def get_args_parser():
     
     parser = argparse.ArgumentParser(description='Barlow Twins Training', add_help=False)
-    parser.add_argument('--config-path', type=str, default='./configs/config_pretrain.yaml',
+    parser.add_argument('--config-path', type=str, default='./configs/pretrain/config.yaml',
                         help='path to .yaml config file')
     return parser
 

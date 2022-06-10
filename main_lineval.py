@@ -22,7 +22,7 @@ from evaluate.linear import LinearTrainer
 def get_args_parser():
     
     parser = argparse.ArgumentParser(description='Linear Evaluation', add_help=False)
-    parser.add_argument('--config-path', type=str, default='./configs/config_lineval.yaml',
+    parser.add_argument('--config-path', type=str, default='./configs/lineval/config.yaml',
                         help='path to .yaml config file')
     return parser
 
