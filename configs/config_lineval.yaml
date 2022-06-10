@@ -32,7 +32,7 @@ data:
 optimizer:
   type: sgd
   lr: 0.1
-  epochs: 10
+  epochs: 100
   batch_size_per_gpu: 512
   normalize: true
 meta:
