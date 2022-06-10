@@ -205,7 +205,6 @@ class LinearTrainer:
             if self.cfg.meta.distributed:
                 test_stats = {k: utils.all_reduce_mean(v) for k, v in test_stats.items()}
             
-            print(f"Test mAP: {test_mAP:.6f}\nTest loss: {test_loss:.6f}")
             log_stats = {
                 **{f'train_{k}': v for k, v in train_stats.items()},
                 **{f'test_{k}': v for k, v in test_stats.items()},
@@ -248,7 +247,7 @@ class LinearTrainer:
         val_loss /= len(self.data_loader_test)
         
         stats['loss'] = val_loss
-        stats['mAP'] = average_precison_score(y_true=torch.cat(all_targets), y_score=torch.cat(all_preds), average='macro') 
+        stats['mAP'] = average_precision_score(y_true=torch.cat(all_targets), y_score=torch.cat(all_preds), average='macro') 
 
         return stats
 
