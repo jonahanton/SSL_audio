@@ -150,9 +150,9 @@ class LinearTrainer:
                 print(f"Loss is {loss.item()}, stopping training")
                 sys.exit(1)
 
-            # calculate mAP score per batch
-            mAP = average_precision_score(y_true=outputs.sigmoid().detach().cpu(), y_score=labels.cpu(), average='macro')
-            metric_logger.update(train_mAP=mAP)
+            # # calculate mAP score per batch
+            # mAP = average_precision_score(y_true=labels.cpu(), y_score=outputs.sigmoid().detach().cpu(), average='macro')
+            # metric_logger.update(train_mAP=mAP)
 
             tflag = time.time()
 			# gradient update
@@ -180,7 +180,7 @@ class LinearTrainer:
                 self.wandb_run.log({
 					'train_loss': metric_logger.meters['loss'].avg,
 					'lr': lr,
-                    'train_mAP': metric_logger.meters['mAP'].avg,
+                    # 'train_mAP': metric_logger.meters['mAP'].avg,
 					'data_time' : metric_logger.meters['data_time'].avg,
 					'forward_time' : metric_logger.meters['forward_time'].avg,
 					'backward_time' : metric_logger.meters['backward_time'].avg,
@@ -198,20 +198,18 @@ class LinearTrainer:
 
         # evaluate on test set (AudioSet eval segments)
         if epoch % self.cfg.val_freq == 0 or epoch == self.cfg.optimizer.epochs - 1:
+            
             print('Starting evaluation on test set')
             test_stats = self.validate()
-            test_loss = test_stats.get('loss')
-            test_mAP = test_stats.get('mAP')
+
             if self.cfg.meta.distributed:
-                test_mAP = utils.all_reduce_mean(test_mAP)
-                test_loss = utils.all_reduce_mean(test_loss)
+                test_stats = {k: utils.all_reduce_mean(v) for k, v in test_stats.items()}
             
             print(f"Test mAP: {test_mAP:.6f}\nTest loss: {test_loss:.6f}")
             log_stats = {
                 **{f'train_{k}': v for k, v in train_stats.items()},
+                **{f'test_{k}': v for k, v in test_stats.items()},
                 'epoch': epoch,
-                'test loss': test_loss, 
-                'test mAP': test_mAP,
             }
 
             if self.cfg.meta.distributed:
@@ -250,7 +248,7 @@ class LinearTrainer:
         val_loss /= len(self.data_loader_test)
         
         stats['loss'] = val_loss
-        stats['mAP'] = average_precison_score(y_true=torch.cat(all_preds), y_score=torch.cat(all_targets), average='macro') 
+        stats['mAP'] = average_precison_score(y_true=torch.cat(all_targets), y_score=torch.cat(all_preds), average='macro') 
 
         return stats
 

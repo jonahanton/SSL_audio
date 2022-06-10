@@ -31,7 +31,7 @@ data:
     gaussnoise_ratio: 0.4
 optimizer:
   type: sgd
-  lr: 1.0e-3
+  lr: 6.4
   epochs: 10
   batch_size_per_gpu: 512
   normalize: true
