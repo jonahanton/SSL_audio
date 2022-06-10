@@ -194,11 +194,9 @@ class AudioSetLoader:
 	def get_loader(self, test=False):
 		# pretrain or downstream eval
 		if self.pretrain:
-			drop_last = True
 			wav_transform, lms_transform = make_transforms_pretrain(self.cfg)
 			dataset = AudioSet(self.cfg, n_views=2, wav_transform=wav_transform, lms_transform=lms_transform)
 		else:
-			drop_last = False
 			if not test:
 				wav_transform, lms_transform = make_transforms_lineval(self.cfg)
 				dataset = AudioSet(self.cfg, n_views=1, wav_transform=wav_transform, lms_transform=lms_transform)
@@ -215,7 +213,7 @@ class AudioSetLoader:
 				num_workers=4,
 				pin_memory=True,
 				sampler=sampler,
-				drop_last=drop_last,
+				drop_last=True,
 			)
 		else:
 			loader = DataLoader(
@@ -224,7 +222,7 @@ class AudioSetLoader:
 				shuffle=True,
 				num_workers=4,
 				pin_memory=True,
-				drop_last=drop_last,
+				drop_last=True,
 			)
 
 		return loader

@@ -12,6 +12,8 @@ import torch.nn as nn
 import torch.nn.functional as F 
 import torch.backends.cudnn as cudnn
 
+from sklearn.metrics import average_precision_score
+
 import time
 import datetime
 import numpy as np
@@ -27,6 +29,8 @@ from utils.stats import calculate_stats
 from data_manager.audioset import AudioSetLoader
 from models.mst import get_mst_model
 
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning)  # for sklearn UserWarning 
 
 class LinearTrainer:
     
@@ -105,7 +109,11 @@ class LinearTrainer:
             self.fp16_scaler = torch.cuda.amp.GradScaler()
         
         """*****init schedulers*****"""
-        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, self.cfg.optimizer.epochs, eta_min=0)
+        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer=self.optimizer,
+            T_max=self.cfg.optimizer.epochs*len(self.data_loader_train),
+            eta_min=0,
+            )
         
         """*****init loss*****"""
         self.criterion = nn.BCEWithLogitsLoss()
@@ -142,12 +150,9 @@ class LinearTrainer:
                 print(f"Loss is {loss.item()}, stopping training")
                 sys.exit(1)
 
-            # calculate mAP score per batch (to track during training)
-            # stats = calculate_stats(output=outputs.sigmoid().detach().cpu(), target=labels.cpu())
-            # mAP = np.mean([stat['AP'] for stat in stats])
-            # mAUC = np.mean([stat['auc'] for stat in stats])
-            # metric_logger.update(mAP=mAP)
-            # metric_logger.update(mAUC=mAUC)
+            # calculate mAP score per batch
+            mAP = average_precision_score(y_true=outputs.sigmoid().detach().cpu(), y_score=labels.cpu(), average='macro')
+            metric_logger.update(train_mAP=mAP)
 
             tflag = time.time()
 			# gradient update
@@ -161,6 +166,7 @@ class LinearTrainer:
                 self.fp16_scaler.update()
             metric_logger.update(backward_time=(time.time()-tflag))
 
+            self.scheduler.step()
 
             # logging 
             if self.cfg.meta.distributed:
@@ -174,15 +180,13 @@ class LinearTrainer:
                 self.wandb_run.log({
 					'train_loss': metric_logger.meters['loss'].avg,
 					'lr': lr,
-                    # 'train_mAP': metric_logger.meters['mAP'].avg,
+                    'train_mAP': metric_logger.meters['mAP'].avg,
 					'data_time' : metric_logger.meters['data_time'].avg,
 					'forward_time' : metric_logger.meters['forward_time'].avg,
 					'backward_time' : metric_logger.meters['backward_time'].avg,
 				})
 
             end = time.time()
-
-        self.scheduler.step()
 
         if self.cfg.meta.distributed:
 			# gather the stats from all processes
@@ -194,18 +198,20 @@ class LinearTrainer:
 
         # evaluate on test set (AudioSet eval segments)
         if epoch % self.cfg.val_freq == 0 or epoch == self.cfg.optimizer.epochs - 1:
-            test_loss, test_stats = self.validate()
-            # test_mAP = np.mean([stat['AP'] for stat in test_stats])
+            print('Starting evaluation on test set')
+            test_stats = self.validate()
+            test_loss = test_stats.get('loss')
+            test_mAP = test_stats.get('mAP')
             if self.cfg.meta.distributed:
-                # test_mAP = utils.AllReduce.apply(test_mAP)
-                test_loss = utils.AllReduce.apply(test_loss)
-            # print(f"Test mAP: {test_mAP:.6f}")
-            print(f'Test loss: {test_loss:.6f}')
+                test_mAP = utils.all_reduce_mean(test_mAP)
+                test_loss = utils.all_reduce_mean(test_loss)
+            
+            print(f"Test mAP: {test_mAP:.6f}\nTest loss: {test_loss:.6f}")
             log_stats = {
                 **{f'train_{k}': v for k, v in train_stats.items()},
                 'epoch': epoch,
                 'test loss': test_loss, 
-                # 'test mAP': test_mAP,
+                'test mAP': test_mAP,
             }
 
             if self.cfg.meta.distributed:
@@ -221,6 +227,7 @@ class LinearTrainer:
     def validate(self):
         self.linear_classifier.eval()
 
+        stats = {}
         all_targets, all_preds = [], []
         val_loss = 0
         for (inputs, labels) in self.data_loader_test:
@@ -241,10 +248,11 @@ class LinearTrainer:
             all_preds.append(outputs.sigmoid().detach().cpu())
         
         val_loss /= len(self.data_loader_test)
-        # stats = calculate_stats(output=torch.cat(all_preds), target=torch.cat(all_targets))
-        stats = None
+        
+        stats['loss'] = val_loss
+        stats['mAP'] = average_precison_score(y_true=torch.cat(all_preds), y_score=torch.cat(all_targets), average='macro') 
 
-        return val_loss, stats
+        return stats
 
 
 class LinearClassifier(nn.Module):

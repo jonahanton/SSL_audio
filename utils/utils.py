@@ -325,21 +325,3 @@ def all_reduce_mean(x):
     else:
         return x
 
-
-
-class AllReduce(torch.autograd.Function):
-
-    @staticmethod
-    def forward(ctx, x):
-        if (
-            dist.is_available()
-            and dist.is_initialized()
-            and (dist.get_world_size() > 1)
-        ):
-            x = x.contiguous() / dist.get_world_size()
-            dist.all_reduce(x)
-        return x
-
-    @staticmethod
-    def backward(ctx, grads):
-        return grads
