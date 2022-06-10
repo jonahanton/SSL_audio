@@ -2,6 +2,7 @@
 A PyTorch implementation of Vision Transformers [Dosovitskiy et al., 2020],
 adapted for our purposes (appropriate for spectrogram input, w/ masking).
 References:
+	https://github.com/nttcslab/msm-mae
 	https://github.com/facebookresearch/mae/blob/main/models_mae.py
 	https://github.com/facebookresearch/msn/blob/main/src/deit.py
 	https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/vision_transformer.py
@@ -20,20 +21,27 @@ from functools import partial
 
 
 class MaskedSpectrogramTransformer(nn.Module):
-	def __init__(self, img_size=(64, 96), patch_size=(16, 16), in_chans=1, embed_dim=768,
-				 depth=12, num_heads=12, mlp_ratio=4., norm_layer=nn.LayerNorm):
+
+	def __init__(self, img_size=(80, 96), patch_size=(16, 16), in_chans=1, 
+				 embed_dim=768, depth=12, num_heads=12, 
+				 mlp_ratio=4., norm_layer=nn.LayerNorm,
+				 use_cls_token=True):
 		super().__init__()
 
 		self.embed_dim = embed_dim 
+		self.use_cls_token = use_cls_token
 		
 		# projects input to have dim. embed_dim (conv2d layer, kernel_size=patch_size, stride=patch_size)
 		self.patch_embed = PatchEmbed(img_size, patch_size, in_chans, embed_dim)
 		num_patches = self.patch_embed.num_patches
+		
+		total_patches = num_patches + (1 if self.use_cls_token else 0)
 
-		# [CLS] token
-		self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
+		if self.use_cls_token:
+			# [CLS] token
+			self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
 		# (learned) positional
-		self.pos_embed = nn.Parameter(torch.zeros(1, num_patches+1, embed_dim))
+		self.pos_embed = nn.Parameter(torch.zeros(1, total_patches, embed_dim))
 
 		self.blocks = nn.ModuleList(
 			[Block(embed_dim, num_heads, mlp_ratio, qkv_bias=True, norm_layer=norm_layer) 
@@ -42,7 +50,8 @@ class MaskedSpectrogramTransformer(nn.Module):
 		self.norm = norm_layer(embed_dim)
 
 		# timm's trunc_normal_(std=.02) is effectively normal_(std=.02) as cutoff is too big (2.)
-		nn.init.normal_(self.cls_token, std=.02)
+		if self.use_cls_token:
+			nn.init.normal_(self.cls_token, std=.02)
 		nn.init.normal_(self.pos_embed, std=.02)
 		self.apply(self._init_weights)
 
@@ -56,7 +65,15 @@ class MaskedSpectrogramTransformer(nn.Module):
 			nn.init.constant_(m.bias, 0)
 			nn.init.constant_(m.weight, 1.0)
 
-		
+
+	def patch_size(self):
+		return self.patch_embed.proj.kernel_size
+
+
+	def grid_size(self):
+		return self.patch_embed.grid_size
+
+
 	def random_masking(self, x, mask_ratio):
 		"""
 		Perform per-sample random masking by per-sample shuffling.
@@ -102,25 +119,26 @@ class MaskedSpectrogramTransformer(nn.Module):
 		x = self.patch_embed(imgs)
 		
 		# add pos embed w/o cls token
-		x = x + self.pos_embed[:,1:,:]
+		if self.use_cls_token:
+			x = x + self.pos_embed[:,1:,:]
+		else:
+			x = x + self.pos_embed
 		
 		# masking: length -> length * mask_ratio
 		x, mask, ids_restore = self.random_masking(x, mask_ratio)
 		
 		# append cls token
-		cls_token = self.cls_token + self.pos_embed[:,:1,:]
-		cls_tokens = cls_token.expand(x.shape[0], -1, -1)  # expand dim 0 of cls token to equal batch size
-		x = torch.cat((cls_tokens, x), dim=1)
+		if self.use_cls_token:
+			cls_token = self.cls_token + self.pos_embed[:,:1,:]
+			cls_tokens = cls_token.expand(x.shape[0], -1, -1)  # expand dim 0 of cls token to equal batch size
+			x = torch.cat((cls_tokens, x), dim=1)
 		
 		# apply Transformer blocks
 		for blk in self.blocks:
 			x = blk(x)
 		x = self.norm(x)
 		
-		# return cls token global clip representation
-		x = x[:, 0]
-		
-		return x
+		return x, mask, ids_restore
 		
 	
 

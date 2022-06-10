@@ -10,12 +10,12 @@ data:
     unit_sec: 0.95
     # FFT parameters
     sample_rate: 16000
-    n_fft: 1024
-    win_length: 1024
+    n_fft: 400
+    win_length: 400
     hop_length: 160
-    n_mels: 64
-    f_min: 60
-    f_max: 7800
+    n_mels: 80
+    f_min: 50
+    f_max: 8000
   transform:
     # Transform raw waveform
     min_rate: 0.5
@@ -29,6 +29,9 @@ data:
     gaussnoise: false
     mixup_ratio: 0.4
     gaussnoise_ratio: 0.4
+model:
+  encoder:
+    latent: cls
 optimizer:
   type: sgd
   lr: 0.1

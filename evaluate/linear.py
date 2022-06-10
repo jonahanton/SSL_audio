@@ -141,8 +141,16 @@ class LinearTrainer:
 			# forward passes + compute loss
             with torch.cuda.amp.autocast(enabled=(self.fp16_scaler is not None)):
                 with torch.no_grad():
-                    outputs = self.encoder(inputs)
-            outputs = self.linear_classifier(outputs)
+                    latent, _, _ = self.encoder(inputs, mask_ratio=0.)
+
+            if self.cfg.model.encoder.latent == 'cls':
+                # return cls token as global clip representation
+                latent = latent[:, 0]
+            else:
+                # return mean pool over patch embeddings as global clip representation
+                latent = torch.mean(latent[:, 1:], dim=1)
+
+            outputs = self.linear_classifier(latent)
             loss = self.criterion(outputs, labels)
             metric_logger.update(forward_time=time.time()-tflag)
 			
@@ -237,8 +245,16 @@ class LinearTrainer:
             # forward passes + compute loss
             with torch.cuda.amp.autocast(enabled=(self.fp16_scaler is not None)):
                 with torch.no_grad():
-                    outputs = self.encoder(inputs)
-            outputs = self.linear_classifier(outputs)
+                    latent, _, _ = self.encoder(inputs, mask_ratio=0.)
+
+            if self.cfg.model.encoder.latent == 'cls':
+                # return cls token as global clip representation
+                latent = latent[:, 0]
+            else:
+                # return mean pool over patch embeddings as global clip representation
+                latent = torch.mean(latent[:, 1:], dim=1)
+            
+            outputs = self.linear_classifier(latent)
             loss = self.criterion(outputs, labels)
             val_loss += loss.item()
 
@@ -258,7 +274,7 @@ class LinearClassifier(nn.Module):
         super().__init__()
 
         self.normalize = normalize
-        self.norm = nn.LayerNorm(dim)
+        # self.norm = nn.LayerNorm(dim)
         self.linear = nn.Linear(dim, num_classes)
         self.linear.weight.data.normal_(mean=0.0, std=0.01)
         self.linear.bias.data.zero_()
@@ -266,7 +282,7 @@ class LinearClassifier(nn.Module):
     
     def forward(self, x):
         x = x.view(x.size(0), -1)  # flatten
-        x = self.norm(x)
+        # x = self.norm(x)
         if self.normalize:  # normalize inputs for linear classifier 
             x = F.normalize(x)
         return self.linear(x)

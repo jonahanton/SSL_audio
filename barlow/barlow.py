@@ -232,8 +232,19 @@ class BarlowTwins(nn.Module):
 		
 	
 	def forward(self, y1, y2):
-		z1 = self.projector(self.backbone(y1, mask_ratio=0.))
-		z2 = self.projector(self.backbone(y2, mask_ratio=self.mask_ratio))
+		latent1, _, _ = self.backbone(y1, mask_ratio=0.)
+		latent2, _, _ = self.backbone(y2, mask_ratio=self.mask_ratio)
+		if self.cfg.model.encoder.latent == 'cls':
+			# return cls token as global clip representation
+			latent1 = latent1[:, 0]
+			latent2 = latent2[:, 0]
+		else:
+			# return mean pool over patch embeddings as global clip representation
+			latent1 = torch.mean(latent1[:, 1:], dim=1)
+			latent2 = torch.mean(latent2[:, 1:], dim=1)
+
+		z1 = self.projector(latent1)
+		z2 = self.projector(latent2)
 		
 		# empirical cross-correlation matrix
 		c = self.bn(z1).T @ self.bn(z2)

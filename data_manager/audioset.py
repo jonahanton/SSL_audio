@@ -138,7 +138,6 @@ class AudioSet(Dataset):
 		length_adj = len(wav) - self.unit_length
 		start = random.randint(0, length_adj) if length_adj > 0 else 0
 		wav = wav[start:start + self.unit_length]
-		wav = wav.unsqueeze(0)
 
 		# transforms to raw waveform (must convert wav to np array)
 		# note that transforms to raw waveform don't have cuda compatibility (done via audiomentations package, which uses librosa)		
@@ -172,7 +171,7 @@ class AudioSet(Dataset):
 	def convert_to_melspecgram(self, wav):
 		out = []
 		for w in wav:
-			lms = self.to_melspecgram(w)
+			lms = (self.to_melspecgram(w) + torch.finfo().eps).log().unsqueeze(0)
 			out.append(lms)
 		return out
 

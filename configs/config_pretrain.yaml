@@ -6,12 +6,12 @@ data:
     unit_sec: 0.95
     # FFT parameters
     sample_rate: 16000
-    n_fft: 1024
-    win_length: 1024
+    n_fft: 400
+    win_length: 400
     hop_length: 160
-    n_mels: 64
-    f_min: 60
-    f_max: 7800
+    n_mels: 80
+    f_min: 50
+    f_max: 8000
   transform:
     # Transform raw waveform
     min_rate: 0.5
@@ -31,6 +31,7 @@ model:
     size: base
     ps: [16,16]
     mask_ratio: 0.75
+    latent: cls
   projection:
     sizes:
   lambd: 5.0e-3
@@ -38,11 +39,11 @@ optimizer:
   type: adamw
   base_lr: 1.0e-4
   final_lr: 1.0e-6
-  warmup_epochs: 0
+  warmup_epochs: 1
   weight_decay: 0.04
   final_weight_decay: 0.4
-  epochs: 2
-  batch_size_per_gpu: 16
+  epochs: 10
+  batch_size_per_gpu: 512
 meta:
   distributed:
   seed: 32
