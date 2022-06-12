@@ -21,20 +21,30 @@ from models.mst import get_mst_model
 
 class Config:
 
-    input_size = [80, 96]
+    model_size = 'base'
+    model_ps = [16, 16]
+    model_embed_dim = 768
+
+    input_size = [64, 96]
 
     # FFT parameters
     sample_rate = 16000
     n_fft = 1024
-    win_length = 400 
+    win_length = 1024 
     hop_length = 160
-    n_mels = 80
-    f_min = 50
-    f_max = 8000
+    n_mels = 64
+    f_min = 60
+    f_max = 7800
     
 
 
 def get_model(cfg, weight_file):
+
+    if weight_file is None:
+        print('No pre-trained model provided. Returning default randomly initalized model.')
+        model = get_mst_model(size=cfg.model_size, patch_size=(cfg.model_ps[0], cfg.model_ps[1]))
+        model.eval()
+        return model
 
     sd = torch.load(weight_file, map_location='cpu')
     sd = sd['model']
@@ -43,14 +53,14 @@ def get_model(cfg, weight_file):
     # remove `backbone.` prefix induced by BarlowTwins wrapper
     sd = {k.replace("backbone.", ""): v for k, v in sd.items()}
     # get patch size
-    model_ps = sd['patch_embed.proj.weight'].shape[2:] 
+    cfg.model_ps = sd['patch_embed.proj.weight'].shape[2:] 
     # get embedding dim 
-    embed_dim = sd['pos_embed'].shape[2]
+    cfg.model_embed_dim = sd['pos_embed'].shape[2]
 
-    model_size = 'tiny' if embed_dim == 192 else 'small' if embed_dim == 384 else 'base'
+    cfg.model_size = 'tiny' if embed_dim == 192 else 'small' if embed_dim == 384 else 'base'
     model = get_mst_model(
-        size=model_size,
-        patch_size=(model_ps[0], model_ps[1]),
+        size=cfg.model_size,
+        patch_size=(cfg.model_ps[0], cfg.model_ps[1]),
     )
     
     # load in weights
@@ -95,6 +105,11 @@ class RuntimeMST(nn.Module):
         self.encoder = get_model(self.cfg, self.cfg.weight_file)
         self.to_spec = get_to_melspecgram(self.cfg)
 
+        # For HEAR API
+        self.sample_rate = self.cfg.sample_rate
+        self.timestamp_embedding_size = self.cfg.model_embed_dim * self.encoder.grid_size()[0]
+        self.scene_embedding_size = self.cfg.model_embed_dim
+
     
     def to_feature(self, batch_audio):
         # raw -> spectrogram
@@ -137,7 +152,7 @@ class RuntimeMST(nn.Module):
                 emb = emb[:, :1]  # [emb] = [b, 1, d], n.b. emb = emb[:, 0] -> [emb] = [b, d]
                 embeddings.append(emb)
 
-            # concat along the 2nd dimension (dim=1)
+            # concat along the 2nd dimension (dim=1), i.e., concat. [CLS] tokens from the different divided segments
             x = torch.hstack(embeddings)  # [x] = [b, n_unit_frames, d], n_unit_frames = x.shape[-1] // unit_frames
         else:
             # stack embeddings
@@ -196,7 +211,7 @@ if __name__ == "__main__":
 
     # print(wav.shape[1]) --> 160000 (10s clip, 10*sr, sr=16000)
 
-    model_file_path = 'checkpoint/0606_16-25-model=transformer_base-ps=16x16-maskratio=0.75/models/epoch-1.pth.tar'
+    model_file_path = None
     model = RuntimeMST(weight_file=model_file_path, cfg=cfg) 
     model.eval()
 
@@ -206,12 +221,12 @@ if __name__ == "__main__":
     scene_emb = torch.mean(model.encode_lms(x, cls_only=True), dim=1)
     timestamp_emb = model.encode_lms(x, cls_only=False)
     print('scene embed:', scene_emb.shape)  # --> scene embed: torch.Size([1, 768])
-    print('timestamp embed:', timestamp_emb.shape)  # --> timestamp embed: torch.Size([1, 63, 3840])
-    # Why timestamp_emb.shape[2] = 3840? As grid_size in freq. dim = 5, and 768*5 = 3840  
+    print('timestamp embed:', timestamp_emb.shape)  # --> timestamp embed: torch.Size([1, 63, 3072])
+    # Why timestamp_emb.shape[2] = 3072? As grid_size in freq. dim = 4, and 768*4 = 3072  
     # Why timestamp_emb.shape[1] = 63?
     # corresponds to 63 patches, as [10s*16000Hz(=sr) / 160(=hop)] + 1 = 1001 frames, length of patch = 16 frames, and ceil(1001 / 16) = 63  
 
     ts = get_timestamps(cfg, wav, timestamp_emb)
     print(ts)
     print(ts.shape)  # --> torch.Size([1, 63])
-    # ts[0] = 0, ts[1] = 0.159. Why? ts 0 -> 1 <-> 16 frames, (16/1001(=total n frames)) * 10s = 0.159s 
+    # ts[0] = 0, ts[1] = 0.158. Why? ts 0 -> 1 <-> 16 frames, (16/1001(=total n frames)) * 10s = 0.158s 

@@ -22,7 +22,7 @@ from functools import partial
 
 class MaskedSpectrogramTransformer(nn.Module):
 
-	def __init__(self, img_size=(80, 96), patch_size=(16, 16), in_chans=1, 
+	def __init__(self, img_size=(64, 96), patch_size=(16, 16), in_chans=1, 
 				 embed_dim=768, depth=12, num_heads=12, 
 				 mlp_ratio=4., norm_layer=nn.LayerNorm,
 				 use_cls_token=True):
