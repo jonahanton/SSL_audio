@@ -158,10 +158,6 @@ class LinearTrainer:
                 print(f"Loss is {loss.item()}, stopping training")
                 sys.exit(1)
 
-            # # calculate mAP score per batch
-            # mAP = average_precision_score(y_true=labels.cpu(), y_score=outputs.sigmoid().detach().cpu(), average='macro')
-            # metric_logger.update(train_mAP=mAP)
-
             tflag = time.time()
 			# gradient update
             self.optimizer.zero_grad()
@@ -188,7 +184,6 @@ class LinearTrainer:
                 self.wandb_run.log({
 					'train_loss': metric_logger.meters['loss'].avg,
 					'lr': lr,
-                    # 'train_mAP': metric_logger.meters['mAP'].avg,
 					'data_time' : metric_logger.meters['data_time'].avg,
 					'forward_time' : metric_logger.meters['forward_time'].avg,
 					'backward_time' : metric_logger.meters['backward_time'].avg,
@@ -209,13 +204,13 @@ class LinearTrainer:
             
             print('Starting evaluation on test set')
             test_stats = self.validate()
-
             if self.cfg.meta.distributed:
                 test_stats = {k: utils.all_reduce_mean(v) for k, v in test_stats.items()}
+            print({f'test_{k}': v for k, v in test_stats.items()})
             
             log_stats = {
-                **{f'train_{k}': v for k, v in train_stats.items()},
                 **{f'test_{k}': v for k, v in test_stats.items()},
+                **{f'train_{k}': v for k, v in train_stats.items()},
                 'epoch': epoch,
             }
 
