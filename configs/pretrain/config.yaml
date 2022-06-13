@@ -25,6 +25,8 @@ data:
     gaussnoise: false
     mixup_ratio: 0.4
     gaussnoise_ratio: 0.4
+  dataloader:
+    num_workers: 4
 model:
   encoder:
     type: transformer
