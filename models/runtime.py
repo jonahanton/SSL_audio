@@ -57,7 +57,7 @@ def get_model(cfg, weight_file):
     # get embedding dim 
     cfg.model_embed_dim = sd['pos_embed'].shape[2]
 
-    cfg.model_size = 'tiny' if embed_dim == 192 else 'small' if embed_dim == 384 else 'base'
+    cfg.model_size = 'tiny' if cfg.model_embed_dim == 192 else 'small' if cfg.model_embed_dim == 384 else 'base'
     model = get_mst_model(
         size=cfg.model_size,
         patch_size=(cfg.model_ps[0], cfg.model_ps[1]),
