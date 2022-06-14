@@ -61,7 +61,7 @@ def extract_features(cfg, model, data_loader, use_cuda=False, multiscale=False):
         # init storage feature matrix
         if utils.get_rank() == 0 and features is None:
             features = torch.zeros(len(data_loader.dataset), feats.shape[-1])
-            labs = torch.zeros(len(self.data_loader.dataset), labels.shape[-1])
+            labs = torch.zeros(len(data_loader.dataset), labels.shape[-1])
             if use_cuda:
                 features = features.cuda(non_blocking=True)
                 labs = labs.cuda(non_blocking=True)

@@ -238,6 +238,7 @@ class BarlowTwinsTrainer:
 
 			# extract features and labels from test set
 			test_features, test_labs = knn_metric.extract_features(
+				cfg=self.cfg,
 				model=self.model.backbone,
 				data_loader=self.data_loader_test,
 			)
