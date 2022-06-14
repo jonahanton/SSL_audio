@@ -287,32 +287,31 @@ def init_distributed_mode(cfg):
         cfg.rank = int(os.environ['SLURM_PROCID'])
         cfg.gpu = cfg.rank % torch.cuda.device_count()
         cfg.world_size = int(os.environ['WORLD_SIZE'])
+    elif torch.cuda.is_available():
+        print('Will run the code on one GPU.')
+        cfg.rank, cfg.gpu, cfg.world_size = 0, 0, 1
+        cfg.meta.distributed = False
+    else:
+        print('Does not support training without GPU.')
+        sys.exit(1)
+
 
     if cfg.world_size > 1:
         cfg.meta.distributed = True
 
-        if cfg.dist_init == 'file':
-            if os.path.exists(cfg.dist_url):
-                os.remove(cfg.dist_url)
+    if cfg.dist_init == 'file':
+        if os.path.exists(cfg.dist_url):
+            os.remove(cfg.dist_url)
                 
-        dist.init_process_group(
-            backend='nccl',
-            init_method=cfg.dist_url,
-            world_size=cfg.world_size,
-            rank=cfg.rank,
-        )
-        torch.cuda.set_device(cfg.gpu)
-        dist.barrier()
-        setup_for_distributed(cfg.rank == 0)
-    else:
-        if torch.cuda.is_available():
-            print('Will run the code on one GPU.')
-            cfg.meta.distributed = False
-            cfg.rank, cfg.gpu, cfg.world_size = 0, 0, 1
-            torch.cuda.set_device(cfg.gpu)
-        else:
-            print('Does not support training without GPU.')
-            sys.exit(1)
+    dist.init_process_group(
+        backend='nccl',
+        init_method=cfg.dist_url,
+        world_size=cfg.world_size,
+        rank=cfg.rank,
+    )
+    torch.cuda.set_device(cfg.gpu)
+    dist.barrier()
+    setup_for_distributed(cfg.rank == 0)
 
 
 def all_reduce_mean(x):

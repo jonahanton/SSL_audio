@@ -46,11 +46,11 @@ class LinearTrainer:
         """*****data loaders*****"""
         print(f'Loading AudioSet-20K')
         self.data_loader_train = AudioSetLoader(cfg=self.cfg, pretrain=False).get_loader() 
-        print(f'Loaded AudioSet-20K, with ~{len(self.data_loader_train) * self.cfg.optimizer.batch_size_per_gpu * self.cfg.world_size} data points')
+        print(f'Loaded AudioSet-20K, with {len(self.data_loader_train.dataset)} data points')
         
         print(f'Loading AudioSet evaluation set')
         self.data_loader_test = AudioSetLoader(cfg=self.cfg, pretrain=False).get_loader(test=True) 
-        print(f'Loaded AudioSet evaluation set, with ~{len(self.data_loader_test) * self.cfg.optimizer.batch_size_per_gpu * self.cfg.world_size} data points')
+        print(f'Loaded AudioSet evaluation set, with {len(self.data_loader_test.dataset)} data points')
 
         
     
@@ -89,9 +89,9 @@ class LinearTrainer:
             normalize=self.cfg.optimizer.normalize,
         )
         self.linear_classifier = self.linear_classifier.cuda(self.cfg.gpu)
-        if self.cfg.meta.distributed:
-            # wrap linear classifier with ddp
-            self.linear_classifier = nn.parallel.DistributedDataParallel(self.linear_classifier, device_ids=[self.cfg.gpu])
+        # if self.cfg.meta.distributed:
+        # wrap linear classifier with ddp
+        self.linear_classifier = nn.parallel.DistributedDataParallel(self.linear_classifier, device_ids=[self.cfg.gpu])
 
         """*****prepare optimizer*****"""
         if self.cfg.optimizer.type == 'sgd':
@@ -173,8 +173,8 @@ class LinearTrainer:
             self.scheduler.step()
 
             # logging 
-            if self.cfg.meta.distributed:
-                torch.cuda.synchronize()
+            # if self.cfg.meta.distributed:
+            torch.cuda.synchronize()
             loss_val = loss.item()
             lr = self.optimizer.param_groups[0]["lr"]
             metric_logger.update(loss=loss_val)
@@ -191,9 +191,9 @@ class LinearTrainer:
 
             end = time.time()
 
-        if self.cfg.meta.distributed:
-			# gather the stats from all processes
-            metric_logger.synchronize_between_processes()
+        # if self.cfg.meta.distributed:
+		# gather the stats from all processes
+        metric_logger.synchronize_between_processes()
         print('Averaged stats:', metric_logger)
 
 		# return training stats
@@ -204,8 +204,8 @@ class LinearTrainer:
             
             print('Starting evaluation on test set')
             test_stats = self.validate()
-            if self.cfg.meta.distributed:
-                test_stats = {k: utils.all_reduce_mean(v) for k, v in test_stats.items()}
+            # if self.cfg.meta.distributed:
+            test_stats = {k: utils.all_reduce_mean(v) for k, v in test_stats.items()}
             print({f'test_{k}': v for k, v in test_stats.items()})
             
             log_stats = {
@@ -214,13 +214,13 @@ class LinearTrainer:
                 'epoch': epoch,
             }
 
-            if self.cfg.meta.distributed:
-                if utils.is_main_process():
-                    with (Path(f'{self.cfg.logging.log_dir}/log.txt')).open("a") as f:
-                        f.write(json.dumps(log_stats) + "\n")
-            else:
+            # if self.cfg.meta.distributed:
+            if utils.is_main_process():
                 with (Path(f'{self.cfg.logging.log_dir}/log.txt')).open("a") as f:
                     f.write(json.dumps(log_stats) + "\n")
+            # else:
+                # with (Path(f'{self.cfg.logging.log_dir}/log.txt')).open("a") as f:
+                    # f.write(json.dumps(log_stats) + "\n")
 
 
     @torch.no_grad()

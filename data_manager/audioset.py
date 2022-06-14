@@ -40,7 +40,7 @@ def make_index_dict(label_csv):
 
 class AudioSet(Dataset):
 	
-	def __init__(self, cfg, n_views=2, base_dir="data/audioset", wav_transform=None, lms_transform=None, test=False):
+	def __init__(self, cfg, n_views=2, base_dir="data/audioset", wav_transform=None, lms_transform=None, return_index=False, test=False):
 		
 		super().__init__()
 		
@@ -50,6 +50,8 @@ class AudioSet(Dataset):
 		self.base_dir = base_dir
 		self.wav_transform = wav_transform 
 		self.lms_transform = lms_transform
+		self.return_index = return_index
+
 		self.unit_length = int(cfg.data.preprocess.unit_sec * cfg.data.preprocess.sample_rate)
 		self.to_melspecgram = AT.MelSpectrogram(
 			sample_rate=cfg.data.preprocess.sample_rate,
@@ -154,9 +156,15 @@ class AudioSet(Dataset):
 			lms = self.transform_lms(lms)
 
 		if len(lms) == 1:
-			return lms[0], label_indices
+			if self.return_index:
+				return lms[0], label_indices, idx
+			else:
+				return lms[0], label_indices
 		else:
-			return lms, label_indices
+			if self.return_index:
+				return lms, label_indices, idx
+			else:
+				return lms, label_indices
 
 	
 	def transform_wav(self, wav, n_views):
@@ -190,17 +198,17 @@ class AudioSetLoader:
 		self.cfg = cfg
 		self.pretrain = pretrain
 
-	def get_loader(self, test=False):
+	def get_loader(self, return_index=False, test=False):
 		# pretrain or downstream eval
 		if self.pretrain:
 			wav_transform, lms_transform = make_transforms_pretrain(self.cfg)
-			dataset = AudioSet(self.cfg, n_views=2, wav_transform=wav_transform, lms_transform=lms_transform)
+			dataset = AudioSet(self.cfg, n_views=2, wav_transform=wav_transform, lms_transform=lms_transform, return_index=return_index)
 		else:
 			if not test:
 				wav_transform, lms_transform = make_transforms_lineval(self.cfg)
-				dataset = AudioSet(self.cfg, n_views=1, wav_transform=wav_transform, lms_transform=lms_transform)
+				dataset = AudioSet(self.cfg, n_views=1, wav_transform=wav_transform, lms_transform=lms_transform, return_index=return_index)
 			else:
-				dataset = AudioSet(self.cfg, n_views=1, wav_transform=None, lms_transform=None, test=True)
+				dataset = AudioSet(self.cfg, n_views=1, wav_transform=None, lms_transform=None, return_index=return_index, test=True)
 
 		if self.cfg.meta.distributed:
 			sampler = torch.utils.data.distributed.DistributedSampler(dataset)
@@ -212,7 +220,7 @@ class AudioSetLoader:
 				num_workers=self.cfg.data.dataloader.num_workers,
 				pin_memory=True,
 				sampler=sampler,
-				drop_last=True,
+				drop_last=False,
 			)
 		else:
 			loader = DataLoader(
@@ -221,7 +229,7 @@ class AudioSetLoader:
 				shuffle=True,
 				num_workers=self.cfg.data.dataloader.num_workers,
 				pin_memory=True,
-				drop_last=True,
+				drop_last=False,
 			)
 
 		return loader

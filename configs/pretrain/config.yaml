@@ -50,9 +50,11 @@ meta:
   distributed:
   seed: 32
   use_fp16: false
+  track_knn: true
 checkpoint:
   print_it: 100
-  save_epoch: 1
+  save_epoch_it: 1
+  track_knn_it: 1
   ckpt_path:
 logging:
   log_dir: checkpoint/{}
