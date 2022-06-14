@@ -44,20 +44,20 @@ class LinearTrainer:
     def construct_model(self):
         
         """*****data loaders*****"""
-        print(f'Loading AudioSet-20K')
+        print(f'Loading AudioSet')
         self.data_loader_train = AudioSetLoader(
             self.cfg,
             pretrain=False,
             balanced_only=self.cfg.data.audioset.balanced_only,
         ).get_loader() 
-        print(f'Loaded AudioSet-20K, with {len(self.data_loader_train.dataset)} data points')
+        print(f'Loaded AudioSet, with {len(self.data_loader_train.dataset)} data points')
         
         print(f'Loading AudioSet evaluation set')
         self.data_loader_test = AudioSetLoader(
             self.cfg,
-            pretrain=False
+            pretrain=False,
             test=True,
-            ).get_loader() 
+        ).get_loader() 
         print(f'Loaded AudioSet evaluation set, with {len(self.data_loader_test.dataset)} data points')
 
         
