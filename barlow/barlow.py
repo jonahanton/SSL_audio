@@ -131,6 +131,8 @@ class BarlowTwinsTrainer:
 			# move to gpu
 			y1 = y1.cuda(non_blocking=True)
 			y2 = y2.cuda(non_blocking=True)
+			labels = labels.cuda(non_blocking=True)
+			index = index.cuda(non_blocking=True)
 
 			tflag = time.time()
 			# forward passes + compute barlow twins loss

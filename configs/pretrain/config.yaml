@@ -52,7 +52,7 @@ meta:
   use_fp16: false
   track_knn: true
 checkpoint:
-  print_it: 100
+  print_it: 20
   save_epoch_it: 1
   track_knn_it: 1
   ckpt_path:
