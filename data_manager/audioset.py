@@ -40,7 +40,17 @@ def make_index_dict(label_csv):
 
 class AudioSet(Dataset):
 	
-	def __init__(self, cfg, n_views=2, base_dir="data/audioset", wav_transform=None, lms_transform=None, return_index=False, test=False):
+	def __init__(
+		self,
+		cfg,
+		n_views=2,
+		base_dir="data/audioset",
+		wav_transform=None,
+		lms_transform=None,
+		balanced_only=False,
+		return_index=False,
+		test=False,
+	):
 		
 		super().__init__()
 		
@@ -50,7 +60,9 @@ class AudioSet(Dataset):
 		self.base_dir = base_dir
 		self.wav_transform = wav_transform 
 		self.lms_transform = lms_transform
+		self.balanced_only = balanced_only
 		self.return_index = return_index
+		self.test = test
 
 		self.unit_length = int(cfg.data.preprocess.unit_sec * cfg.data.preprocess.sample_rate)
 		self.to_melspecgram = AT.MelSpectrogram(
@@ -78,10 +90,10 @@ class AudioSet(Dataset):
 			header=None
 		)
 
-		if test:
+		if self.test:
 			self.combined_df = self.eval_df
 		else:
-			if cfg.data.audioset.balanced_only:
+			if self.balanced_only:
 				self.combined_df = self.balanced_df
 			else:
 				self.combined_df = pd.concat([self.unbalanced_df, self.balanced_df], ignore_index=True)
@@ -194,43 +206,68 @@ class AudioSet(Dataset):
 			
 class AudioSetLoader:
 
-	def __init__(self, cfg, pretrain=True):
+	def __init__(
+		self,
+		cfg,
+		pretrain=True,
+		balanced_only=False,
+		return_index=False,
+		test=False,
+	):
 		self.cfg = cfg
 		self.pretrain = pretrain
+		self.balanced_only = balanced_only
+		self.return_index = return_index
+		self.test = test
 
-	def get_loader(self, return_index=False, test=False):
+	def get_loader(self):
 		# pretrain or downstream eval
 		if self.pretrain:
 			wav_transform, lms_transform = make_transforms_pretrain(self.cfg)
-			dataset = AudioSet(self.cfg, n_views=2, wav_transform=wav_transform, lms_transform=lms_transform, return_index=return_index)
+			dataset = AudioSet(
+				self.cfg,
+				n_views=2,
+				wav_transform=wav_transform,
+				lms_transform=lms_transform,
+				return_index=self.return_index,
+			)
 		else:
-			if not test:
-				wav_transform, lms_transform = make_transforms_lineval(self.cfg)
-				dataset = AudioSet(self.cfg, n_views=1, wav_transform=wav_transform, lms_transform=lms_transform, return_index=return_index)
+			if self.test:
+				wav_transform, lms_transform = None, None
 			else:
-				dataset = AudioSet(self.cfg, n_views=1, wav_transform=None, lms_transform=None, return_index=return_index, test=True)
+				wav_transform, lms_transform = make_transforms_lineval(self.cfg)
+			dataset = AudioSet(
+				self.cfg,
+				n_views=1,
+				wav_transform=wav_transform,
+				lms_transform=lms_transform,
+				balanced_only=self.balanced_only,
+				return_index=self.return_index,
+				test=self.test,
+			)
 
-		if self.cfg.meta.distributed:
-			sampler = torch.utils.data.distributed.DistributedSampler(dataset)
+		# if self.cfg.meta.distributed:
+		sampler = torch.utils.data.distributed.DistributedSampler(dataset)
 			
-			loader = DataLoader(
-				dataset=dataset,
-				batch_size=self.cfg.optimizer.batch_size_per_gpu,
-				shuffle=False,
-				num_workers=self.cfg.data.dataloader.num_workers,
-				pin_memory=True,
-				sampler=sampler,
-				drop_last=False,
-			)
-		else:
-			loader = DataLoader(
-				dataset=dataset,
-				batch_size=self.cfg.optimizer.batch_size_per_gpu,
-				shuffle=True,
-				num_workers=self.cfg.data.dataloader.num_workers,
-				pin_memory=True,
-				drop_last=False,
-			)
+		loader = DataLoader(
+			dataset=dataset,
+			batch_size=self.cfg.optimizer.batch_size_per_gpu,
+			shuffle=False,
+			num_workers=self.cfg.data.dataloader.num_workers,
+			pin_memory=True,
+			sampler=sampler,
+			drop_last=False,
+		)
+
+		# else:
+		# 	loader = DataLoader(
+		# 		dataset=dataset,
+		# 		batch_size=self.cfg.optimizer.batch_size_per_gpu,
+		# 		shuffle=True,
+		# 		num_workers=self.cfg.data.dataloader.num_workers,
+		# 		pin_memory=True,
+		# 		drop_last=False,
+		# 	)
 
 		return loader
 

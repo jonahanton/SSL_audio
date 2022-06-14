@@ -47,11 +47,13 @@ class BarlowTwinsTrainer:
 
 		"""*****data loaders*****"""
 		print(f'Loading AudioSet')
-		self.data_loader = AudioSetLoader(cfg=self.cfg, pretrain=True).get_loader(return_index=True) 
+		self.data_loader = AudioSetLoader(
+			self.cfg,
+			pretrain=True,
+			balanced_only=self.cfg.data.audioset.balanced_only,
+			return_index=True,
+		).get_loader() 
 		print(f'Loaded AudioSet, with {len(self.data_loader.dataset)} data points')
-		print(f'Loading AudioSet evaluation set')
-		self.data_loader_test = AudioSetLoader(cfg=self.cfg, pretrain=False).get_loader(return_index=True, test=True)
-		print(f'Loaded AudioSet evaluation set, with {len(self.data_loader_test.dataset)} data points')
 
 		"""*****build model*****"""
 		if self.cfg.model.encoder.type == 'transformer':
@@ -139,19 +141,10 @@ class BarlowTwinsTrainer:
 			with torch.cuda.amp.autocast(enabled=(self.fp16_scaler is not None)):
 				loss, (latent, _) = self.model(y1, y2)
 			metric_logger.update(forward_time=time.time()-tflag)
-				
+			
 			if not math.isfinite(loss.item()):
 				print(f"Loss is {loss.item()}, stopping training")
 				sys.exit(1)
-
-			# knn mAP metric
-			if track_knn:
-				# init features / labels storage matrix
-				if utils.get_rank() == 0 and features is None:
-					features = torch.zeros(len(self.data_loader.dataset), latent.shape[-1])
-					print(f"Storing features into tensor of shape {features.shape}")
-					labs = torch.zeros(len(self.data_loader.dataset), labels.shape[-1])
-					print(f"Storing labels into tensor of shape {labs.shape}")
 			
 			tflag = time.time()
 			# gradient update
@@ -185,46 +178,8 @@ class BarlowTwinsTrainer:
 					'forward_time' : metric_logger.meters['forward_time'].avg,
 					'backward_time' : metric_logger.meters['backward_time'].avg,
 				})
-
-			end = time.time()
-
-			# gather the features and labels from all processes
-			if track_knn:
-
-				"""get indexes from all processes"""
-				y_all = torch.empty(utils.get_world_size(), index.size(0), dtype=index.dtype, device=index.device)
-				y_l = list(y_all.unbind(0))
-				y_all_reduce = dist.all_gather(y_l, index, async_op=True)
-				y_all_reduce.wait()
-				index_all = torch.cat(y_l)
-				"""share features between processes"""
-				feats_all = torch.empty(
-					utils.get_world_size(),
-					latent.size(0),
-					latent.size(1),
-					dtype=latent.dtype,
-					device=latent.device,
-				)
-				output_l = list(feats_all.unbind(0))
-				output_all_reduce = dist.all_gather(output_l, latent, async_op=True)
-				output_all_reduce.wait()
-
-				"""share labels between processes"""
-				labels_all = torch.empty(
-					utils.get_world_size(),
-					labels.size(0), 
-					labels.size(1),
-					dtype=labels.dtype,
-					device=labels.device,
-				)
-				labels_l = list(labels_all.unbind(0))
-				labels_all_reduce = dist.all_gather(labels_l, labels, async_op=True)
-				labels_all_reduce.wait()
 				
-				"""update storage feature and storage labels matrices"""
-				if utils.get_rank() == 0:
-					features.index_copy_(0, index_all.cpu(), torch.cat(output_l).detach().cpu())
-					labs.index_copy_(0, index_all.cpu(), torch.cat(labels_l).cpu())
+			end = time.time()
 
 		# if self.cfg.meta.distributed:
 		# gather the stats from all processes
@@ -235,36 +190,55 @@ class BarlowTwinsTrainer:
 		train_stats = {k: meter.global_avg for k, meter in metric_logger.meters.items()}
 
 		# knn mAP metric
-		if track_knn:
-			print('Calculating knn mAP metric for test set')
+		if track_knn and utils.get_rank() == 0:
+			print('Calculating knn mAP')
 
-			# extract features and labels from test set
+			# extract features and labels from AudioSet 'balanced_train_segments'
+			print('Extracting features from AudioSet balanced_train_segments')
+			train_features, train_labels = knn_metric.extract_features(
+				cfg=self.cfg,
+				model=self.model.backbone,
+				data_loader=AudioSetLoader(
+					self.cfg,
+					pretrain=False,
+					balanced_only=True,
+					return_index=True,
+					test=False,
+				).get_loader(),
+			)
+
+			# extract features and labels from AudioSet 'eval_segments'
+			print('Extracting features from AudioSet eval_segments')
 			test_features, test_labs = knn_metric.extract_features(
 				cfg=self.cfg,
 				model=self.model.backbone,
-				data_loader=self.data_loader_test,
+				data_loader=AudioSetLoader(
+					self.cfg,
+					pretrain=False,
+					return_index=True,
+					test=True,
+				).get_loader(),
 			)
 			
 			# normalize features
 			train_features = F.normalize(train_features, dim=1, p=2)
 			test_features = F.normalize(test_features, dim=1, p=2)
 
-			if utils.get_rank() == 0:
+			# calculate knn mAP
+			print('Calculating knn mAP')
+			knn_mAP = knn_metric.mlknn_classifier(
+				train_feautres=train_features,
+				train_labels=test_labels,
+				test_features=test_features,
+				test_labels=test_labels,
+			)
+			print(f'knn mAP: {knn_mAP}')
+			train_stats.update({'knn_mAP': knn_mAP})
 
-				# calculate knn mAP
-				knn_mAP = knn_metric.mlknn_classifier(
-					train_feautres=features,
-					train_labels=labs,
-					test_features=test_features,
-					test_labels=test_labs,
-				)
-				print(f'knn mAP: {knn_mAP}')
-				train_stats.update({'knn_mAP': knn_mAP})
-
-				if self.wandb_run is not None:
-					self.wandb_run.log({
-						'test_knn_mAP': knn_mAP,
-					})
+			if self.wandb_run is not None:
+				self.wandb_run.log({
+					'test_knn_mAP': knn_mAP,
+				})
 		
 		# save checkpoint
 		if epoch % self.cfg.checkpoint.save_epoch_it == 0:
@@ -348,7 +322,7 @@ class BarlowTwins(nn.Module):
 		on_diag = torch.diagonal(c).add_(-1).pow_(2).sum()
 		off_diag = off_diagonal(c).pow_(2).sum()
 		loss = on_diag + self.lambd * off_diag
-		return loss, (latent1, latent2)
+		return loss, (latent1.contiguous(), latent2.contiguous())
 
 
 def off_diagonal(x):

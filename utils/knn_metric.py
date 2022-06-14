@@ -31,7 +31,6 @@ def mlknn_classifier(train_features, train_labels, test_features, test_labels, k
     if isinstance(test_labels, torch.Tensor):
         test_labels = test_labels.cpu().numpy()
     
-    print('Calculating knn mAP')
     classifier = KNeighborsClassifier(n_neighbors=k, metric='cosine', weights=lambda x: np.exp(x/T))
     classifier.fit(X=train_features, y=train_labels)
     pred_test_labels = classifier.predict(test_features)
@@ -43,7 +42,43 @@ def mlknn_classifier(train_features, train_labels, test_features, test_labels, k
 @torch.no_grad()
 def extract_features(cfg, model, data_loader, use_cuda=False, multiscale=False):
 
-    print('Extracting features')
+    features = None
+    for (y, labels, index) in data_loader:
+        y = y.cuda(non_blocking=True)
+
+        feats, _, _ = model(y, mask_ratio=0.)
+        if cfg.model.encoder.latent == 'cls':
+            # return cls token as global clip representation
+            feats = feats[:, 0]
+        else:
+            # return mean pool over patch embeddings as global clip representation
+            feats = torch.mean(feats[:, 1:], dim=1)
+        feats = feats.contiguous()
+
+        # init storage feature matrix
+        if features is None:
+            features = torch.zeros(len(data_loader.dataset), feats.shape[-1])
+            labs = torch.zeros(len(data_loader.dataset), labels.shape[-1])
+            if use_cuda:
+                features = features.cuda(non_blocking=True)
+                labs = labs.cuda(non_blocking=True)
+            print(f"Storing features into tensor of shape {features.shape}")
+            print(f"Storing labels into tensor of shape {labs.shape}")
+
+        # update storage feature matrix
+        if use_cuda:
+            features.index_copy_(0, index.cuda(non_blocking=True), feats.detach())
+            labs.index_copy_(0, index.cuda(non_blocking=True), labels.cuda(non_blocking=True))
+        else:
+            features.index_copy_(0, index, feats.detach().cpu())
+            labs.index_copy_(0, index, labels)
+
+    return features, labs
+
+
+@torch.no_grad()
+def extract_features_ddp(cfg, model, data_loader, use_cuda=False, multiscale=False):
+
     features = None
     for (y, labels, index) in data_loader:
         y = y.cuda(non_blocking=True)
@@ -57,6 +92,7 @@ def extract_features(cfg, model, data_loader, use_cuda=False, multiscale=False):
         else:
             # return mean pool over patch embeddings as global clip representation
             feats = torch.mean(feats[:, 1:], dim=1)
+        feats = feats.contiguous()
 
         # init storage feature matrix
         if utils.get_rank() == 0 and features is None:

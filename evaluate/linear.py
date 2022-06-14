@@ -45,11 +45,19 @@ class LinearTrainer:
         
         """*****data loaders*****"""
         print(f'Loading AudioSet-20K')
-        self.data_loader_train = AudioSetLoader(cfg=self.cfg, pretrain=False).get_loader() 
+        self.data_loader_train = AudioSetLoader(
+            self.cfg,
+            pretrain=False,
+            balanced_only=self.cfg.data.audioset.balanced_only,
+        ).get_loader() 
         print(f'Loaded AudioSet-20K, with {len(self.data_loader_train.dataset)} data points')
         
         print(f'Loading AudioSet evaluation set')
-        self.data_loader_test = AudioSetLoader(cfg=self.cfg, pretrain=False).get_loader(test=True) 
+        self.data_loader_test = AudioSetLoader(
+            self.cfg,
+            pretrain=False
+            test=True,
+            ).get_loader() 
         print(f'Loaded AudioSet evaluation set, with {len(self.data_loader_test.dataset)} data points')
 
         
@@ -149,6 +157,7 @@ class LinearTrainer:
             else:
                 # return mean pool over patch embeddings as global clip representation
                 latent = torch.mean(latent[:, 1:], dim=1)
+            latent = latent.contiguous()
 
             outputs = self.linear_classifier(latent)
             loss = self.criterion(outputs, labels)
@@ -248,6 +257,7 @@ class LinearTrainer:
             else:
                 # return mean pool over patch embeddings as global clip representation
                 latent = torch.mean(latent[:, 1:], dim=1)
+            latent = latent.contiguous()
             
             outputs = self.linear_classifier(latent)
             loss = self.criterion(outputs, labels)
