@@ -197,27 +197,27 @@ class BarlowTwinsTrainer:
 			print('Extracting features from AudioSet balanced_train_segments')
 			train_features, train_labels = knn_metric.extract_features(
 				cfg=self.cfg,
-				model=self.model.backbone,
+				model=self.model.module.backbone,
 				data_loader=AudioSetLoader(
 					self.cfg,
 					pretrain=False,
 					balanced_only=True,
 					return_index=True,
 					test=False,
-				).get_loader(),
+				).get_loader(drop_last=False),
 			)
 
 			# extract features and labels from AudioSet 'eval_segments'
 			print('Extracting features from AudioSet eval_segments')
 			test_features, test_labels = knn_metric.extract_features(
 				cfg=self.cfg,
-				model=self.model.backbone,
+				model=self.model.module.backbone,
 				data_loader=AudioSetLoader(
 					self.cfg,
 					pretrain=False,
 					return_index=True,
 					test=True,
-				).get_loader(),
+				).get_loader(drop_last=False),
 			)
 			
 			# normalize features
@@ -227,7 +227,7 @@ class BarlowTwinsTrainer:
 			# calculate knn mAP
 			print('Calculating knn mAP')
 			knn_mAP = knn_metric.mlknn_classifier(
-				train_feautres=train_features,
+				train_features=train_features,
 				train_labels=train_labels,
 				test_features=test_features,
 				test_labels=test_labels,

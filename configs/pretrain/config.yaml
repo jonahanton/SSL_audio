@@ -30,7 +30,7 @@ data:
 model:
   encoder:
     type: transformer
-    size: base
+    size: tiny
     ps: [16,16]
     mask_ratio: 0.75
     latent: cls
@@ -45,7 +45,7 @@ optimizer:
   weight_decay: 0.04
   final_weight_decay: 0.4
   epochs: 10
-  batch_size_per_gpu: 512
+  batch_size_per_gpu: 32
 meta:
   distributed:
   seed: 32

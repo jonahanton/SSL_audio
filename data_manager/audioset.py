@@ -220,7 +220,7 @@ class AudioSetLoader:
 		self.return_index = return_index
 		self.test = test
 
-	def get_loader(self):
+	def get_loader(self, drop_last=True):
 		# pretrain or downstream eval
 		if self.pretrain:
 			wav_transform, lms_transform = make_transforms_pretrain(self.cfg)
@@ -229,6 +229,7 @@ class AudioSetLoader:
 				n_views=2,
 				wav_transform=wav_transform,
 				lms_transform=lms_transform,
+				balanced_only = self.balanced_only,
 				return_index=self.return_index,
 			)
 		else:
@@ -256,7 +257,7 @@ class AudioSetLoader:
 			num_workers=self.cfg.data.dataloader.num_workers,
 			pin_memory=True,
 			sampler=sampler,
-			drop_last=False,
+			drop_last=drop_last,
 		)
 
 		# else:
