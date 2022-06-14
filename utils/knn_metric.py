@@ -49,11 +49,11 @@ def extract_features(cfg, model, data_loader, use_cuda=False, multiscale=False):
         y = y.cuda(non_blocking=True)
         labels = labels.cuda(non_blocking=True)
         index = index.cuda(non_blocking=True)
-        
+
         feats, _, _ = model(y, mask_ratio=0.)
         if cfg.model.encoder.latent == 'cls':
             # return cls token as global clip representation
-			feats = feats[:, 0]
+            feats = feats[:, 0]
         else:
             # return mean pool over patch embeddings as global clip representation
             feats = torch.mean(feats[:, 1:], dim=1)

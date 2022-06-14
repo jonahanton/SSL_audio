@@ -109,7 +109,7 @@ class AudioSet(Dataset):
 
 		# initialize the label
 		label_indices = np.zeros(self.label_num)
-        # add sample labels
+		# add sample labels
 		for label_str in labels.split('#'):
 			label_indices[int(self.index_dict[label_str])] = 1.0
 		label_indices = torch.FloatTensor(label_indices)
