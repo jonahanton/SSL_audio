@@ -48,7 +48,6 @@ class AudioSet(Dataset):
 		wav_transform=None,
 		lms_transform=None,
 		balanced_only=False,
-		return_index=False,
 		test=False,
 	):
 		
@@ -61,7 +60,6 @@ class AudioSet(Dataset):
 		self.wav_transform = wav_transform 
 		self.lms_transform = lms_transform
 		self.balanced_only = balanced_only
-		self.return_index = return_index
 		self.test = test
 
 		self.unit_length = int(cfg.data.preprocess.unit_sec * cfg.data.preprocess.sample_rate)
@@ -168,15 +166,9 @@ class AudioSet(Dataset):
 			lms = self.transform_lms(lms)
 
 		if len(lms) == 1:
-			if self.return_index:
-				return lms[0], label_indices, idx
-			else:
-				return lms[0], label_indices
+			return lms[0], label_indices
 		else:
-			if self.return_index:
-				return lms, label_indices, idx
-			else:
-				return lms, label_indices
+			return lms, label_indices
 
 	
 	def transform_wav(self, wav, n_views):
@@ -211,13 +203,11 @@ class AudioSetLoader:
 		cfg,
 		pretrain=True,
 		balanced_only=False,
-		return_index=False,
 		test=False,
 	):
 		self.cfg = cfg
 		self.pretrain = pretrain
 		self.balanced_only = balanced_only
-		self.return_index = return_index
 		self.test = test
 
 	def get_loader(self, drop_last=True):
@@ -230,7 +220,6 @@ class AudioSetLoader:
 				wav_transform=wav_transform,
 				lms_transform=lms_transform,
 				balanced_only = self.balanced_only,
-				return_index=self.return_index,
 			)
 		else:
 			if self.test:
@@ -243,7 +232,6 @@ class AudioSetLoader:
 				wav_transform=wav_transform,
 				lms_transform=lms_transform,
 				balanced_only=self.balanced_only,
-				return_index=self.return_index,
 				test=self.test,
 			)
 

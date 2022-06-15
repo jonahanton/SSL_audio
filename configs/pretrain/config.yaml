@@ -1,6 +1,6 @@
 data:
   audioset:
-    balanced_only: true
+    balanced_only: false
   preprocess:
     # Unit duration in seconds for one audio segment
     unit_sec: 0.95
@@ -30,7 +30,7 @@ data:
 model:
   encoder:
     type: transformer
-    size: tiny
+    size: base
     ps: [16,16]
     mask_ratio: 0.75
     latent: cls
@@ -41,22 +41,26 @@ optimizer:
   type: adamw
   base_lr: 1.0e-4
   final_lr: 1.0e-6
-  warmup_epochs: 1
+  warmup_epochs: 0
   weight_decay: 0.04
   final_weight_decay: 0.4
-  epochs: 10
-  batch_size_per_gpu: 32
+  epochs: 1
+  batch_size_per_gpu: 512
 meta:
   distributed:
   seed: 32
   use_fp16: false
-  track_knn: true
 checkpoint:
   print_it: 20
   save_epoch_it: 1
-  track_knn_it: 1
   ckpt_path:
 logging:
   log_dir: checkpoint/{}
+knn:
+  track_knn: true
+  track_knn_it: 1
+  k: 200
+  T: 0.07
+  num_classes: 527
 dist_url: env://
 dist_init: file

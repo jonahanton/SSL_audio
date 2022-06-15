@@ -19,7 +19,55 @@ import warnings
 warnings.filterwarnings("ignore", category=UserWarning)  # for sklearn UserWarning 
 
 
+def predict_knn(cfg, model, train_loader, test_loader):
+
+    train_features, train_labels = extract_features(cfg, model, train_loader)
+    test_features, test_labels = extract_features(cfg, model, test_loader)
+
+    if utils.get_rank() == 0:
+        knn_mAP = mlknn_classifier(
+            train_features,
+            train_labels,
+            test_features,
+            test_labels,
+            cfg.knn.k,
+            cfg.knn.T,
+            cfg.knn.num_classes,
+        )
+
+    return knn_mAP
+
+
 @torch.no_grad()
+def extract_features(cfg, model, data_loader):
+    model.eval()
+    feature_bank, feature_labels = [], []
+
+    for (inputs, labels) in train_loader:
+        feature, _, _ = model(inputs.cuda(non_blocking=True))
+        if cfg.model.encoder.latent == 'cls':
+            feature = feature[:, 0]
+        else:
+            feature = torch.mean(feature[:, 1:], dim=1)
+        feature = feature.contiguous()
+        feature = F.normalize(feature, dim=1)
+        feature_bank.append(feature)
+        feature_labels.append(labels.cuda(non_blocking=True))
+    
+    feature_bank = torch.cat(feature_bank, dim=0)
+    feature_labels = torch.cat(feature_labels, dim=0)
+
+    feature_bank_list = [torch.zeros_like(feature_bank) for _ in range(cfg.world_size)]
+    dist.all_gather(feature_bank_list, feature_bank)
+    feature_bank = torch.cat(feature_bank_list, dim=0)  # [N, D]
+
+    feature_labels_list = [torch.zeros_like(feature_labels) for _ in range(cfg.world_size)]
+    dist.all_gather(feature_labels_list, feature_labels)
+    feature_labels = torch.cat(feature_labels_list, dim=0)
+
+    return feature_bank, feature_labels
+
+
 def mlknn_classifier(train_features, train_labels, test_features, test_labels, k=200, T=0.07, num_classes=527):
     
     if isinstance(train_features, torch.Tensor):
@@ -39,109 +87,3 @@ def mlknn_classifier(train_features, train_labels, test_features, test_labels, k
     return mAP
 
 
-@torch.no_grad()
-def extract_features(cfg, model, data_loader, use_cuda=False, multiscale=False):
-
-    features = None
-    for (y, labels, index) in data_loader:
-        y = y.cuda(non_blocking=True)
-
-        feats, _, _ = model(y, mask_ratio=0.)
-        if cfg.model.encoder.latent == 'cls':
-            # return cls token as global clip representation
-            feats = feats[:, 0]
-        else:
-            # return mean pool over patch embeddings as global clip representation
-            feats = torch.mean(feats[:, 1:], dim=1)
-        feats = feats.contiguous()
-
-        # init storage feature matrix
-        if features is None:
-            features = torch.zeros(len(data_loader.dataset), feats.shape[-1])
-            labs = torch.zeros(len(data_loader.dataset), labels.shape[-1])
-            if use_cuda:
-                features = features.cuda(non_blocking=True)
-                labs = labs.cuda(non_blocking=True)
-            print(f"Storing features into tensor of shape {features.shape}")
-            print(f"Storing labels into tensor of shape {labs.shape}")
-
-        # update storage feature matrix
-        if use_cuda:
-            features.index_copy_(0, index.cuda(non_blocking=True), feats.detach())
-            labs.index_copy_(0, index.cuda(non_blocking=True), labels.cuda(non_blocking=True))
-        else:
-            features.index_copy_(0, index, feats.detach().cpu())
-            labs.index_copy_(0, index, labels)
-
-    return features, labs
-
-
-@torch.no_grad()
-def extract_features_ddp(cfg, model, data_loader, use_cuda=False, multiscale=False):
-
-    features = None
-    for (y, labels, index) in data_loader:
-        y = y.cuda(non_blocking=True)
-        labels = labels.cuda(non_blocking=True)
-        index = index.cuda(non_blocking=True)
-
-        feats, _, _ = model(y, mask_ratio=0.)
-        if cfg.model.encoder.latent == 'cls':
-            # return cls token as global clip representation
-            feats = feats[:, 0]
-        else:
-            # return mean pool over patch embeddings as global clip representation
-            feats = torch.mean(feats[:, 1:], dim=1)
-        feats = feats.contiguous()
-
-        # init storage feature matrix
-        if utils.get_rank() == 0 and features is None:
-            features = torch.zeros(len(data_loader.dataset), feats.shape[-1])
-            labs = torch.zeros(len(data_loader.dataset), labels.shape[-1])
-            if use_cuda:
-                features = features.cuda(non_blocking=True)
-                labs = labs.cuda(non_blocking=True)
-            print(f"Storing features into tensor of shape {features.shape}")
-            print(f"Storing labels into tensor of shape {labs.shape}")
-
-        """get indexes from all processes"""
-        y_all = torch.empty(utils.get_world_size(), index.size(0), dtype=index.dtype, device=index.device)
-        y_l = list(y_all.unbind(0))
-        y_all_reduce = dist.all_gather(y_l, index, async_op=True)
-        y_all_reduce.wait()
-        index_all = torch.cat(y_l)
-
-        """share features between processes"""
-        feats_all = torch.empty(
-            dist.get_world_size(),
-            feats.size(0),
-            feats.size(1),
-            dtype=feats.dtype,
-            device=feats.device,
-        )
-        output_l = list(feats_all.unbind(0))
-        output_all_reduce = dist.all_gather(output_l, feats, async_op=True)
-        output_all_reduce.wait()
-
-        """share labels between processes"""
-        labels_all = torch.empty(
-            utils.get_world_size(),
-            labels.size(0), 
-            labels.size(1),
-            dtype=labels.dtype,
-            device=labels.device,
-        )
-        labels_l = list(labels_all.unbind(0))
-        labels_all_reduce = dist.all_gather(labels_l, labels, async_op=True)
-        labels_all_reduce.wait()
-
-        # update storage feature matrix
-        if utils.get_rank() == 0:
-            if use_cuda:
-                features.index_copy_(0, index_all, torch.cat(output_l).detach())
-                labs.index_copy_(0, index_all, torch.cat(labels_l))
-            else:
-                features.index_copy_(0, index_all.cpu(), torch.cat(output_l).detach().cpu())
-                labs.index_copy_(0, index_all.cpu(), torch.cat(labels_l).cpu())
-
-    return features, labs
