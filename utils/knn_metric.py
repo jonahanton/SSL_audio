@@ -21,9 +21,11 @@ warnings.filterwarnings("ignore", category=UserWarning)  # for sklearn UserWarni
 
 def predict_knn(cfg, model, train_loader, test_loader):
 
+    print('Extracting features...')
     train_features, train_labels = extract_features(cfg, model, train_loader)
     test_features, test_labels = extract_features(cfg, model, test_loader)
-
+    
+    print('Features are ready!\nStart the k-NN classification.')
     if utils.get_rank() == 0:
         knn_mAP = mlknn_classifier(
             train_features,
