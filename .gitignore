@@ -4,7 +4,7 @@ proj_venv
 condor
 */__init__.py
 checkpoint
-pbs
+pbs/out
 slurm
 misc
 wandb

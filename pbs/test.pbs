@@ -1,0 +1,40 @@
+#!/bin/bash
+
+#PBS -l walltime=00:01:00
+#PBS -l select=2:ncpus=4:ngpus=1:mem=24gb:gpu_type=RTX6000
+#PBS -o ${HOME}/SSL_audio/pbs/out/${PBS_JOBID}.out
+#PBS -j oe
+#PBS -N test
+
+module load anaconda3/personal
+source activate project
+
+cd ${HOME}/SSL_audio
+
+###Number of processes per node to launch
+NPROC_PER_NODE=1
+###Number of processes in all nodes
+WORLD_SIZE=`expr $PBS_NUM_NODES \* $NPROC_PER_NODE`
+
+MASTER=`/bin/hostname -s`
+cat $PBS_NODEFILE>nodelist
+###Make sure this node (MASTER) comes first
+SLAVES=`cat nodelist | grep -v $MASTER | uniq`
+
+#We want names of master and slave nodes
+HOSTLIST="$MASTER $SLAVES"
+
+#Get a random unused port on this host(MASTER)
+#First line gets list of unused ports
+#3rd line gets single random port from the list
+MPORT=`ss -tan | awk '{print $5}' | cut -d':' -f2 | \
+        grep "[2-9][0-9]\{3,3\}" | sort | uniq | shuf -n 1`
+
+
+echo $HOSTLIST
+echo $MPORT
+echo $MASTER
+echo $PBS_NUM_NODES
+
+
+echo $SECONDS
