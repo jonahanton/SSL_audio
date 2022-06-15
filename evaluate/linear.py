@@ -212,13 +212,20 @@ class LinearTrainer:
         if epoch % self.cfg.val_freq == 0 or epoch == self.cfg.optimizer.epochs - 1:
             
             print('Starting evaluation on test set')
-            test_stats = self.validate()
+            test_mAP, test_loss = self.validate()
             # if self.cfg.meta.distributed:
-            test_stats = {k: utils.all_reduce_mean(v) for k, v in test_stats.items()}
-            print({f'test_{k}': v for k, v in test_stats.items()})
+            test_loss = utils.all_reduce_mean(test_loss)
+            print(f'Test mAP: {test_mAP}\t'
+                  f'Test loss: {test_loss}')
+
+            if self.wandb_run is not None:
+                self.wandb_run.log({
+                    'test_mAP': test_mAP,
+                })
             
             log_stats = {
-                **{f'test_{k}': v for k, v in test_stats.items()},
+                'test_mAP': test_mAP,
+                'test_loss': test_loss,
                 **{f'train_{k}': v for k, v in train_stats.items()},
                 'epoch': epoch,
             }
@@ -241,7 +248,6 @@ class LinearTrainer:
         val_loss = 0
         for (inputs, labels) in self.data_loader_test:
             
-            all_targets.append(labels)
             # move to gpu
             inputs = inputs.cuda(non_blocking=True)
             labels = labels.cuda(non_blocking=True)
@@ -263,14 +269,25 @@ class LinearTrainer:
             loss = self.criterion(outputs, labels)
             val_loss += loss.item()
 
-            all_preds.append(outputs.sigmoid().detach().cpu())
+            all_preds.append(outputs.sigmoid())
+            all_targets.append(labels)
         
         val_loss /= len(self.data_loader_test)
         
-        stats['loss'] = val_loss
-        stats['mAP'] = average_precision_score(y_true=torch.cat(all_targets), y_score=torch.cat(all_preds), average='macro') 
+        # gather preds + targets from all processes
+        all_preds = torch.cat(all_preds, dim=0)
+        all_targets = torch.cat(all_targets, dim=0)
+        all_preds_list = [torch.zeros_like(all_preds) for _ in range(self.cfg.world_size)]
+        dist.all_gather(all_preds_list, all_preds)
+        all_preds = torch.cat(all_preds_list, dim=0)
+        all_targets_list = [torch.zeros_like(all_targets) for _ in range(self.cfg.world_size)]
+        dist.all_gather(all_targets_list, all_targets)
+        all_targets = torch.cat(all_targets_list, dim=0)
+        
+        # calculate mAP
+        mAP = average_precision_score(y_true=all_targets.cpu(), y_score=all_preds.cpu(), average='macro') 
 
-        return stats
+        return mAP, val_loss
 
 
 class LinearClassifier(nn.Module):
