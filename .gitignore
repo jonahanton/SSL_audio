@@ -11,6 +11,7 @@ wandb
 tests
 utils/torch_mlp_clf.py
 utils/mask_conv.py
+data_usage.txt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
