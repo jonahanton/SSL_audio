@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#PBS -l walltime=01:0:00
+#PBS -l walltime=01:00:00
 #PBS -l select=1:ncpus=8:ngpus=2:mem=48gb:gpu_type=RTX6000
 #PBS -o /rds/general/user/jla21/home/SSL_audio/pbs/out
 #PBS -e /rds/general/user/jla21/home/SSL_audio/pbs/err
@@ -31,6 +31,6 @@ python -m torch.distributed.launch \
     --master_addr=$MASTER \
     --master_port=$MPORT \
     --use_env \
-    --nnodes=$NUM_NODES \ 
+    --nnodes=$NUM_NODES \
     --node_rank=$RANK \
     main_pretrain.py
