@@ -274,14 +274,17 @@ class LinearTrainer:
         
         val_loss /= len(self.data_loader_test)
         
-        # gather preds + targets from all processes
+        # gather preds from all processes
         all_preds = torch.cat(all_preds, dim=0)
-        all_targets = torch.cat(all_targets, dim=0)
         all_preds_list = [torch.zeros_like(all_preds) for _ in range(self.cfg.world_size)]
-        dist.all_gather(all_preds_list, all_preds)
+        handle = dist.all_gather(all_preds_list, all_preds, async_op=True)
+        handle.wait()
         all_preds = torch.cat(all_preds_list, dim=0)
+        # gather targets from all processes
+        all_targets = torch.cat(all_targets, dim=0)
         all_targets_list = [torch.zeros_like(all_targets) for _ in range(self.cfg.world_size)]
-        dist.all_gather(all_targets_list, all_targets)
+        handle = dist.all_gather(all_targets_list, all_targets, async_op=True)
+        handle.wait()
         all_targets = torch.cat(all_targets_list, dim=0)
         
         # calculate mAP

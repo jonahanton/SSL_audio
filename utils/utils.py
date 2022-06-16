@@ -298,10 +298,19 @@ def init_distributed_mode(cfg):
 
     if cfg.world_size > 1:
         cfg.meta.distributed = True
-
-    if cfg.dist_init is not None:
+    else:
+        cfg.meta.distributed = False
+    
+    # shared file-system initialization for torch distributed (https://pytorch.org/docs/stable/distributed.html)
+    if cfg.dist_init == "file":
         if os.path.exists(cfg.dist_url):
             os.remove(cfg.dist_url)
+
+    env_dict = {
+        key: os.environ[key]
+        for key in ("MASTER_ADDR", "MASTER_PORT", "RANK", "WORLD_SIZE")
+    }
+    print(f"[{os.getpid()}] Initializing process group with: {env_dict}")
                 
     dist.init_process_group(
         backend='nccl',
@@ -309,6 +318,12 @@ def init_distributed_mode(cfg):
         world_size=cfg.world_size,
         rank=cfg.rank,
     )
+
+    print(
+        f"[{os.getpid()}] world_size = {dist.get_world_size()}, "
+        + f"rank = {dist.get_rank()}, backend={dist.get_backend()}"
+    )
+
     torch.cuda.set_device(cfg.gpu)
     dist.barrier()
     setup_for_distributed(cfg.rank == 0)

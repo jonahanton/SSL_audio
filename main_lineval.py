@@ -49,8 +49,8 @@ def eval_linear(args=None):
     # time stamp
     cfg.time_stamp = datetime.datetime.now().strftime('%d%m_%H-%M')
 
-    # shared file-system initialization for torch distributed (https://pytorch.org/docs/stable/distributed.html)
-    if cfg.dist_init == 'file':
+    if cfg.dist_init == "file":
+        # shared file-system initialization for torch distributed (https://pytorch.org/docs/stable/distributed.html)
         cfg.dist_url = 'file:///vol/bitbucket/jla21/proj/slurm/sharedfile'
 
     # set-up path for logging
