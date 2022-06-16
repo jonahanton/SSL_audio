@@ -5,6 +5,7 @@ condor
 */__init__.py
 checkpoint
 pbs/out
+pbs/err
 slurm
 misc
 wandb
@@ -12,6 +13,7 @@ tests
 utils/torch_mlp_clf.py
 utils/mask_conv.py
 data_usage.txt
+nodelist
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
