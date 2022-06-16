@@ -1,0 +1,14 @@
+#!/bin/bash
+
+#PBS -l walltime=01:00:00
+#PBS -l select=1:ncpus=1:mem=10gb
+#PBS -o /rds/general/user/jla21/home/SSL_audio/pbs/out
+#PBS -j oe
+#PBS -N misc
+
+module load anaconda3/personal
+source activate project
+
+cd /rds/general/user/jla21/home/SSL_audio/data/audioset/audioset_utils
+
+python analyse_downloads.py
