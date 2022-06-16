@@ -299,7 +299,7 @@ def init_distributed_mode(cfg):
     if cfg.world_size > 1:
         cfg.meta.distributed = True
 
-    if cfg.dist_init == 'file':
+    if cfg.dist_init is not None:
         if os.path.exists(cfg.dist_url):
             os.remove(cfg.dist_url)
                 

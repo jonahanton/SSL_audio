@@ -1,6 +1,6 @@
 data:
   audioset:
-    balanced_only: false
+    balanced_only: true
   preprocess:
     # Unit duration in seconds for one audio segment
     unit_sec: 0.95
@@ -63,4 +63,4 @@ knn:
   T: 0.07
   num_classes: 527
 dist_url: env://
-dist_init: file
+dist_init: 
