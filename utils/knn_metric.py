@@ -45,7 +45,7 @@ def extract_features(cfg, model, data_loader):
     model.eval()
     feature_bank, feature_labels = [], []
 
-    for (inputs, labels) in train_loader:
+    for (inputs, labels) in data_loader:
         feature, _, _ = model(inputs.cuda(non_blocking=True))
         if cfg.model.encoder.latent == 'cls':
             feature = feature[:, 0]
