@@ -29,10 +29,3 @@ MPORT=`ss -tan | awk '{print $5}' | cut -d':' -f2 | \
         grep "[2-9][0-9]\{3,3\}" | sort | uniq | shuf -n 1`
 
 
-echo $HOSTLIST
-for node in $HOSTLIST; do
-        echo $node
-        ssh $node
-                echo $HOSTNAME
-done
-wait
