@@ -11,6 +11,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F 
 import torch.backends.cudnn as cudnn
+import torch.distributed as dist
 
 from sklearn.metrics import average_precision_score
 
