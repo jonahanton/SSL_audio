@@ -1,7 +1,7 @@
 data:
   audioset:
     balanced_only: false
-    twohundredk_only: false
+    twohundredk_only: true
   preprocess:
     # Unit duration in seconds for one audio segment
     unit_sec: 0.95
@@ -29,7 +29,7 @@ data:
     mixup_ratio: 0.4
     gaussnoise_ratio: 0.4
   dataloader:
-    num_workers: 4
+    num_workers: 10
 model:
   encoder:
     type: transformer
