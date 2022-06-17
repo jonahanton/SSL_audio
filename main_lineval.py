@@ -41,7 +41,7 @@ def eval_linear(args=None):
         parser = argparse.ArgumentParser('LinearEval', parents=[get_args_parser()])
         args = parser.parse_args()
 
-    # load training params from .ymal config file
+    # load training params from .yaml config file
     cfg = utils.load_yaml_config(args.config_path)
     # update config with any remaining arguments from args
     utils.update_cfg_from_args(cfg, args)

@@ -1,7 +1,7 @@
 data:
   audioset:
     balanced_only: false
-    twohundredk_only: true
+    twohundredk_only: false
   preprocess:
     # Unit duration in seconds for one audio segment
     unit_sec: 0.95
@@ -13,6 +13,8 @@ data:
     n_mels: 64
     f_min: 60
     f_max: 7800
+    # [mean, std], for audioset: [-0.8294, 4.6230]
+    norm_stats: [-0.8294, 4.6230]
   transform:
     # Transform raw waveform
     min_rate: 0.5
@@ -53,10 +55,10 @@ meta:
   use_fp16: false
 checkpoint:
   print_it: 20
-  save_epoch_it: 1
+  save_epoch_it: 20
   ckpt_path:
 logging:
-  log_dir: checkpoint/{}
+  log_dir: /rds/general/user/jla21/ephemeral/SSL_audio/checkpoint/{}
 knn:
   track_knn: true
   track_knn_it: 1

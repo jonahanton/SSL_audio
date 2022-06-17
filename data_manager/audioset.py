@@ -73,6 +73,7 @@ class AudioSet(Dataset):
 			f_max=cfg.data.preprocess.f_max,
 			power=2,
 		)
+		self.norm_stats = self.cfg.data.preprocess.norm_stats
 		
 		# load in csv files
 		self.unbalanced_df = pd.read_csv(
@@ -154,7 +155,7 @@ class AudioSet(Dataset):
 		wav = wav[start:start + self.unit_length]
 
 		# transforms to raw waveform (must convert wav to np array)
-		# note that transforms to raw waveform don't have cuda compatibility (done via audiomentations package, which uses librosa)		
+		# note that transforms to raw waveform don't have torch compatibility (done via audiomentations package, which uses librosa)		
 		if self.wav_transform:
 			wav = self.transform_wav(wav, n_views=self.n_views)
 		else:
@@ -162,6 +163,10 @@ class AudioSet(Dataset):
 
 		# to log mel spectogram -> (1, n_mels, time)
 		lms = self.convert_to_melspecgram(wav)
+
+		# normalise lms with pre-computed dataset statistics
+		if self.norm_stats is not None:
+			lms = self.normalise_lms(lms)
 		
 		# transforms to lms
 		if self.lms_transform:
@@ -190,6 +195,14 @@ class AudioSet(Dataset):
 		return out
 
 	
+	def normalise_lms(self, lms):
+		out = []
+		for l in lms:
+			l_norm = (l - self.norm_stats[0]) / self.norm_stats[1]
+			out.append(l_norm)
+		return out
+
+
 	def transform_lms(self, lms):
 		out = []
 		for l in lms:
