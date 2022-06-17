@@ -206,11 +206,13 @@ class AudioSetLoader:
 		pretrain=True,
 		balanced_only=False,
 		test=False,
+		num_workers=None,
 	):
 		self.cfg = cfg
 		self.pretrain = pretrain
 		self.balanced_only = balanced_only
 		self.test = test
+		self.num_workers = num_workers if num_workers is not None else self.cfg.data.dataloader.num_workers
 
 	def get_loader(self, drop_last=True):
 		# pretrain or downstream eval
@@ -238,15 +240,15 @@ class AudioSetLoader:
 			)
 
 		# if self.cfg.meta.distributed:
-		sampler = torch.utils.data.distributed.DistributedSampler(dataset)
+		# sampler = torch.utils.data.distributed.DistributedSampler(dataset)
 			
 		loader = DataLoader(
 			dataset=dataset,
 			batch_size=self.cfg.optimizer.batch_size_per_gpu,
-			shuffle=False,
-			num_workers=self.cfg.data.dataloader.num_workers,
+			shuffle=True,
+			num_workers=self.num_workers,
 			pin_memory=True,
-			sampler=sampler,
+			# sampler=sampler,
 			drop_last=drop_last,
 		)
 
@@ -255,7 +257,7 @@ class AudioSetLoader:
 		# 		dataset=dataset,
 		# 		batch_size=self.cfg.optimizer.batch_size_per_gpu,
 		# 		shuffle=True,
-		# 		num_workers=self.cfg.data.dataloader.num_workers,
+		# 		num_workers=self.numworkers,
 		# 		pin_memory=True,
 		# 		drop_last=False,
 		# 	)
