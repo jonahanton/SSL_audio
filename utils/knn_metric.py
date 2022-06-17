@@ -27,6 +27,7 @@ def predict_knn(cfg, model, train_loader, test_loader):
     
     print('Features are ready!\nStart the k-NN classification.')
     if utils.get_rank() == 0:
+        
         knn_mAP = mlknn_classifier(
             train_features,
             train_labels,
@@ -36,8 +37,7 @@ def predict_knn(cfg, model, train_loader, test_loader):
             cfg.knn.T,
             cfg.knn.num_classes,
         )
-
-    return knn_mAP
+        return knn_mAP
 
 
 @torch.no_grad()
