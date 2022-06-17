@@ -29,7 +29,7 @@ data:
     mixup_ratio: 0.4
     gaussnoise_ratio: 0.4
   dataloader:
-    num_workers: 10
+    num_workers: 32
 model:
   encoder:
     type: transformer
@@ -38,7 +38,7 @@ model:
     mask_ratio: 0.75
     latent: cls
   projection:
-    sizes: [768, 8192, 8192, 8192]
+    sizes: # [768, 8192, 8192, 8192]
   lambd: 5.0e-3
 optimizer:
   type: adamw
