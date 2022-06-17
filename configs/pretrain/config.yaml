@@ -1,7 +1,7 @@
 data:
   audioset:
     balanced_only: false
-    200k_only: true
+    twohundredk_only: true
   preprocess:
     # Unit duration in seconds for one audio segment
     unit_sec: 0.95

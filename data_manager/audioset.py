@@ -95,7 +95,7 @@ class AudioSet(Dataset):
 				self.combined_df = self.balanced_df
 			else:
 				self.combined_df = pd.concat([self.unbalanced_df, self.balanced_df], ignore_index=True)
-				if self.cfg.data.audioset.200k_only:
+				if self.cfg.data.audioset.twohundredk_only:
 					self.combined_df = self.combined_df[:int(2e5)]
 			
 		# first column contains the audio fnames

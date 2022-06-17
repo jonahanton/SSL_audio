@@ -5,6 +5,7 @@ val_freq: 5
 data:
   audioset:
     balanced_only: true
+    twohundredkonly: false
   preprocess:
     # Unit duration in seconds for one audio segment
     unit_sec: 0.95
