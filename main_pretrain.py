@@ -64,8 +64,9 @@ def pretrain_btaudio(args=None):
     os.makedirs(cfg.checkpoint.ckpt_path, exist_ok=True)
     # save config 
     dump = os.path.join(cfg.logging.log_dir, 'pretrain_params.yaml')
-    with open(dump, 'w') as f:
-        yaml.dump(cfg, f)
+    if utils.is_main_process():
+        with open(dump, 'w') as f:
+            yaml.dump(cfg, f)
 
 
     """set-up DDP"""
@@ -77,7 +78,7 @@ def pretrain_btaudio(args=None):
     # logging 
     logger = utils.get_std_logging(filename=os.path.join(cfg.logging.log_dir, 'out.log')) 
     # wandb 
-    if cfg.rank == 0:
+    if utils.is_main_process():
         wandb_run = wandb.init(
             project='BT-Audio-pretrain',
             config=cfg,

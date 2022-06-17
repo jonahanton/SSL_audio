@@ -52,7 +52,7 @@ def update_cfg_from_args(cfg, args):
 def get_std_logging(filename):
     logging.basicConfig(
         filename=filename,
-        filemode='w'
+        filemode='w',
         format='%(asctime)s %(filename)s:%(lineno)d [%(levelname)s] %(message)s',
         level=logging.INFO,
         )
@@ -288,6 +288,11 @@ def init_distributed_mode(cfg):
         cfg.rank = int(os.environ['RANK'])
         cfg.gpu = int(os.environ['LOCAL_RANK'])
         cfg.world_size = int(os.environ['WORLD_SIZE'])
+        env_dict = {
+            key: os.environ[key]
+            for key in ("MASTER_ADDR", "MASTER_PORT", "RANK", "WORLD_SIZE")
+        }
+        print(f"[{os.getpid()}] Initializing process group with: {env_dict}")
     # launched with a slurm scheduler
     elif 'SLURM_PROCID' in os.environ:
         cfg.rank = int(os.environ['SLURM_PROCID'])
@@ -311,12 +316,6 @@ def init_distributed_mode(cfg):
     if cfg.dist_init == "file":
         if os.path.exists(cfg.dist_url):
             os.remove(cfg.dist_url)
-
-    env_dict = {
-        key: os.environ[key]
-        for key in ("MASTER_ADDR", "MASTER_PORT", "RANK", "WORLD_SIZE")
-    }
-    print(f"[{os.getpid()}] Initializing process group with: {env_dict}")
                 
     dist.init_process_group(
         backend='nccl',

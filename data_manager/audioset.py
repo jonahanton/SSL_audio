@@ -253,15 +253,15 @@ class AudioSetLoader:
 			)
 
 		# if self.cfg.meta.distributed:
-		# sampler = torch.utils.data.distributed.DistributedSampler(dataset)
+		sampler = torch.utils.data.distributed.DistributedSampler(dataset)
 			
 		loader = DataLoader(
 			dataset=dataset,
 			batch_size=self.cfg.optimizer.batch_size_per_gpu,
-			shuffle=True,
+			shuffle=False,
 			num_workers=self.num_workers,
 			pin_memory=True,
-			# sampler=sampler,
+			sampler=sampler,
 			drop_last=drop_last,
 		)
 
