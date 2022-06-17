@@ -9,6 +9,7 @@ import argparse
 from pprint import pprint
 import os
 import datetime
+import yaml
 
 import torch
 import torch.distributed as dist
@@ -28,9 +29,9 @@ def get_args_parser():
     return parser
 
 
-def train(cfg, wandb_run):
+def train(cfg, wandb_run, logger):
 
-    trainer = BarlowTwinsTrainer(cfg, wandb_run)
+    trainer = BarlowTwinsTrainer(cfg, wandb_run, logger)
     print(f'Starting training for {cfg.optimizer.epochs} epochs')
     for epoch in range(cfg.optimizer.epochs):
         trainer.train_one_epoch(epoch)
@@ -61,6 +62,10 @@ def pretrain_btaudio(args=None):
     cfg.checkpoint.ckpt_path = os.path.join(cfg.logging.log_dir, 'models')
     os.makedirs(cfg.logging.log_dir, exist_ok=True)
     os.makedirs(cfg.checkpoint.ckpt_path, exist_ok=True)
+    # save config 
+    dump = os.path.join(cfg.logging.log_dir, 'pretrain_params.yaml')
+    with open(dump, 'w') as f:
+        yaml.dump(cfg, f)
 
 
     """set-up DDP"""
@@ -70,7 +75,8 @@ def pretrain_btaudio(args=None):
     cudnn.benchmark = True
 
     # logging 
-    print(f'Rank: {cfg.rank}')
+    logger = utils.get_std_logging(filename=os.path.join(cfg.logging.log_dir, 'out.log')) 
+    # wandb 
     if cfg.rank == 0:
         wandb_run = wandb.init(
             project='BT-Audio-pretrain',
@@ -80,7 +86,7 @@ def pretrain_btaudio(args=None):
         wandb_run = None
     
     # run training
-    train(cfg, wandb_run)
+    train(cfg, wandb_run, logger)
 
 
 

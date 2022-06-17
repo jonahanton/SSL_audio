@@ -32,27 +32,30 @@ from models.mst import get_mst_model
 
 class BarlowTwinsTrainer:
 
-	def __init__(self, cfg, wandb_run):
+	def __init__(self, cfg, wandb_run, logger):
 		
 		self.cfg = cfg
 		self.wandb_run = wandb_run
+		self.logger = logger
 		# checkpoint path
 		self.ckpt_path = os.path.join(self.cfg.checkpoint.ckpt_path, '{}.pth.tar')
 		self.construct_model()
 
 		print(f'Config parameters: \n{self.cfg}')
-		
+		utils.log_on_master(self.logger, f'Config parameters: \n{self.cfg}')
 
 	def construct_model(self):
 
 		"""*****data loaders*****"""
 		print(f'Loading AudioSet')
+		utils.log_on_master(self.logger, f'Loading AudioSet')
 		self.data_loader = AudioSetLoader(
 			self.cfg,
 			pretrain=True,
 			balanced_only=self.cfg.data.audioset.balanced_only,
 		).get_loader() 
 		print(f'Loaded AudioSet, with {len(self.data_loader.dataset)} data points')
+		utils.log_on_master(self.logger, f'Loaded AudioSet, with {len(self.data_loader.dataset)} data points')
 
 		"""*****build model*****"""
 		if self.cfg.model.encoder.type == 'transformer':
@@ -180,7 +183,8 @@ class BarlowTwinsTrainer:
 		# if self.cfg.meta.distributed:
 		# gather the stats from all processes
 		metric_logger.synchronize_between_processes()
-		print("Averaged stats:", metric_logger)
+		print(f'Averaged stats: {metric_logger}')
+		utils.log_on_master(self.logger, f'Averaged stats: {metric_logger}')
 
 		# return training stats
 		train_stats = {k: meter.global_avg for k, meter in metric_logger.meters.items()}
@@ -188,7 +192,8 @@ class BarlowTwinsTrainer:
 		# knn mAP metric
 		if track_knn:
 
-			print('Calculating knn mAP...')
+			print('Calculating knn mAP')
+			utils.log_on_master(self.logger, 'Calculating knn mAP')
 			# obtain data loaders
 			knn_train_loader = AudioSetLoader(self.cfg, pretrain=False, balanced_only=True,test=False).get_loader(drop_last=False)
 			knn_test_loader = AudioSetLoader(self.cfg, pretrain=False, test=True).get_loader(drop_last=False)
@@ -196,6 +201,7 @@ class BarlowTwinsTrainer:
 			knn_mAP = knn_metric.predict_knn(self.cfg, self.model.module.backbone, knn_train_loader, knn_test_loader)
 
 			print(f'knn mAP: {knn_mAP}')
+			utils.log_on_master(self.logger, f'knn mAP: {knn_mAP}')
 			train_stats.update({'knn_mAP': knn_mAP})
 
 			if self.wandb_run is not None:

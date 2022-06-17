@@ -57,6 +57,11 @@ def eval_linear(args=None):
     if cfg.logging.log_dir is None:
         cfg.logging.log_dir = '/'.join(cfg.weight_file.split('/')[:-2]) + '/eval'
     os.makedirs(cfg.logging.log_dir, exist_ok=True)
+    # save config 
+    dump = os.path.join(cfg.logging.log_dir, 'lineval_params.yaml')
+    with open(dump, 'w') as f:
+        yaml.dump(cfg, f)
+
 
     """set-up DDP"""
     utils.init_distributed_mode(cfg)

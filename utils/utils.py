@@ -49,9 +49,10 @@ def update_cfg_from_args(cfg, args):
         cfg.setdefault(k, v)
 
 
-def get_std_logging():
+def get_std_logging(filename):
     logging.basicConfig(
-        stream=sys.stdout,
+        filename=filename,
+        filemode='w'
         format='%(asctime)s %(filename)s:%(lineno)d [%(levelname)s] %(message)s',
         level=logging.INFO,
         )
@@ -257,6 +258,11 @@ def setup_for_distributed(is_master):
 def save_on_master(*args, **kwargs):
     if is_main_process():
         torch.save(*args, **kwargs)
+
+
+def log_on_master(logger, msg):
+    if is_main_process():
+        logger.info(msg)
 
 
 def get_world_size():
