@@ -51,10 +51,6 @@ def pretrain_btaudio(args=None):
     # time stamp
     cfg.time_stamp = datetime.datetime.now().strftime('%d%m_%H-%M')
 
-    if cfg.dist_init == "file":
-        # shared file-system initialization for torch distributed (https://pytorch.org/docs/stable/distributed.html)
-        cfg.dist_url = 'file:///vol/bitbucket/jla21/proj/slurm/sharedfile'
-
     # update path for logging
     name = (f'{cfg.time_stamp}-model={cfg.model.encoder.type}_{cfg.model.encoder.size}-ps={cfg.model.encoder.ps[0]}x{cfg.model.encoder.ps[1]}'
             f'-maskratio={cfg.model.encoder.mask_ratio}')
@@ -82,7 +78,7 @@ def pretrain_btaudio(args=None):
         wandb_run = wandb.init(
             project='BT-Audio-pretrain',
             config=cfg,
-            settings=wandb.Setting(start_method="fork"),
+            # settings=wandb.Settings(start_method="fork"),
         )
     else:
         wandb_run = None

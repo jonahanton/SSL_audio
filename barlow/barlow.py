@@ -81,7 +81,11 @@ class BarlowTwinsTrainer:
 		# synchronize batch norms
 		self.model = nn.SyncBatchNorm.convert_sync_batchnorm(self.model)
 		# wrap model with ddp
-		self.model = nn.parallel.DistributedDataParallel(self.model, device_ids=[self.cfg.gpu])
+		self.model = nn.parallel.DistributedDataParallel(
+			self.model,
+			device_ids=[self.cfg.gpu],
+			output_device=self.cfg.gpu,
+		)
 		self.model_without_ddp = self.model.module
 		
 		"""*****prepare optimizer*****"""

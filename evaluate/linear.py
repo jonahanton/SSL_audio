@@ -100,7 +100,11 @@ class LinearTrainer:
         self.linear_classifier = self.linear_classifier.cuda(self.cfg.gpu)
         # if self.cfg.meta.distributed:
         # wrap linear classifier with ddp
-        self.linear_classifier = nn.parallel.DistributedDataParallel(self.linear_classifier, device_ids=[self.cfg.gpu])
+        self.linear_classifier = nn.parallel.DistributedDataParallel(
+            self.linear_classifier,
+            device_ids=[self.cfg.gpu],
+            output_device-self.cfg.gpu,
+        )
 
         """*****prepare optimizer*****"""
         if self.cfg.optimizer.type == 'sgd':

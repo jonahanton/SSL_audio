@@ -311,17 +311,9 @@ def init_distributed_mode(cfg):
         cfg.meta.distributed = True
     else:
         cfg.meta.distributed = False
-    
-    # shared file-system initialization for torch distributed (https://pytorch.org/docs/stable/distributed.html)
-    if cfg.dist_init == "file":
-        if os.path.exists(cfg.dist_url):
-            os.remove(cfg.dist_url)
                 
     dist.init_process_group(
         backend='nccl',
-        init_method=cfg.dist_url,
-        world_size=cfg.world_size,
-        rank=cfg.rank,
     )
 
     print(

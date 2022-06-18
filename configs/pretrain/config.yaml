@@ -29,7 +29,7 @@ data:
     mixup_ratio: 0.4
     gaussnoise_ratio: 0.4
   dataloader:
-    num_workers: 32
+    num_workers: 4  # 4*num_GPUs
 model:
   encoder:
     type: transformer
@@ -66,4 +66,3 @@ knn:
   T: 0.07
   num_classes: 527
 dist_url: env://
-dist_init: torch_dist_launch

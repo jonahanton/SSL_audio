@@ -50,4 +50,3 @@ checkpoint:
 logging:
   log_dir: 
 dist_url: env://
-dist_init: torch_dist_launch
