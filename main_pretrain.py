@@ -26,6 +26,11 @@ def get_args_parser():
     parser = argparse.ArgumentParser(description='Barlow Twins Training', add_help=False)
     parser.add_argument('--config-path', type=str, default='./configs/pretrain/config.yaml',
                         help='path to .yaml config file')
+    
+    # training hyperparameters
+    parser.add_argument('-B', '--batch-size-per-gpu', type=int, default=None)
+    parser.add_argument('-M', '--mask-ratio', type=float, default=None)
+    parser.add_argument('-E', '--epochs', type=int, default=None)
     return parser
 
 
@@ -46,13 +51,19 @@ def pretrain_btaudio(args=None):
     # load training params from .yaml config file
     cfg = utils.load_yaml_config(args.config_path)
     # update config with any remaining arguments from args
-    utils.update_cfg_from_args(cfg, args)
+    cfg.config_path = args.config_path
+    if args.batch_size_per_gpu is not None:
+        cfg.optimizer.batch_size_per_gpu = args.batch_size_per_gpu
+    if args.mask_ratio is not None:
+        cfg.model.encoder.mask_ratio = args.mask_ratio
+    if args.epochs is not None:
+        cfg.optimizer.epochs = args.epochs
 
     # time stamp
-    cfg.time_stamp = datetime.datetime.now().strftime('%d%m_%H-%M')
+    cfg.time_stamp = datetime.datetime.now().strftime('%d_%m')
 
     # update path for logging
-    name = (f'{cfg.time_stamp}-model={cfg.model.encoder.type}_{cfg.model.encoder.size}-ps={cfg.model.encoder.ps[0]}x{cfg.model.encoder.ps[1]}'
+    name = (f'{cfg.time_stamp}---model={cfg.model.encoder.type}_{cfg.model.encoder.size}-ps={cfg.model.encoder.ps[0]}x{cfg.model.encoder.ps[1]}'
             f'-maskratio={cfg.model.encoder.mask_ratio}')
     cfg.logging.log_dir = cfg.logging.log_dir.format(name)
     cfg.checkpoint.ckpt_path = os.path.join(cfg.logging.log_dir, 'models')

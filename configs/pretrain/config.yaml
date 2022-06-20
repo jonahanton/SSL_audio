@@ -29,13 +29,13 @@ data:
     mixup_ratio: 0.4
     gaussnoise_ratio: 0.4
   dataloader:
-    num_workers: 8
+    num_workers: 10
 model:
   encoder:
     type: transformer
     size: base
     ps: [16,16]
-    mask_ratio: 0.75
+    mask_ratio: 0.
     latent: cls
   projection:
     sizes: # [768, 8192, 8192, 8192]
@@ -44,11 +44,11 @@ optimizer:
   type: adamw
   base_lr: 1.0e-4
   final_lr: 1.0e-6
-  warmup_epochs: 15
+  warmup_epochs: 6
   weight_decay: 0.04
   final_weight_decay: 0.4
-  epochs: 100
-  batch_size_per_gpu: 256
+  epochs: 40
+  batch_size_per_gpu: 512
 meta:
   distributed:
   seed: 32
@@ -58,10 +58,10 @@ checkpoint:
   save_epoch_it: 20
   ckpt_path:
 logging:
-  log_dir: /rds/general/user/jla21/ephemeral/SSL_audio/checkpoint/{}
+  log_dir: checkpoint/{}
 knn:
   track_knn: true
-  track_knn_it: 1
+  track_knn_it: 5
   k: 200
   T: 0.07
   num_classes: 527

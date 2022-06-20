@@ -213,6 +213,15 @@ class BarlowTwinsTrainer:
 					'test_knn_mAP': knn_mAP,
 				})
 		
+		# save epoch logs
+		log_stats = {
+			**{f'train_{k}': v for k, v in train_stats.items()},
+			'epoch': epoch,
+		}
+		if utils.is_main_process():
+			with (Path(f'{self.cfg.logging.log_dir}/log.txt')).open("a") as f:
+				f.write(json.dumps(log_stats) + "\n")
+		
 		# save checkpoint
 		if epoch % self.cfg.checkpoint.save_epoch_it == 0:
 			self.save_checkpoint(epoch, train_stats)
@@ -229,21 +238,8 @@ class BarlowTwinsTrainer:
 		if self.fp16_scaler is not None:
 			save_dict['fp16_scaler'] = self.fp16_scaler.state_dict()
 
-		log_stats = {
-			**{f'train_{k}': v for k, v in train_stats.items()},
-			'epoch': epoch,
-		}
-		
-		# if self.cfg.meta.distributed:
 		utils.save_on_master(save_dict, self.ckpt_path.format(f'epoch-{epoch}'))
-		if utils.is_main_process():
-			with (Path(f'{self.cfg.logging.log_dir}/log.txt')).open("a") as f:
-				f.write(json.dumps(log_stats) + "\n")
-		# else:
-		# 	torch.save(save_dict, self.ckpt_path.format(f'epoch-{epoch}'))
-		# 	with (Path(f'{self.cfg.logging.log_dir}/log.txt')).open("a") as f:
-		# 			f.write(json.dumps(log_stats) + "\n")
-					
+	
 
 class BarlowTwins(nn.Module):
 	
