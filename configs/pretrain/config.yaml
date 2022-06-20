@@ -29,7 +29,7 @@ data:
     mixup_ratio: 0.4
     gaussnoise_ratio: 0.4
   dataloader:
-    num_workers: 4  # 4*num_GPUs
+    num_workers: 8
 model:
   encoder:
     type: transformer

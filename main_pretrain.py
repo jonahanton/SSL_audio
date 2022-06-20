@@ -78,7 +78,7 @@ def pretrain_btaudio(args=None):
         wandb_run = wandb.init(
             project='BT-Audio-pretrain',
             config=cfg,
-            # settings=wandb.Settings(start_method="fork"),
+            settings=wandb.Settings(start_method="fork"),
         )
     else:
         wandb_run = None

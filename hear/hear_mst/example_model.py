@@ -12,10 +12,10 @@ sys.path.append('../..')
 import torch
 import torch.nn as nn
 
-from models.runtime import RuntimeMST
+from .models.runtime import RuntimeMST
 
 
-def load_model(model_file_path):
+def load_model(model_file_path='${EPHEMERAL}/SSL_audio/checkpoint/example_model.pth.tar'):
     model = RuntimeMST(weight_file=model_file_path)
     if torch.cuda.is_available():
         model.cuda()
