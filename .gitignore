@@ -13,7 +13,7 @@ utils/torch_mlp_clf.py
 utils/mask_conv.py
 data_usage.txt
 nodelist
-hear/hear_mst/submit_hear.pbs
+hear/submit_hear.pbs
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

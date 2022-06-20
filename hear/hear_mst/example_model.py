@@ -15,7 +15,7 @@ import torch.nn as nn
 from models.runtime import RuntimeMST
 
 
-def load_model(model_file_path='${EPHEMERAL}/SSL_audio/checkpoint/example_model.pth.tar'):
+def load_model(model_file_path='/rds/general/user/jla21/ephemeral/SSL_audio/checkpoint/example_model.pth.tar'):
     model = RuntimeMST(weight_file=model_file_path)
     if torch.cuda.is_available():
         model.cuda()
