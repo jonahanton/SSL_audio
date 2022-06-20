@@ -66,7 +66,8 @@ class BarlowTwinsTrainer:
 			embed_dim = backbone.embed_dim
 			
 		if self.cfg.model.projection.sizes is None:
-			self.cfg.model.projection.sizes = [embed_dim, 4*embed_dim, 4*embed_dim, 4*embed_dim]
+			p_x = self.cfg.model.projection.projector_x 
+			self.cfg.model.projection.sizes = [embed_dim, p_x*embed_dim, p_x*embed_dim, p_x*embed_dim]
 	
 		self.model = BarlowTwins(
 			cfg=self.cfg,

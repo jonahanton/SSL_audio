@@ -31,6 +31,7 @@ def get_args_parser():
     parser.add_argument('-B', '--batch-size-per-gpu', type=int, default=None)
     parser.add_argument('-M', '--mask-ratio', type=float, default=None)
     parser.add_argument('-E', '--epochs', type=int, default=None)
+    parser.add_argument('--projector-x', type=int, default=None)
     return parser
 
 
@@ -58,6 +59,8 @@ def pretrain_btaudio(args=None):
         cfg.model.encoder.mask_ratio = args.mask_ratio
     if args.epochs is not None:
         cfg.optimizer.epochs = args.epochs
+    if args.projector_x is not None:
+        cfg.model.projection.projector_x = args.projector_x
 
     # time stamp
     cfg.time_stamp = datetime.datetime.now().strftime('%d_%m')
