@@ -1,5 +1,5 @@
 """
-Linear evaluation of pre-trained model on AudioSet-20K.
+End-t-end fine-tuning evaluation of pre-trained model on AudioSet-20K.
 References:
     https://github.com/facebookresearch/msn/blob/main/linear_eval.py
     https://github.com/facebookresearch/dino/blob/main/eval_linear.py
@@ -33,7 +33,7 @@ from models.mst import get_mst_model
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)  # for sklearn UserWarning 
 
-class LinearTrainer:
+class FinetuneTrainer:
     
     def __init__(self, cfg, wandb_run, logger):
         
@@ -92,22 +92,26 @@ class LinearTrainer:
         print(f'Loaded in pre-trained weights from file {self.cfg.weight_file}')
         utils.log_on_master(self.logger, f'Loaded in pre-trained weights from file {self.cfg.weight_file}')
         del sd
-        # move encoder to gpu
-        
-        self.encoder = self.encoder.cuda(self.cfg.gpu)
-        self.encoder.eval()
 
-        """*****build linear classifier*****"""
-        self.linear_classifier = LinearClassifier(
+        # move encoder to gpu
+        self.encoder = self.encoder.cuda(self.cfg.gpu)
+        self.encoder.train()
+
+        """*****build finetune classifier*****"""
+        self.finetune_classifier = FinetuneClassifier(
+            cfg=self.cfg,
+            encoder=self.encoder,
             dim=embed_dim,
             num_classes=self.cfg.num_classes,
             normalize=self.cfg.optimizer.normalize,
         )
-        self.linear_classifier = self.linear_classifier.cuda(self.cfg.gpu)
+        self.finetune_classifier = self.finetune_classifier.cuda(self.cfg.gpu)
         if self.cfg.meta.distributed:
-            # wrap linear classifier with ddp
-            self.linear_classifier = nn.parallel.DistributedDataParallel(
-                self.linear_classifier,
+            # synchronize batch norms
+            self.finetune_classifier = nn.SyncBatchNorm.convert_sync_batchnorm(self.finetune_classifier)
+            # wrap finetune classifier with ddp
+            self.finetune_classifier = nn.parallel.DistributedDataParallel(
+                self.finetune_classifier,
                 device_ids=[self.cfg.gpu],
                 output_device=self.cfg.gpu,
             )
@@ -115,7 +119,7 @@ class LinearTrainer:
         """*****prepare optimizer*****"""
         if self.cfg.optimizer.type == 'sgd':
             self.optimizer = torch.optim.SGD(
-                params=self.linear_classifier.parameters(),
+                params=self.finetune_classifier.parameters(),
                 lr=self.cfg.optimizer.lr*(self.cfg.optimizer.batch_size_per_gpu*self.cfg.world_size/256.),  # linear scaling rule
                 momentum=0.9,
                 weight_decay=0,
@@ -140,7 +144,7 @@ class LinearTrainer:
     
     def train_one_epoch(self, epoch):
         
-        self.linear_classifier.train()
+        self.finetune_classifier.train()
 
         metric_logger = utils.MetricLogger(delimiter=" ")
         header = f'Epoch: [{epoch}/{self.cfg.optimizer.epochs}]'
@@ -157,30 +161,19 @@ class LinearTrainer:
             labels = labels.cuda(non_blocking=True)
 
             tflag = time.time()
-			# forward passes + compute loss
+            # forward passes + compute loss
             with torch.cuda.amp.autocast(enabled=(self.fp16_scaler is not None)):
-                with torch.no_grad():
-                    latent, _, _ = self.encoder(inputs, mask_ratio=0.)
-
-            if self.cfg.model.encoder.latent == 'cls':
-                # return cls token as global clip representation
-                latent = latent[:, 0]
-            else:
-                # return mean pool over patch embeddings as global clip representation
-                latent = torch.mean(latent[:, 1:], dim=1)
-            latent = latent.contiguous()
-
-            outputs = self.linear_classifier(latent)
-            loss = self.criterion(outputs, labels)
+                outputs = self.finetune_classifier(inputs)
+                loss = self.criterion(outputs, labels)
             metric_logger.update(forward_time=time.time()-tflag)
-			
+
             if not math.isfinite(loss.item()):
                 print(f"Loss is {loss.item()}, stopping training")
                 utils.log_on_master(self.logger, f"Loss is {loss.item()}, stopping training")
                 sys.exit(1)
 
             tflag = time.time()
-			# gradient update
+            # gradient update
             self.optimizer.zero_grad()
             if self.fp16_scaler is None:
                 loss.backward()
@@ -249,7 +242,7 @@ class LinearTrainer:
 
     @torch.no_grad()
     def validate(self):
-        self.linear_classifier.eval()
+        self.finetune_classifier.eval()
 
         stats = {}
         all_targets, all_preds = [], []
@@ -263,18 +256,8 @@ class LinearTrainer:
             # forward passes + compute loss
             with torch.cuda.amp.autocast(enabled=(self.fp16_scaler is not None)):
                 with torch.no_grad():
-                    latent, _, _ = self.encoder(inputs, mask_ratio=0.)
-
-            if self.cfg.model.encoder.latent == 'cls':
-                # return cls token as global clip representation
-                latent = latent[:, 0]
-            else:
-                # return mean pool over patch embeddings as global clip representation
-                latent = torch.mean(latent[:, 1:], dim=1)
-            latent = latent.contiguous()
-            
-            outputs = self.linear_classifier(latent)
-            loss = self.criterion(outputs, labels)
+                    outputs = self.finetune_classifier(inputs)
+                loss = self.criterion(outputs, labels)
             val_loss += loss.item()
 
             all_preds.append(outputs.sigmoid())
@@ -301,11 +284,13 @@ class LinearTrainer:
         return mAP, val_loss
 
 
-class LinearClassifier(nn.Module):
+class FinetuneClassifier(nn.Module):
 
-    def __init__(self, dim, num_classes=527, normalize=True):
+    def __init__(self, cfg, encoder, dim, num_classes=527, normalize=True):
         super().__init__()
 
+        self.cfg = cfg
+        self.encoder = encoder
         self.normalize = normalize
         # self.norm = nn.LayerNorm(dim)
         self.linear = nn.Linear(dim, num_classes)
@@ -314,6 +299,14 @@ class LinearClassifier(nn.Module):
 
     
     def forward(self, x):
+        x, _, _ = self.encoder(x, mask_ratio=0.)
+        if self.cfg.model.encoder.latent == 'cls':
+            # return cls token as global clip representation
+			x = x[:, 0]
+        else:
+            # return mean pool over patch embeddings as global clip representation
+            x = torch.mean(x[:, 1:], dim=1)
+        x = x.contiguous()
         x = x.view(x.size(0), -1)  # flatten
         # x = self.norm(x)
         if self.normalize:  # normalize inputs for linear classifier 

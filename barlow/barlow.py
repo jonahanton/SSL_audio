@@ -224,7 +224,7 @@ class BarlowTwinsTrainer:
 				f.write(json.dumps(log_stats) + "\n")
 		
 		# save checkpoint
-		if epoch % self.cfg.checkpoint.save_epoch_it == 0:
+		if (epoch % self.cfg.checkpoint.save_epoch_it == 0) or (epoch == self.cfg.optimizer.epochs - 1):
 			self.save_checkpoint(epoch, train_stats)
 
 

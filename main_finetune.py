@@ -18,13 +18,13 @@ import torch.backends.cudnn as cudnn
 import wandb
 
 from utils import utils 
-from evaluate.linear import LinearTrainer
+from evaluate.finetune import FinetuneTrainer
 
 
 def get_args_parser():
     
-    parser = argparse.ArgumentParser(description='Linear Evaluation', add_help=False)
-    parser.add_argument('--config-path', type=str, default='./configs/lineval/config.yaml',
+    parser = argparse.ArgumentParser(description='End-to-end Finetune', add_help=False)
+    parser.add_argument('--config-path', type=str, default='./configs/finetune/config.yaml',
                         help='path to .yaml config file')
     parser.add_argument('-w', '--weight-file', type=str, default=None)
     return parser
@@ -32,7 +32,7 @@ def get_args_parser():
 
 def train_and_test(cfg, wandb_run, logger):
 
-    trainer = LinearTrainer(cfg, wandb_run, logger)
+    trainer = FinetuneTrainer(cfg, wandb_run, logger)
     print(f'Starting training for {cfg.optimizer.epochs} epochs')
     for epoch in range(cfg.optimizer.epochs):
         trainer.train_one_epoch(epoch)
@@ -41,7 +41,7 @@ def train_and_test(cfg, wandb_run, logger):
 def eval_linear(args=None):
 
     if args is None:
-        parser = argparse.ArgumentParser('LinearEval', parents=[get_args_parser()])
+        parser = argparse.ArgumentParser('Finetune', parents=[get_args_parser()])
         args = parser.parse_args()
 
     # load training params from .yaml config file
@@ -56,10 +56,10 @@ def eval_linear(args=None):
 
     # set-up path for logging
     if cfg.logging.log_dir is None:
-        cfg.logging.log_dir = '/'.join(cfg.weight_file.split('/')[:-2]) + '/lineval'
+        cfg.logging.log_dir = '/'.join(cfg.weight_file.split('/')[:-2]) + '/finetune'
     os.makedirs(cfg.logging.log_dir, exist_ok=True)
     # save config 
-    dump = os.path.join(cfg.logging.log_dir, 'lineval_params.yaml')
+    dump = os.path.join(cfg.logging.log_dir, 'finetune_params.yaml')
     with open(dump, 'w') as f:
         yaml.dump(cfg, f)
 
@@ -74,7 +74,7 @@ def eval_linear(args=None):
     # wandb 
     if utils.is_main_process():
         wandb_run = wandb.init(
-            project='BT-Audio-lineval',
+            project='BT-Audio-finetune',
             config=cfg,
             settings=wandb.Settings(start_method="fork"),
         )

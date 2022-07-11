@@ -301,7 +301,6 @@ def init_distributed_mode(cfg):
     elif torch.cuda.is_available():
         print('Will run the code on one GPU.')
         cfg.rank, cfg.gpu, cfg.world_size = 0, 0, 1
-        cfg.meta.distributed = False
     else:
         print('Does not support training without GPU.')
         sys.exit(1)
@@ -309,20 +308,18 @@ def init_distributed_mode(cfg):
 
     if cfg.world_size > 1:
         cfg.meta.distributed = True
+        dist.init_process_group(
+            backend='nccl',
+        )
+        print(
+            f"[{os.getpid()}] world_size = {dist.get_world_size()}, "
+            + f"rank = {dist.get_rank()}, backend={dist.get_backend()}"
+        )
+        dist.barrier()
     else:
         cfg.meta.distributed = False
-                
-    dist.init_process_group(
-        backend='nccl',
-    )
-
-    print(
-        f"[{os.getpid()}] world_size = {dist.get_world_size()}, "
-        + f"rank = {dist.get_rank()}, backend={dist.get_backend()}"
-    )
 
     torch.cuda.set_device(cfg.gpu)
-    dist.barrier()
     setup_for_distributed(cfg.rank == 0)
 
 
