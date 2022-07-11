@@ -28,6 +28,7 @@ import json
 from utils import utils
 from utils.stats import calculate_stats
 from data_manager.audioset import AudioSetLoader
+from data_manager.audioset_lms import SpectrogramLoader
 from models.mst import get_mst_model
 
 import warnings
@@ -48,24 +49,41 @@ class FinetuneTrainer:
         """*****data loaders*****"""
         print(f'Loading AudioSet')
         utils.log_on_master(self.logger, f'Loading AudioSet')
-        self.data_loader_train = AudioSetLoader(
-            self.cfg,
-            pretrain=False,
-            balanced_only=self.cfg.data.audioset.balanced_only,
-        ).get_loader() 
+        if self.cfg.data.dataloader.npy:
+            # Load in pre-converted raw waveforms (.wav) -> lms (.npy) files 
+            self.data_loader_train = SpectrogramLoader(
+                self.cfg,
+                pretrain=False,
+                balanced_only=self.cfg.data.audioset.balanced_only,
+            ).get_loader()
+        else:
+            # Load in raw waveforms (.wav)
+            self.data_loader_train = AudioSetLoader(
+                self.cfg,
+                pretrain=False,
+                balanced_only=self.cfg.data.audioset.balanced_only,
+            ).get_loader() 
         print(f'Loaded AudioSet, with {len(self.data_loader_train.dataset)} data points')
         utils.log_on_master(self.logger, f'Loaded AudioSet, with {len(self.data_loader_train.dataset)} data points')
 
         print(f'Loading AudioSet evaluation set')
         utils.log_on_master(self.logger, f'Loading AudioSet evaluation set')
-        self.data_loader_test = AudioSetLoader(
-            self.cfg,
-            pretrain=False,
-            test=True,
-        ).get_loader() 
+        if self.cfg.data.dataloader.npy:
+            # Load in pre-converted raw waveforms (.wav) -> lms (.npy) files 
+            self.data_loader_test = SpectrogramLoader(
+                self.cfg,
+                pretrain=False,
+                test=True,
+            ).get_loader()
+        else:
+            # Load in raw waveforms (.wav)
+            self.data_loader_test = AudioSetLoader(
+                self.cfg,
+                pretrain=False,
+                test=True,
+            ).get_loader() 
         print(f'Loaded AudioSet evaluation set, with {len(self.data_loader_test.dataset)} data points')
         utils.log_on_master(self.logger, f'Loaded AudioSet evaluation set, with {len(self.data_loader_test.dataset)} data points')
-
         
     
         """*****load pre-trained weights*****"""

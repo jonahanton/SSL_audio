@@ -10,7 +10,7 @@ This converstion includes the following processes:
 Code adapted from https://github.com/nttcslab/msm-mae/blob/main/wav_to_lms.py.
 
 Example:
-    python -m data_manager.wav_to_lms /data/audioset /data/audioset_lms
+    python -m data_manager.wav_to_lms data/audioset data/audioset_lms
 """
 
 import numpy as np 

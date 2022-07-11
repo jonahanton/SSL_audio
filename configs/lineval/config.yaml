@@ -33,7 +33,8 @@ data:
     mixup_ratio: 0.4
     gaussnoise_ratio: 0.4
   dataloader:
-    num_workers: 4
+    num_workers: 10
+    npy: False
 model:
   encoder:
     latent: cls

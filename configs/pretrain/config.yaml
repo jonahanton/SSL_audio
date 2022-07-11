@@ -30,6 +30,7 @@ data:
     gaussnoise_ratio: 0.4
   dataloader:
     num_workers: 10
+    npy: False
 model:
   encoder:
     type: transformer

@@ -33,14 +33,15 @@ data:
     mixup_ratio: 0.4
     gaussnoise_ratio: 0.4
   dataloader:
-    num_workers: 4
+    num_workers: 10
+    npy: False
 model:
   encoder:
     latent: cls
 optimizer:
-  type: sgd
+  type: adamw
   lr: 0.1
-  epochs: 100
+  epochs: 30
   batch_size_per_gpu: 256
   normalize: true
 meta:

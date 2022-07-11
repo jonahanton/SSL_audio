@@ -5,7 +5,7 @@ import torchaudio
 import random 
 
 from audiomentations import Compose, TimeStretch, PitchShift
-from data_manager.augmentations import Mixup, MixGaussianNoise
+from data_manager.augmentations import RandomResizeCrop, Mixup, MixGaussianNoise
 
 
 def make_transforms_pretrain(cfg):
@@ -35,6 +35,14 @@ def make_transforms_pretrain(cfg):
 	return wav_transform, lms_transform
 	
 
-def make_transforms_lineval(cfg):
+def make_transforms_eval(cfg):
 	wav_transform, lms_transform = None, None
 	return wav_transform, lms_transform
+
+
+def make_transforms_pretrain_lms(cfg):
+	return nn.Sequential(Mixup(ratio=cfg.data.transform.maxup_ratio), RandomResizeCrop())
+
+
+def make_transforms_eval_lms(cfg):
+	return None

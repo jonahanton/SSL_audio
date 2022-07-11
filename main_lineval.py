@@ -50,13 +50,14 @@ def eval_linear(args=None):
     cfg.config_path = args.config_path
     if args.weight_file is not None:
         cfg.weight_file = args.weight_file
+    model_base_name = (cfg.weight_file.split('/')[-1]).replace('.pth.tar', '')
 
     # time stamp
     cfg.time_stamp = datetime.datetime.now().strftime('%d%m_%H-%M')
 
     # set-up path for logging
     if cfg.logging.log_dir is None:
-        cfg.logging.log_dir = '/'.join(cfg.weight_file.split('/')[:-2]) + '/lineval'
+        cfg.logging.log_dir = '/'.join(cfg.weight_file.split('/')[:-2]) + '/lineval/' + model_base_name 
     os.makedirs(cfg.logging.log_dir, exist_ok=True)
     # save config 
     dump = os.path.join(cfg.logging.log_dir, 'lineval_params.yaml')
