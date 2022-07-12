@@ -173,7 +173,7 @@ def train(cfg, wandb_run, logger):
         track_knn = cfg.knn.track_knn and (epoch % cfg.knn.track_knn_it == 0)
 
         end = time.time()
-        for iteration, ((y1, y2), labels) in enumerate(data_loader):
+        for iteration, ((y1, y2), labels) in enumerate(metric_logger.log_every(data_loader, cfg.checkpoint.print_it, header)):
             # measure data loading time
             metric_logger.update(data_time=(time.time()-end))
 
