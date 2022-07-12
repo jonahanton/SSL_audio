@@ -36,7 +36,7 @@ model:
     type: transformer
     size: base
     ps: [16,16]
-    mask_ratio: 0.
+    mask_ratio: 0.75
     latent: cls
   projection:
     sizes: # [768, 8192, 8192, 8192]

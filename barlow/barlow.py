@@ -28,7 +28,7 @@ import json
 from utils import utils, knn_metric
 from data_manager.audioset import AudioSetLoader
 from data_manager.audioset_lms import SpectrogramLoader
-from models.mst import get_mst_model
+from models import mae 
 
 
 class BarlowTwinsTrainer:
@@ -70,10 +70,7 @@ class BarlowTwinsTrainer:
 
 		"""*****build model*****"""
 		if self.cfg.model.encoder.type == 'transformer':
-			backbone = get_mst_model(
-				size=self.cfg.model.encoder.size,
-				patch_size=(self.cfg.model.encoder.ps[0], self.cfg.model.encoder.ps[1])
-			)
+			backbone = mae.mae_vit_base_patchX(patch_size=self.cfg.model.encoder.ps)
 			embed_dim = backbone.embed_dim
 			
 		if self.cfg.model.projection.sizes is None:

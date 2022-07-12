@@ -29,7 +29,7 @@ from utils import utils
 from utils.stats import calculate_stats
 from data_manager.audioset import AudioSetLoader
 from data_manager.audioset_lms import SpectrogramLoader
-from models.mst import get_mst_model
+from models import mae 
 
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)  # for sklearn UserWarning 
@@ -100,11 +100,7 @@ class LinearTrainer:
         embed_dim = sd['pos_embed'].shape[2]
 
         """*****build encoder*****"""
-        encoder_size = 'tiny' if embed_dim == 192 else 'small' if embed_dim == 384 else 'base'
-        self.encoder = get_mst_model(
-            size=encoder_size,
-            patch_size=(encoder_ps[0], encoder_ps[1]),
-        )
+        self.encoder = mae.mae_vit_base_patchX(patch_size=(encoder_ps[0], encoder_ps[1]))
         # load in weights
         self.encoder.load_state_dict(sd, strict=False)
         print(f'Loaded in pre-trained weights from file {self.cfg.weight_file}')
