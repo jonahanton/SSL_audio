@@ -124,7 +124,7 @@ class SpectrogramDataset(Dataset):
 		elif ident == "eval_segments":
 			audio_fpath = os.path.join(os.path.join(*[self.base_dir, "eval_segments", f"{audio_fname}.npy"]))
 
-		lms = torch.tensor(np.load(filename)).unsqueeze(0)
+		lms = torch.tensor(np.load(audio_fpath)).unsqueeze(0)
 
 		# Trim or pad
 		l = lms.shape[-1]

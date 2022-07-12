@@ -342,7 +342,7 @@ class FinetuneClassifier(nn.Module):
         x, _, _ = self.encoder(x, mask_ratio=0.)
         if self.cfg.model.encoder.latent == 'cls':
             # return cls token as global clip representation
-			x = x[:, 0]
+            x = x[:, 0]
         else:
             # return mean pool over patch embeddings as global clip representation
             x = torch.mean(x[:, 1:], dim=1)
