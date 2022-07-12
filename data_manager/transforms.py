@@ -39,7 +39,7 @@ def make_transforms_pretrain(cfg):
 def make_transforms_eval(cfg):
 	wav_transform = None
 	lms_transform = nn.Sequential(
-		Mixup(ratio=cfg.data.transform.maxup_ratio),
+		Mixup(ratio=cfg.data.transform.mixup_ratio),
 		AT.FrequencyMasking(freq_mask_param=cfg.data.transform.freqm),
 		AT.TimeMasking(time_mask_param=cfg.data.transform.timem),
 	)
@@ -48,7 +48,7 @@ def make_transforms_eval(cfg):
 
 def make_transforms_pretrain_lms(cfg):
 	transform = nn.Sequential(
-		Mixup(ratio=cfg.data.transform.maxup_ratio),
+		Mixup(ratio=cfg.data.transform.mixup_ratio),
 		RandomResizeCrop(),
 	)
 	return transform
@@ -56,7 +56,7 @@ def make_transforms_pretrain_lms(cfg):
 
 def make_transforms_eval_lms(cfg):
 	transform = nn.Sequential(
-		Mixup(ratio=cfg.data.transform.maxup_ratio),
+		Mixup(ratio=cfg.data.transform.mixup_ratio),
 		AT.FrequencyMasking(freq_mask_param=cfg.data.transform.freqm),
 		AT.TimeMasking(time_mask_param=cfg.data.transform.timem),
 	)

@@ -1,11 +1,11 @@
 weight_file:
 task: audioset
 num_classes: 527
-val_freq: 5
+val_freq: 1
 data:
   audioset:
     balanced_only: true
-    twohundredkonly: false
+    twohundredk_only: false
   preprocess:
     # Unit duration in seconds for one audio segment
     unit_sec: 0.95
@@ -38,7 +38,7 @@ optimizer:
   weight_decay: 0.05
   final_weight_decay: 
   epochs: 30
-  batch_size_per_gpu: 1024
+  batch_size_per_gpu: 512
   normalize: true
 meta:
   distributed: 

@@ -1,5 +1,5 @@
 """
-Barlow Twins for Audio (w/ Transformer encoder): Linear Evaluation.
+Barlow Twins for Audio (w/ Transformer encoder): end-to-end finetune.
 References:
     https://github.com/nttcslab/byol-a/blob/master/evaluate.py
 """
@@ -23,7 +23,7 @@ from evaluate.finetune import FinetuneTrainer
 
 def get_args_parser():
     
-    parser = argparse.ArgumentParser(description='End-to-end Finetune', add_help=False)
+    parser = argparse.ArgumentParser(description='end-to-end Finetune', add_help=False)
     parser.add_argument('--config-path', type=str, default='./configs/finetune/config.yaml',
                         help='path to .yaml config file')
     parser.add_argument('-w', '--weight-file', type=str, default=None)
@@ -38,7 +38,7 @@ def train_and_test(cfg, wandb_run, logger):
         trainer.train_one_epoch(epoch)
 
 
-def eval_linear(args=None):
+def eval_finetune(args=None):
 
     if args is None:
         parser = argparse.ArgumentParser('Finetune', parents=[get_args_parser()])
@@ -87,4 +87,4 @@ def eval_linear(args=None):
 
 
 if __name__ == "__main__":
-    eval_linear()
+    eval_finetune()

@@ -1,5 +1,5 @@
 """
-End-t-end fine-tuning evaluation of pre-trained model on AudioSet-20K.
+End-to-end fine-tuning evaluation of pre-trained model on AudioSet-20K.
 References:
     https://github.com/facebookresearch/msn/blob/main/linear_eval.py
     https://github.com/facebookresearch/dino/blob/main/eval_linear.py
