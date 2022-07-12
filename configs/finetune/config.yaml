@@ -20,18 +20,10 @@ data:
     # [mean, std], for audioset: [-0.8294, 4.6230]
     norm_stats: [-0.8294, 4.6230]
   transform:
-    # Transform raw waveform
-    min_rate: 0.5
-    max_rate: 1.5
-    ts_p: 0.6
-    min_semitones: -7
-    max_semitones: 7
-    ps_p: 0.6
     # Transform lms
-    mixup: true
-    gaussnoise: false
     mixup_ratio: 0.4
-    gaussnoise_ratio: 0.4
+    freqm: 24
+    timem: 36
   dataloader:
     num_workers: 10
     npy: False
@@ -40,9 +32,13 @@ model:
     latent: cls
 optimizer:
   type: adamw
-  lr: 0.1
+  base_lr: 5.0e-4
+  final_lr: 1.0e-6
+  warmup_epochs: 5
+  weight_decay: 0.05
+  final_weight_decay: 
   epochs: 30
-  batch_size_per_gpu: 256
+  batch_size_per_gpu: 1024
   normalize: true
 meta:
   distributed: 

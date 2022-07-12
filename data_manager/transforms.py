@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torchaudio
+import torchaudio.transforms as AT
 
 import random 
 
@@ -36,13 +37,27 @@ def make_transforms_pretrain(cfg):
 	
 
 def make_transforms_eval(cfg):
-	wav_transform, lms_transform = None, None
+	wav_transform = None
+	lms_transform = nn.Sequential(
+		Mixup(ratio=cfg.data.transform.maxup_ratio),
+		AT.FrequencyMasking(freq_mask_param=cfg.data.transform.freqm),
+		AT.TimeMasking(time_mask_param=cfg.data.transform.timem),
+	)
 	return wav_transform, lms_transform
 
 
 def make_transforms_pretrain_lms(cfg):
-	return nn.Sequential(Mixup(ratio=cfg.data.transform.maxup_ratio), RandomResizeCrop())
+	transform= = nn.Sequential(
+		Mixup(ratio=cfg.data.transform.maxup_ratio),
+		RandomResizeCrop(),
+	)
+	return transform
 
 
 def make_transforms_eval_lms(cfg):
-	return None
+	transform = nn.Sequential(
+		Mixup(ratio=cfg.data.transform.maxup_ratio),
+		AT.FrequencyMasking(freq_mask_param=cfg.data.transform.freqm),
+		AT.TimeMasking(time_mask_param=cfg.data.transform.timem),
+	)
+	return transform

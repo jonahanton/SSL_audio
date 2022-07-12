@@ -159,12 +159,14 @@ class SpectrogramLoader:
 		self,
 		cfg,
 		pretrain=True,
+		finetune=False,
 		balanced_only=False,
 		test=False,
 		num_workers=None,
 	):
 		self.cfg = cfg
 		self.pretrain = pretrain
+		self.finetune = finetune 
 		self.balanced_only = balanced_only
 		self.test = test
 		self.num_workers = num_workers if num_workers is not None else self.cfg.data.dataloader.num_workers
@@ -181,10 +183,10 @@ class SpectrogramLoader:
 				balanced_only = self.balanced_only,
 			)
 		else:
-			if self.test:
-				transform = None
-			else:
+			if self.finetune:
 				transform = make_transforms_eval_lms(self.cfg)
+			else:
+				transform = None
 			dataset = SpectrogramDataset(
 				self.cfg,
 				n_views=1,

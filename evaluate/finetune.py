@@ -54,6 +54,7 @@ class FinetuneTrainer:
             self.data_loader_train = SpectrogramLoader(
                 self.cfg,
                 pretrain=False,
+                finetune=True,
                 balanced_only=self.cfg.data.audioset.balanced_only,
             ).get_loader()
         else:
@@ -61,6 +62,7 @@ class FinetuneTrainer:
             self.data_loader_train = AudioSetLoader(
                 self.cfg,
                 pretrain=False,
+                finetune=True,
                 balanced_only=self.cfg.data.audioset.balanced_only,
             ).get_loader() 
         print(f'Loaded AudioSet, with {len(self.data_loader_train.dataset)} data points')
@@ -135,13 +137,17 @@ class FinetuneTrainer:
             )
 
         """*****prepare optimizer*****"""
+        param_groups = utils.get_param_groups(self.finetune_classifier)
         if self.cfg.optimizer.type == 'sgd':
             self.optimizer = torch.optim.SGD(
-                params=self.finetune_classifier.parameters(),
-                lr=self.cfg.optimizer.lr*(self.cfg.optimizer.batch_size_per_gpu*self.cfg.world_size/256.),  # linear scaling rule
+                params=param_groups,
                 momentum=0.9,
                 weight_decay=0,
                 nesterov=True,
+            )
+        elif self.cfg.optimizer.type == 'adamw':
+            self.optimizer = torch.optim.AdamW(
+                params=param_groups,
             )
         
         # for mixed precision training
@@ -150,10 +156,20 @@ class FinetuneTrainer:
             self.fp16_scaler = torch.cuda.amp.GradScaler()
         
         """*****init schedulers*****"""
-        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer=self.optimizer,
-            T_max=self.cfg.optimizer.epochs*len(self.data_loader_train),
-            eta_min=0,
+        self.lr_schedule = utils.cosine_scheduler(
+            base_value=self.cfg.optimizer.base_lr * (self.cfg.optimizer.batch_size_per_gpu * self.cfg.world_size / 256.),  # linear scaling rule
+            final_value=self.cfg.optimizer.final_lr,
+            epochs=self.cfg.optimizer.epochs, 
+            niter_per_ep=len(self.data_loader_train),
+            warmup_epochs=self.cfg.optimizer.warmup_epochs,
+        )
+        if self.cfg.optimizer.final_weight_decay is None:
+            self.cfg.optimizer.final_weight_decay = self.cfg.optimizer.weight_decay
+        self.wd_schedule = utils.cosine_scheduler(
+            base_value=self.cfg.optimizer.weight_decay,
+            final_value=self.cfg.optimizer.final_weight_decay,
+            epochs=self.cfg.optimizer.epochs,
+            niter_per_ep=len(self.data_loader_train),
         )
         
         """*****init loss*****"""
@@ -169,10 +185,18 @@ class FinetuneTrainer:
         metric_logger.add_meter('lr', utils.SmoothedValue(window_size=1, fmt='{value:.6f}'))
 
         end = time.time()
-        for (inputs, labels) in metric_logger.log_every(self.data_loader_train, self.cfg.checkpoint.print_it, header):
+        for iteration, (inputs, labels) in enumerate(metric_logger.log_every(self.data_loader_train, self.cfg.checkpoint.print_it, header)):
             
             # measure data loading time
             metric_logger.update(data_time=(time.time()-end))
+
+            # update weight decay and learning rate according to their schedule 
+            iteration = len(self.data_loader_train) * epoch + iteration  # global training iteration
+			
+            for i, param_group in enumerate(self.optimizer.param_groups):
+                param_group["lr"] = self.lr_schedule[iteration]
+                if i == 0:  # only the first group is regularized
+                    param_group["weight_decay"] = self.wd_schedule[iteration]
 
             # move to gpu
             inputs = inputs.cuda(non_blocking=True)
@@ -201,8 +225,6 @@ class FinetuneTrainer:
                 self.fp16_scaler.step(self.optimizer)
                 self.fp16_scaler.update()
             metric_logger.update(backward_time=(time.time()-tflag))
-
-            self.scheduler.step()
 
             # logging 
             if self.cfg.meta.distributed:
