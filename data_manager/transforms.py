@@ -47,7 +47,7 @@ def make_transforms_eval(cfg):
 
 
 def make_transforms_pretrain_lms(cfg):
-	transform= = nn.Sequential(
+	transform = nn.Sequential(
 		Mixup(ratio=cfg.data.transform.maxup_ratio),
 		RandomResizeCrop(),
 	)
