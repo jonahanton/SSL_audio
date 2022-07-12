@@ -173,7 +173,7 @@ def train(cfg, wandb_run, logger):
         track_knn = cfg.knn.track_knn and (epoch % cfg.knn.track_knn_it == 0)
 
         end = time.time()
-        for iteration, ((y1, y2), labels) in enumerate(metric_logger.log_every(data_loader, cfg.checkpoint.print_it, header)):
+        for iteration, ((y1, y2), labels) in enumerate(data_loader):
             # measure data loading time
             metric_logger.update(data_time=(time.time()-end))
 
@@ -216,12 +216,12 @@ def train(cfg, wandb_run, logger):
 
             if wandb_run is not None:
                 wandb_run.log({
-                    'train_loss': metric_logger.meters['loss'].avg,
+                    'train_loss': metric_logger.meters['loss'].value,
 					'lr_weights': lr_weights,
                     'lr_biases': lr_biases,
-                    'data_time' : metric_logger.meters['data_time'].avg,
-                    'forward_time' : metric_logger.meters['forward_time'].avg,
-                    'backward_time' : metric_logger.meters['backward_time'].avg,
+                    'data_time' : metric_logger.meters['data_time'].value,
+                    'forward_time' : metric_logger.meters['forward_time'].value,
+                    'backward_time' : metric_logger.meters['backward_time'].value,
                 })
             
             end = time.time()

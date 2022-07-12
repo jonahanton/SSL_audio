@@ -46,11 +46,14 @@ def extract_features(cfg, model, data_loader):
     feature_bank, feature_labels = [], []
 
     for (inputs, labels) in data_loader:
-        feature, _, _ = model(inputs.cuda(non_blocking=True))
-        if cfg.model.encoder.latent == 'cls':
-            feature = feature[:, 0]
+        if cfg.model.encoder.type == 'transformer':
+            feature, _, _ = model(inputs.cuda(non_blocking=True))
+            if cfg.model.encoder.latent == 'cls':
+                feature = feature[:, 0]
+            else:
+                feature = torch.mean(feature[:, 1:], dim=1)
         else:
-            feature = torch.mean(feature[:, 1:], dim=1)
+            feature = model(inputs.cuda(non_blocking=True))
         feature = feature.contiguous()
         feature = F.normalize(feature, dim=1)
         feature_bank.append(feature)
@@ -58,14 +61,15 @@ def extract_features(cfg, model, data_loader):
     
     feature_bank = torch.cat(feature_bank, dim=0)
     feature_labels = torch.cat(feature_labels, dim=0)
+    
+    if cfg.meta.distributed:
+        feature_bank_list = [torch.zeros_like(feature_bank) for _ in range(cfg.world_size)]
+        dist.all_gather(feature_bank_list, feature_bank)
+        feature_bank = torch.cat(feature_bank_list, dim=0)  # [N, D]
 
-    feature_bank_list = [torch.zeros_like(feature_bank) for _ in range(cfg.world_size)]
-    dist.all_gather(feature_bank_list, feature_bank)
-    feature_bank = torch.cat(feature_bank_list, dim=0)  # [N, D]
-
-    feature_labels_list = [torch.zeros_like(feature_labels) for _ in range(cfg.world_size)]
-    dist.all_gather(feature_labels_list, feature_labels)
-    feature_labels = torch.cat(feature_labels_list, dim=0)
+        feature_labels_list = [torch.zeros_like(feature_labels) for _ in range(cfg.world_size)]
+        dist.all_gather(feature_labels_list, feature_labels)
+        feature_labels = torch.cat(feature_labels_list, dim=0)
 
     return feature_bank, feature_labels
 
