@@ -216,12 +216,12 @@ def train(cfg, wandb_run, logger):
 
             if wandb_run is not None:
                 wandb_run.log({
-                    'train_loss': metric_logger.meters['loss'].avg,
+                    'train_loss': metric_logger.meters['loss'].value,
 					'lr_weights': lr_weights,
                     'lr_biases': lr_biases,
-                    'data_time' : metric_logger.meters['data_time'].avg,
-                    'forward_time' : metric_logger.meters['forward_time'].avg,
-                    'backward_time' : metric_logger.meters['backward_time'].avg,
+                    'data_time' : metric_logger.meters['data_time'].value,
+                    'forward_time' : metric_logger.meters['forward_time'].value,
+                    'backward_time' : metric_logger.meters['backward_time'].value,
                 })
             
             end = time.time()
@@ -327,6 +327,7 @@ class BarlowTwins(nn.Module):
         self.cfg = cfg
         self.backbone = torchvision.models.resnet50(zero_init_residual=True, pretrained=False)
         self.backbone.fc = nn.Identity()
+        self.backbone.conv1 = nn.Conv2d(1, 64, kernel_size=(7,7), stride=(2,2), padding=(3,3), bias=False)  # spectrogram inputs have only 1 channel
         self.lambd = lambd
 
         # projector
@@ -365,3 +366,8 @@ def off_diagonal(x):
     n, m = x.shape
     assert n == m
     return x.flatten()[:-1].view(n - 1, n + 1)[:, 1:].flatten()
+
+
+
+if __name__ == "__main__":
+    main()
