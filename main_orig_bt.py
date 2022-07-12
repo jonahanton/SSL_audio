@@ -327,6 +327,7 @@ class BarlowTwins(nn.Module):
         self.cfg = cfg
         self.backbone = torchvision.models.resnet50(zero_init_residual=True, pretrained=False)
         self.backbone.fc = nn.Identity()
+        self.backbone.conv1 = nn.Conv2d(1, 64, kernel_size=(7,7), stride=(2,2), padding=(3,3), bias=False)  # spectrogram inputs have only 1 channel
         self.lambd = lambd
 
         # projector
@@ -365,3 +366,8 @@ def off_diagonal(x):
     n, m = x.shape
     assert n == m
     return x.flatten()[:-1].view(n - 1, n + 1)[:, 1:].flatten()
+
+
+
+if __name__ == "__main__":
+    main()

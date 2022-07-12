@@ -31,7 +31,7 @@ model:
 optimizer:
   epochs: 40
   warmup_epochs: 6
-  batch_size_per_gpu: 512
+  batch_size_per_gpu: 256
   lr_weights: 0.2
   lr_biases: 0.0048
 meta:

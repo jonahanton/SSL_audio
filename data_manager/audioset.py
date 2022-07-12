@@ -159,7 +159,7 @@ class AudioSet(Dataset):
 		if self.wav_transform:
 			wav = self.transform_wav(wav, n_views=self.n_views)
 		else:
-			wav = [wav]
+			wav = [wav for _ in range(self.n_views)]
 
 		# to log mel spectogram -> (1, n_mels, time)
 		lms = self.convert_to_melspecgram(wav)
@@ -180,7 +180,7 @@ class AudioSet(Dataset):
 	
 	def transform_wav(self, wav, n_views):
 		out = []
-		for n in range(n_views):
+		for _ in range(n_views):
 			w_tf = self.wav_transform(samples=wav.numpy(), sample_rate=self.cfg.data.preprocess.sample_rate)
 			w_tf = torch.tensor(w_tf)
 			out.append(w_tf)
