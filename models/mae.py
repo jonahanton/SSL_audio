@@ -93,7 +93,7 @@ class MaskedAutoencoderViT(nn.Module):
 				 use_decoder=False,
 				 decoder_embed_dim=384, decoder_depth=8, decoder_num_heads=12,
 				 mlp_ratio=4., norm_layer=nn.LayerNorm, norm_pix_loss=False,
-				 use_cls_token=False, block_cls=BlockKBiasZero, use_2d_dec_pos_embd=False):
+				 use_cls_token=True, block_cls=BlockKBiasZero, use_2d_dec_pos_embd=False):
 		super().__init__()
 		self.in_chans = in_chans
 		self.embed_dim = embed_dim
