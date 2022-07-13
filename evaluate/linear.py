@@ -42,7 +42,7 @@ class LinearTrainer:
         self.wandb_run = wandb_run
         self.logger = logger
         self.construct_model()
-
+        
 
     def construct_model(self):
         
@@ -91,7 +91,7 @@ class LinearTrainer:
         sd = sd['model']
         # remove `module.` prefix
         sd = {k.replace("module.", ""): v for k, v in sd.items()}
-        # remove `backbone.` prefix induced by BarlowTwins wrapper
+        # remove `backbone.` prefix 
         sd = {k.replace("backbone.", ""): v for k, v in sd.items()}
 
         # get patch size
