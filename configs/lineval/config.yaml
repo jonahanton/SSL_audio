@@ -19,19 +19,6 @@ data:
     f_max: 7800
     # [mean, std], for audioset: [-0.8294, 4.6230]
     norm_stats: [-0.8294, 4.6230]
-  transform:
-    # Transform raw waveform
-    min_rate: 0.5
-    max_rate: 1.5
-    ts_p: 0.6
-    min_semitones: -7
-    max_semitones: 7
-    ps_p: 0.6
-    # Transform lms
-    mixup: true
-    gaussnoise: false
-    mixup_ratio: 0.4
-    gaussnoise_ratio: 0.4
   dataloader:
     num_workers: 10
     npy: False

@@ -119,8 +119,8 @@ def train(cfg, wandb_run, logger):
             d=cfg.model.encoder.feature_d,
         ),
         image_size=cfg.data.preprocess.shape,
-        projection_size=cfg.model.encoder.projection.proj_size,
-        projection_hidden_size=cfg.model.encoder.projection.proj_dim,
+        projection_size=cfg.model.projection.proj_size,
+        projection_hidden_size=cfg.model.projection.proj_dim,
         moving_average_decay=cfg.model.ema_decay,
     )
     # move to gpu 

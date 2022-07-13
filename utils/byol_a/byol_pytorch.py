@@ -1,5 +1,5 @@
 """
-Code copy-pasted from https://github.com/nttcslab/byol-a/blob/a4c2bda1363ceceb0b6734fa9909c55ce98e4b14/byol_a/byol_pytorch.diff
+Copy-pasted from https://github.com/nttcslab/byol-a/blob/a4c2bda1363ceceb0b6734fa9909c55ce98e4b14/byol_a/byol_pytorch.diff
 """
 
 import copy
