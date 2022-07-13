@@ -28,7 +28,7 @@ def get_args_parser():
     parser = argparse.ArgumentParser(description='Barlow Twins Training', add_help=False)
     parser.add_argument('--method', type=str, default='barlow', choices=['barlow', 'dino'],
                         help='type of ssl method to use during training')
-    parser.add_argument('--config-path', type=str, default='./configs/pretrain/barlow.yaml',
+    parser.add_argument('--config-path', type=str, default='configs/pretrain/barlow.yaml',
                         help='path to .yaml config file')
     # training hyperparameters
     parser.add_argument('-B', '--batch-size-per-gpu', type=int, default=None)
