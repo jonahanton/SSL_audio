@@ -47,7 +47,7 @@ def main(args=None):
     cfg.time_stamp = datetime.datetime.now().strftime('%d_%m')
 
     # update path for logging
-    name = (f'{cfg.time_stamp}---model={cfg.model.encoder.type}')
+    name = (f'{cfg.time_stamp}---method=barlow-model={cfg.model.encoder.type}')
     cfg.logging.log_dir = cfg.logging.log_dir.format(name)
     cfg.checkpoint.ckpt_path = os.path.join(cfg.logging.log_dir, 'models')
     os.makedirs(cfg.logging.log_dir, exist_ok=True)

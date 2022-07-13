@@ -36,7 +36,7 @@ optimizer:
   lr_biases: 0.0048
 meta:
   distributed:
-  seed: 32
+  seed: 33
   use_fp16: false
 checkpoint:
   print_it: 20
