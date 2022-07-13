@@ -175,7 +175,8 @@ class MaskedAutoencoderViT(nn.Module):
 		# timm's trunc_normal_(std=.02) is effectively normal_(std=0.02) as cutoff is too big (2.)
 		if self.use_cls_token:
 			torch.nn.init.normal_(self.cls_token, std=.02)
-		torch.nn.init.normal_(self.mask_token, std=.02)
+		if self.use_decoder:
+			torch.nn.init.normal_(self.mask_token, std=.02)
 
 		# initialize nn.Linear and nn.LayerNorm
 		self.apply(self._init_weights)
