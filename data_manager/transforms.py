@@ -40,7 +40,7 @@ def make_transforms_pretrain(cfg):
 	wav_transform = None
 	lms_transform = nn.Sequential(
 		Mixup(ratio=cfg.data.transform.mixup_ratio),
-		RandomResizeCrop(),
+		RandomResizeCrop(virtual_crop_scale=(1.0, 1.5), freq_scale=(0.6, 1.5), time_scale=(0.6, 1.5)),
 	)
 	return wav_transform, lms_transform
 	

@@ -16,18 +16,8 @@ data:
     # [mean, std], for audioset: [-0.8294, 4.6230]
     norm_stats: [-0.8294, 4.6230]
   transform:
-    # Transform raw waveform
-    min_rate: 0.5
-    max_rate: 1.5
-    ts_p: 0.6
-    min_semitones: -7
-    max_semitones: 7
-    ps_p: 0.6
     # Transform lms
-    mixup: true
-    gaussnoise: false
     mixup_ratio: 0.4
-    gaussnoise_ratio: 0.4
   dataloader:
     num_workers: 10
     npy: False
@@ -63,7 +53,7 @@ logging:
   log_dir: checkpoint/{}
 knn:
   track_knn: true
-  track_knn_it: 5
+  track_knn_it: 1
   k: 200
   T: 0.07
   num_classes: 527
