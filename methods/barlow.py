@@ -74,7 +74,7 @@ class BarlowTwinsTrainer:
 			embed_dim = backbone.embed_dim
 			
 		if self.cfg.model.projection.sizes is None:
-			p_x = self.cfg.model.projection.projector_x 
+			p_x = 4
 			self.cfg.model.projection.sizes = [embed_dim, p_x*embed_dim, p_x*embed_dim, p_x*embed_dim]
 	
 		self.model = BarlowTwins(
@@ -86,16 +86,16 @@ class BarlowTwinsTrainer:
 		)
 		# move model to gpu
 		self.model = self.model.cuda(self.cfg.gpu)
-		# if self.cfg.meta.distributed:
-		# synchronize batch norms
-		self.model = nn.SyncBatchNorm.convert_sync_batchnorm(self.model)
-		# wrap model with ddp
-		self.model = nn.parallel.DistributedDataParallel(
-			self.model,
-			device_ids=[self.cfg.gpu],
-			output_device=self.cfg.gpu,
-		)
-		self.model_without_ddp = self.model.module
+		if self.cfg.meta.distributed:
+			# synchronize batch norms
+			self.model = nn.SyncBatchNorm.convert_sync_batchnorm(self.model)
+			# wrap model with ddp
+			self.model = nn.parallel.DistributedDataParallel(
+				self.model,
+				device_ids=[self.cfg.gpu],
+				output_device=self.cfg.gpu,
+			)
+			self.model_without_ddp = self.model.module
 		
 		"""*****prepare optimizer*****"""
 		param_groups = utils.get_param_groups(self.model)
@@ -193,7 +193,6 @@ class BarlowTwinsTrainer:
 				
 			end = time.time()
 
-		# if self.cfg.meta.distributed:
 		# gather the stats from all processes
 		metric_logger.synchronize_between_processes()
 		print(f'Averaged stats: {metric_logger}')

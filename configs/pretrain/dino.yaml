@@ -1,0 +1,63 @@
+data:
+  audioset:
+    balanced_only: false
+    twohundredk_only: true
+  preprocess:
+    # Unit duration in seconds for one audio segment
+    unit_sec: 0.95
+    # FFT parameters
+    sample_rate: 16000
+    n_fft: 1024
+    win_length: 1024
+    hop_length: 160
+    n_mels: 64
+    f_min: 60
+    f_max: 7800
+    # [mean, std], for audioset: [-0.8294, 4.6230]
+    norm_stats: [-0.8294, 4.6230]
+  transform:
+    # Transform lms
+    mixup_ratio: 0.4
+  dataloader:
+    num_workers: 10
+    npy: False
+model:
+  encoder:
+    type: transformer
+    size: base
+    ps: [16,16]
+    mask_ratio: 0.75
+    latent: cls
+  projection:
+    out_dim: 4096
+  drop_path_rate: 0.1
+  momentum_teacher: 0.996
+  warmup_teacher_temp: 0.04
+  warmup_teacher_temp_epochs: 18
+  teacher_temp: 0.4
+optimizer:
+  type: adamw
+  base_lr: 5.0e-4
+  final_lr: 1.0e-6
+  warmup_epochs: 6
+  weight_decay: 0.04
+  final_weight_decay: 0.4
+  epochs: 40
+  batch_size_per_gpu: 256
+meta:
+  distributed:
+  seed: 32
+  use_fp16: false
+checkpoint:
+  print_it: 20
+  save_epoch_it: 10
+  ckpt_path:
+logging:
+  log_dir: checkpoint/{}
+knn:
+  track_knn: true
+  track_knn_it: 1
+  k: 200
+  T: 0.07
+  num_classes: 527
+dist_url: env://

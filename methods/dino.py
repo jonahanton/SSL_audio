@@ -1,12 +1,7 @@
 """
-Implementation of Barlow Twins [Zbontar et al., 2021], 
+Implementation of DINO [Caron et al., 2021], 
 adapted from
-	https://github.com/MaxLikesMath/Barlow-Twins-Pytorch
-	https://github.com/facebookresearch/barlowtwins
-using some code from
 	https://github.com/facebookresearch/dino
-	https://github.com/lucidrains/byol-pytorch
-	https://github.com/yaox12/BYOL-PyTorch
 """
 
 import torch
@@ -31,7 +26,7 @@ from data_manager.audioset_lms import SpectrogramLoader
 from models import mae 
 
 
-class BarlowTwinsTrainer:
+class DINOTrainer:
 
 	def __init__(self, cfg, wandb_run, logger):
 		
@@ -68,37 +63,58 @@ class BarlowTwinsTrainer:
 		print(f'Loaded AudioSet, with {len(self.data_loader.dataset)} data points')
 		utils.log_on_master(self.logger, f'Loaded AudioSet, with {len(self.data_loader.dataset)} data points')
 
-		"""*****build model*****"""
+		"""*****build models (student + teacher)*****"""
 		if self.cfg.model.encoder.type == 'transformer':
-			backbone = mae.mae_vit_base_patchX(patch_size=self.cfg.model.encoder.ps)
-			embed_dim = backbone.embed_dim
-			
-		if self.cfg.model.projection.sizes is None:
-			p_x = self.cfg.model.projection.projector_x 
-			self.cfg.model.projection.sizes = [embed_dim, p_x*embed_dim, p_x*embed_dim, p_x*embed_dim]
-	
-		self.model = BarlowTwins(
-			cfg=self.cfg,
-			backbone=backbone,
-			projection_sizes=self.cfg.model.projection.sizes,
-			lambd=self.cfg.model.lambd,
-			mask_ratio=self.cfg.model.encoder.mask_ratio,
-		)
-		# move model to gpu
-		self.model = self.model.cuda(self.cfg.gpu)
-		# if self.cfg.meta.distributed:
-		# synchronize batch norms
-		self.model = nn.SyncBatchNorm.convert_sync_batchnorm(self.model)
-		# wrap model with ddp
-		self.model = nn.parallel.DistributedDataParallel(
-			self.model,
-			device_ids=[self.cfg.gpu],
-			output_device=self.cfg.gpu,
-		)
-		self.model_without_ddp = self.model.module
+			self.student = mae.mae_vit_base_patchX(patch_size=self.cfg.model.encoder.ps, drop_path_rate=self.cfg.model.drop_path_rate)
+			self.teacher = mae.mae_vit_base_patchX(patch_size=self.cfg.model.encoder.ps)
+			embed_dim = self.student.embed_dim
 		
+			
+		# wrap in DINO head
+		self.student = DINOHead(in_dim=embed_dim, out_dim=self.cfg.model.projection.out_dim)
+		self.teacher = DINOHead(in_dim=embed_dim, out_dim=self.cfg.model.projection.out_dim)
+
+		# teacher and student start with the same weights
+		self.teacher.load_state_dict(self.student.state_dict())
+		
+		# move to gpu
+		self.student = self.student.cuda(self.cfg.gpu)
+		self.teacher = self.teacher.cuda(self.cfg.gpu)
+		
+		if self.cfg.meta.distributed:
+			# synchronize batch norms
+			self.student = nn.SyncBatchNorm.convert_sync_batchnorm(self.student)
+			self.teacher = nn.SyncBatchNorm.convert_sync_batchnorm(self.teacher)
+			# wrap with ddp
+			self.student = nn.parallel.DistributedDataParallel(
+				self.student,
+				device_ids=[self.cfg.gpu],
+				output_device=self.cfg.gpu,
+			)
+			self.student_without_ddp = self.student.module
+			self.teacher = nn.parallel.DistributedDataParallel(
+				self.teacher,
+				device_ids=[self.cfg.gpu],
+				output_device=self.cfg.gpu,
+			)
+			self.teacher_without_ddp = self.teacher.module
+
+		# there is no backpropagation through the teacher, so no need for gradients
+		for p in self.teacher.parameters():
+			p.requires_grad = False
+
+		"""*****prepare loss*****"""
+		self.dino_loss = DINOLoss(
+			out_dim=self.cfg.model.projection.out_dim,
+			ncrops=2,
+			warmup_teacher_temp=self.cfg.model.warmup_teacher_temp,
+			teacher_temp=self.cfg.model.teacher_temp,
+			warmup_teacher_temp_epochs=self.cfg.model.warmup_teacher_temp_epochs,
+			nepochs=self.cfg.optimizer.epochs,
+		).cuda(self.cfg.gpu)
+
 		"""*****prepare optimizer*****"""
-		param_groups = utils.get_param_groups(self.model)
+		param_groups = utils.get_param_groups(self.student)
 		if self.cfg.optimizer.type == 'adamw':
 			self.optimizer = torch.optim.AdamW(param_groups)  # to use with ViTs
 		# for mixed precision training
@@ -120,6 +136,13 @@ class BarlowTwinsTrainer:
 			epochs=self.cfg.optimizer.epochs,
 			niter_per_ep=len(self.data_loader),
 		)
+		 # momentum parameter is increased to 1. during training with a cosine schedule
+		self.momentum_schedule = utils.cosine_scheduler(
+			base_value=self.cfg.model.momentum_teacher,
+			final_value=1,
+			epochs=self.cfg.optimizer.epochs,
+			niter_per_ep=len(self.data_loader),
+		)
 	
 
 	def train_one_epoch(self, epoch):
@@ -132,7 +155,7 @@ class BarlowTwinsTrainer:
 
 		
 		end = time.time()
-		for iteration, ((y1, y2), labels) in enumerate(metric_logger.log_every(self.data_loader, self.cfg.checkpoint.print_it, header)):
+		for iteration, (images, labels) in enumerate(metric_logger.log_every(self.data_loader, self.cfg.checkpoint.print_it, header)):
 			# measure data loading time
 			metric_logger.update(data_time=(time.time()-end))
 
@@ -145,13 +168,14 @@ class BarlowTwinsTrainer:
 					param_group["weight_decay"] = self.wd_schedule[iteration]
 			
 			# move to gpu
-			y1 = y1.cuda(non_blocking=True)
-			y2 = y2.cuda(non_blocking=True)
+			images = [im.cuda(non_blocking=True) for im in images]
 
 			tflag = time.time()
 			# forward passes + compute barlow twins loss
 			with torch.cuda.amp.autocast(enabled=(self.fp16_scaler is not None)):
-				loss = self.model(y1, y2)
+				teacher_output = self.teacher(images[:2])  # only the 2 global views pass through the teacher
+				student_output = self.student(images)
+				loss = self.dino_loss(student_output, teacher_output, epoch)
 			metric_logger.update(forward_time=time.time()-tflag)
 			
 			if not math.isfinite(loss.item()):
@@ -170,9 +194,15 @@ class BarlowTwinsTrainer:
 				self.fp16_scaler.update()
 			metric_logger.update(backward_time=(time.time()-tflag))
 
+			# EMA update for the teacher
+			with torch.no_grad():
+				m = self.momentum_schedule[iteration]  # momentum parameter
+				for param_q, param_k in zip(self.student.parameters(), self.teacher.parameters()):
+					param_k.data.mul_(m).add_((1 - m) * param_q.detach().data)
+
 			# logging 
-			# if self.cfg.meta.distributed:
-			torch.cuda.synchronize()
+			if self.cfg.meta.distributed:
+				torch.cuda.synchronize()
 			loss_val = loss.item()
 			lr = self.optimizer.param_groups[0]["lr"]
 			wd = self.optimizer.param_groups[0]["weight_decay"]
@@ -193,7 +223,6 @@ class BarlowTwinsTrainer:
 				
 			end = time.time()
 
-		# if self.cfg.meta.distributed:
 		# gather the stats from all processes
 		metric_logger.synchronize_between_processes()
 		print(f'Averaged stats: {metric_logger}')
@@ -243,7 +272,7 @@ class BarlowTwinsTrainer:
 	
 	def save_checkpoint(self, epoch, train_stats):
 		save_dict = {
-			'model': self.model.state_dict(),
+			'model': self.student.state_dict(),
 			'opt': self.optimizer.state_dict(),
 			'epoch': epoch,
 			'config': self.cfg,
@@ -254,61 +283,95 @@ class BarlowTwinsTrainer:
 		utils.save_on_master(save_dict, self.ckpt_path.format(f'epoch-{epoch}'))
 	
 
-class BarlowTwins(nn.Module):
-	
-	def __init__(self, cfg, backbone, projection_sizes, lambd, mask_ratio):
-		
+class DINOHead(nn.Module):
+	def __init__(self, in_dim, out_dim, use_bn=False, norm_last_layer=True, nlayers=3, hidden_dim=2048, bottleneck_dim=256):
 		super().__init__()
-		self.cfg = cfg
-		self.backbone = backbone
-		self.lambd = lambd
-		self.mask_ratio = mask_ratio
-		
-		# projector
-		sizes = projection_sizes
-		layers = []
-		for i in range(len(sizes) - 2):
-			layers.append(nn.Linear(sizes[i], sizes[i + 1], bias=False))
-			layers.append(nn.BatchNorm1d(sizes[i + 1]))
-			layers.append(nn.ReLU(inplace=True))
-		layers.append(nn.Linear(sizes[-2], sizes[-1], bias=False))
-		self.projector = nn.Sequential(*layers)
-			
-		# normalization layer for the representations z1 and z2
-		self.bn = nn.BatchNorm1d(sizes[-1], affine=False)
-		
-	
-	def forward(self, y1, y2):
-		latent1, _, _ = self.backbone(y1, mask_ratio=0.)
-		latent2, _, _ = self.backbone(y2, mask_ratio=self.mask_ratio)
-		if self.cfg.model.encoder.latent == 'cls':
-			# return cls token as global clip representation
-			latent1 = latent1[:, 0]
-			latent2 = latent2[:, 0]
+		nlayers = max(nlayers, 1)
+		if nlayers == 1:
+			self.mlp = nn.Linear(in_dim, bottleneck_dim)
 		else:
-			# return mean pool over patch embeddings as global clip representation
-			latent1 = torch.mean(latent1[:, 1:], dim=1)
-			latent2 = torch.mean(latent2[:, 1:], dim=1)
+			layers = [nn.Linear(in_dim, hidden_dim)]
+			if use_bn:
+				layers.append(nn.BatchNorm1d(hidden_dim))
+			layers.append(nn.GELU())
+			for _ in range(nlayers - 2):
+				layers.append(nn.Linear(hidden_dim, hidden_dim))
+				if use_bn:
+					layers.append(nn.BatchNorm1d(hidden_dim))
+				layers.append(nn.GELU())
+			layers.append(nn.Linear(hidden_dim, bottleneck_dim))
+			self.mlp = nn.Sequential(*layers)
+		self.apply(self._init_weights)
+		self.last_layer = nn.utils.weight_norm(nn.Linear(bottleneck_dim, out_dim, bias=False))
+		self.last_layer.weight_g.data.fill_(1)
+		if norm_last_layer:
+			self.last_layer.weight_g.requires_grad = False
 
-		z1 = self.projector(latent1)
-		z2 = self.projector(latent2)
-		
-		# empirical cross-correlation matrix
-		c = self.bn(z1).T @ self.bn(z2)
-		
-		# sum the cross-correlation matrix between all gpus
-		c.div_(z1.shape[0])
-		if self.cfg.meta.distributed:
-			torch.distributed.all_reduce(c)
-		
-		on_diag = torch.diagonal(c).add_(-1).pow_(2).sum()
-		off_diag = off_diagonal(c).pow_(2).sum()
-		loss = on_diag + self.lambd * off_diag
-		return loss
+	def _init_weights(self, m):
+		if isinstance(m, nn.Linear):
+			nn.init.normal_(m.weight, std=.02)
+			if isinstance(m, nn.Linear) and m.bias is not None:
+				nn.init.constant_(m.bias, 0)
+
+	def forward(self, x):
+		x = self.mlp(x)
+		x = nn.functional.normalize(x, dim=-1, p=2)
+		x = self.last_layer(x)
+		return x
 
 
-def off_diagonal(x):
-	# return a flattened view of the off-diagonal elements of a square matrix
-	n, m = x.shape
-	assert n == m
-	return x.flatten()[:-1].view(n - 1, n + 1)[:, 1:].flatten()
+class DINOLoss(nn.Module):
+	def __init__(self, out_dim, ncrops, warmup_teacher_temp, teacher_temp,
+				 warmup_teacher_temp_epochs, nepochs, student_temp=0.1,
+				 center_momentum=0.9):
+		super().__init__()
+		self.student_temp = student_temp
+		self.center_momentum = center_momentum
+		self.ncrops = ncrops
+		self.register_buffer("center", torch.zeros(1, out_dim))
+		# we apply a warm up for the teacher temperature because
+		# a too high temperature makes the training instable at the beginning
+		self.teacher_temp_schedule = np.concatenate((
+			np.linspace(warmup_teacher_temp,
+						teacher_temp, warmup_teacher_temp_epochs),
+			np.ones(nepochs - warmup_teacher_temp_epochs) * teacher_temp
+		))
+
+	def forward(self, student_output, teacher_output, epoch):
+		"""
+		Cross-entropy between softmax outputs of the teacher and student networks.
+		"""
+		student_out = student_output / self.student_temp
+		student_out = student_out.chunk(self.ncrops)
+
+		# teacher centering and sharpening
+		temp = self.teacher_temp_schedule[epoch]
+		teacher_out = F.softmax((teacher_output - self.center) / temp, dim=-1)
+		teacher_out = teacher_out.detach().chunk(2)
+
+		total_loss = 0
+		n_loss_terms = 0
+		for iq, q in enumerate(teacher_out):
+			for v in range(len(student_out)):
+				if v == iq:
+					# we skip cases where student and teacher operate on the same view
+					continue
+				loss = torch.sum(-q * F.log_softmax(student_out[v], dim=-1), dim=-1)
+				total_loss += loss.mean()
+				n_loss_terms += 1
+		total_loss /= n_loss_terms
+		self.update_center(teacher_output)
+		return total_loss
+
+	@torch.no_grad()
+	def update_center(self, teacher_output):
+		"""
+		Update center used for teacher output.
+		"""
+		batch_center = torch.sum(teacher_output, dim=0, keepdim=True)
+		if utils.is_dist_avail_and_initialized():
+			dist.all_reduce(batch_center)
+		batch_center = batch_center / (len(teacher_output) * utils.get_world_size())
+
+		# ema update
+		self.center = self.center * self.center_momentum + batch_center * (1 - self.center_momentum)

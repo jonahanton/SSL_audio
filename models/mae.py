@@ -93,7 +93,8 @@ class MaskedAutoencoderViT(nn.Module):
 				 use_decoder=False,
 				 decoder_embed_dim=384, decoder_depth=8, decoder_num_heads=12,
 				 mlp_ratio=4., norm_layer=nn.LayerNorm, norm_pix_loss=False,
-				 use_cls_token=True, block_cls=BlockKBiasZero, use_2d_dec_pos_embd=False):
+				 use_cls_token=True, block_cls=BlockKBiasZero, use_2d_dec_pos_embd=False,
+				 drop_path_rate=0.):
 		super().__init__()
 		self.in_chans = in_chans
 		self.embed_dim = embed_dim
@@ -112,8 +113,9 @@ class MaskedAutoencoderViT(nn.Module):
 			print('NO [CLS] TOKEN')
 		self.pos_embed = nn.Parameter(torch.zeros(1, total_patches, embed_dim), requires_grad=False)  # fixed sin-cos embedding
 
+		dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
 		self.blocks = nn.ModuleList([
-			block_cls(embed_dim, num_heads, mlp_ratio, qkv_bias=True, norm_layer=norm_layer)
+			block_cls(embed_dim, num_heads, mlp_ratio, qkv_bias=True, norm_layer=norm_layer, drop_path=dpr[i])
 			for i in range(depth)])
 		self.norm = norm_layer(embed_dim)
 		# --------------------------------------------------------------------------

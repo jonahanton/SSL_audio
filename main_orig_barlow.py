@@ -28,7 +28,7 @@ from data_manager.audioset_lms import SpectrogramLoader
 def get_args_parser():
     
     parser = argparse.ArgumentParser(description='Barlow Twins Training', add_help=False)
-    parser.add_argument('--config-path', type=str, default='./configs/orig_bt.yaml',
+    parser.add_argument('--config-path', type=str, default='./configs/pretrain/orig_barlow.yaml',
                         help='path to .yaml config file')
     return parser
 
