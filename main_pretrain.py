@@ -18,7 +18,7 @@ import torch.multiprocessing as mp
 
 import wandb
 
-from barlow.barlow import BarlowTwinsTrainer
+from methods.barlow import BarlowTwinsTrainer
 from utils import utils
 
 def get_args_parser():
