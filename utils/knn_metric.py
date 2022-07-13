@@ -52,6 +52,8 @@ def extract_features(cfg, model, data_loader):
                 feature = feature[:, 0]
             else:
                 feature = torch.mean(feature[:, 1:], dim=1)
+        elif cfg.model.encoder.type.split('-')[0] == 'byola':
+            feature = model(inputs.cuda(non_blocking=True), return_projection=False)
         else:
             feature = model(inputs.cuda(non_blocking=True))
         feature = feature.contiguous()

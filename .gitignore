@@ -14,8 +14,8 @@ utils/mask_conv.py
 data_usage.txt
 nodelist
 hear/submit_hear.pbs
-AST
 additional_scripts
+byol-a
 
 
 # Byte-compiled / optimized / DLL files
