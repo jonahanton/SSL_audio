@@ -186,9 +186,11 @@ if __name__ == '__main__':
 		test_data = torchvision.datasets.ImageFolder('data/tiny-imagenet-200/val', \
 													  utils.TinyImageNetPairTransform(train_transform = False))
 	elif dataset == 'fsd50k':
-		train_data = datasets.FSD50K(args, train=True, transform=utils.FSD50KPairTransform(train_transform = True))
-		memory_data = datasets.FSD50K(args, train=True, transform=utils.FSD50KPairTransform(train_transform = False))
-		test_data = datasets.FSD50K(args, train=False, transform=utils.FSD50KPairTransform(train_transform = False))
+		# fsd50k [mean, std] (lms)
+		norm_stats = None
+		train_data = datasets.FSD50K(args, train=True, transform=utils.FSD50KPairTransform(train_transform = True), norm_stats=norm_stats)
+		memory_data = datasets.FSD50K(args, train=True, transform=utils.FSD50KPairTransform(train_transform = False), norm_stats=norm_stats)
+		test_data = datasets.FSD50K(args, train=False, transform=utils.FSD50KPairTransform(train_transform = False), norm_stats=norm_stats)
 	
 	train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True,
 							drop_last=True)
