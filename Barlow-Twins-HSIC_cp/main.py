@@ -12,6 +12,9 @@ from model import Model
 
 import torchvision
 
+import wandb 
+
+
 if torch.cuda.is_available():
     torch.backends.cudnn.benchmark = True
 
@@ -22,7 +25,7 @@ def off_diagonal(x):
     return x.flatten()[:-1].view(n - 1, n + 1)[:, 1:].flatten()
 
 # train for one epoch to learn unique features
-def train(net, data_loader, train_optimizer):
+def train(net, data_loader, train_optimizer, wandb_run):
     net.train()
     total_loss, total_num, train_bar = 0.0, 0, tqdm(data_loader)
     for data_tuple in train_bar:
@@ -64,11 +67,14 @@ def train(net, data_loader, train_optimizer):
             off_corr = 0
         train_bar.set_description('Train Epoch: [{}/{}] Loss: {:.4f} off_corr:{} lmbda:{:.4f} bsz:{} f_dim:{} dataset: {}'.format(\
                                 epoch, epochs, total_loss / total_num, off_corr, lmbda, batch_size, feature_dim, dataset))
+
+        wandb_run.log({'Loss': total_loss / total_num})
+
     return total_loss / total_num
 
 
 # test for one epoch, use weighted knn to find the most similar images' label to assign the test image
-def test(net, memory_data_loader, test_data_loader):
+def test(net, memory_data_loader, test_data_loader, wandb_run):
     net.eval()
     total_top1, total_top5, total_num, feature_bank, target_bank = 0.0, 0.0, 0, [], []
     with torch.no_grad():
@@ -120,7 +126,7 @@ if __name__ == '__main__':
     parser.add_argument('--feature_dim', default=128, type=int, help='Feature dim for latent vector')
     parser.add_argument('--temperature', default=0.5, type=float, help='Temperature used in softmax')
     parser.add_argument('--k', default=200, type=int, help='Top k most similar images used to predict the label')
-    parser.add_argument('--batch_size', default=512, type=int, help='Number of images in each mini-batch')
+    parser.add_argument('--batch_size', default=256, type=int, help='Number of images in each mini-batch')
     parser.add_argument('--epochs', default=1000, type=int, help='Number of sweeps over the dataset to train')
     # for barlow twins
     
@@ -135,10 +141,15 @@ if __name__ == '__main__':
     dataset = args.dataset
     feature_dim, temperature, k = args.feature_dim, args.temperature, args.k
     batch_size, epochs = args.batch_size, args.epochs
-    
-    
     lmbda = args.lmbda
     corr_neg_one = args.corr_neg_one
+
+    # wandb init
+    wandb_run = wandb.init(
+            project='barlow twins cifar10',
+            config=args,
+            settings=wandb.Settings(start_method="fork"),
+        )
     
     # data prepare
     if dataset == 'cifar10':
@@ -192,12 +203,16 @@ if __name__ == '__main__':
         os.mkdir('results')
     best_acc = 0.0
     for epoch in range(1, epochs + 1):
-        train_loss = train(model, train_loader, optimizer)
+        train_loss = train(model, train_loader, optimizer, wandb_run)
         if epoch % 5 == 0:
             results['train_loss'].append(train_loss)
-            test_acc_1, test_acc_5 = test(model, memory_loader, test_loader)
+            test_acc_1, test_acc_5 = test(model, memory_loader, test_loader, wandb_run)
             results['test_acc@1'].append(test_acc_1)
             results['test_acc@5'].append(test_acc_5)
+            wandb_run.log({
+                'test_acc@1': test_acc_1,
+                'test_acc@5': test_acc_5,
+            })
             # save statistics
             data_frame = pd.DataFrame(data=results, index=range(5, epoch + 1, 5))
             data_frame.to_csv('results/{}_statistics.csv'.format(save_name_pre), index_label='epoch')
