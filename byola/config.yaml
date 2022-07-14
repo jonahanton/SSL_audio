@@ -45,7 +45,11 @@ checkpoint:
   save_epoch_it: 5
   ckpt_path:
 logging:
+<<<<<<< HEAD:configs/pretrain/byola.yaml
   log_dir: /rds/general/user/jla21/ephemeral/SSL_audio/checkpoint/{}
+=======
+  log_dir: byola/checkpoint/{}
+>>>>>>> 8c8d63281c527a410d39f4c035b80491b7b8259b:byola/config.yaml
 knn:
   track_knn: true
   track_knn_it: 1

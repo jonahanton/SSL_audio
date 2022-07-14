@@ -79,18 +79,18 @@ def pretrain_btaudio(args=None):
     cfg.checkpoint.ckpt_path = os.path.join(cfg.logging.log_dir, 'models')
     os.makedirs(cfg.logging.log_dir, exist_ok=True)
     os.makedirs(cfg.checkpoint.ckpt_path, exist_ok=True)
-    # save config 
-    dump = os.path.join(cfg.logging.log_dir, 'pretrain_params.yaml')
-    if utils.is_main_process():
-        with open(dump, 'w') as f:
-            yaml.dump(cfg, f)
-
 
     """set-up DDP"""
     utils.init_distributed_mode(cfg)
     # fix random seeds
     utils.fix_random_seeds(cfg.meta.seed)
     cudnn.benchmark = True
+
+    # save config 
+    dump = os.path.join(cfg.logging.log_dir, 'pretrain_params.yaml')
+    if utils.is_main_process():
+        with open(dump, 'w') as f:
+            yaml.dump(cfg, f)
 
     # logging 
     logger = utils.get_std_logging(filename=os.path.join(cfg.logging.log_dir, 'out.log')) 
