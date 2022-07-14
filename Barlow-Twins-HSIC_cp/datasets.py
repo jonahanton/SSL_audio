@@ -10,6 +10,7 @@ import pandas as pd
 import csv
 import argparse
 from tqdm import tqdm
+import librosa
 
 
 
@@ -45,12 +46,12 @@ class FSD50K(Dataset):
 		)
 		# load in csv files
 		if train:
-			self.df = pd.read_csv("data/FSD50K.ground_truth/dev.csv", header=None)
+			self.df = pd.read_csv("data/FSD50K/FSD50K.ground_truth/dev.csv", header=None)
 		else:
-			self.df = pd.read_csv("data/FSD50K.ground_truth/eval.csv", header=None)	
+			self.df = pd.read_csv("data/FSD50K/FSD50K.ground_truth/eval.csv", header=None)	
 		self.files = np.asarray(self.df.iloc[:, 0])
 		self.labels = np.asarray(self.df.iloc[:, 2])  # mids (separated by ,)
-		self.index_dict = make_index_dict("data/FSD50K.ground_truth/vocabulary.csv")
+		self.index_dict = make_index_dict("data/FSD50K/FSD50K.ground_truth/vocabulary.csv")
 		self.label_num = len(self.index_dict)
 
 
@@ -59,7 +60,7 @@ class FSD50K(Dataset):
 		
 		
 	def __getitem__(self, idx):
-		file = self.files[idx]
+		fname = self.files[idx]
 		labels = self.labels[idx]
 		# initialize the label
 		label_indices = np.zeros(self.label_num)
@@ -69,15 +70,11 @@ class FSD50K(Dataset):
 		label_indices = torch.FloatTensor(label_indices)
 		# load raw audio
 		if self.train:
-			audio_path = "data/FSD50K.dev_audio/" + file + ".wav"
+			audio_path = "data/FSD50K/FSD50K.dev_audio/" + fname + ".wav"
 		else:
-			audio_path = "data/FSD50K.eval_audio/" + file + ".wav"
-		wav, sr = torchaudio.load(audio_path)
-		assert sr == self.cfg.sample_rate, f"Convert .wav files to {self.cfg.sample_rate} Hz. {audio_path} has {sr} Hz."
-		# if audio has 2 channels, convert to mono
-		if wav.shape[0] == 2:
-			wav = torch.mean(wav, dim=0).unsqueeze(0)
-		wav = wav[0]  # (1, length) -> (length,)
+			audio_path = "data/FSD50K/FSD50K.eval_audio/" + fname + ".wav"
+		wav, org_sr = librosa.load(audio_path, sr=self.cfg.sample_rate)
+		wav = torch.tensor(wav)  # (length,)
 		# zero padding to both ends
 		length_adj = self.unit_length - len(wav)
 		if length_adj > 0:
@@ -94,7 +91,7 @@ class FSD50K(Dataset):
 		if self.norm_stats is not None:
 			lms = (lms - self.norm_stats[0]) / self.norm_stats[1]
 		# transforms to lms
-		if self.lms_transform:
+		if self.transform:
 			lms = self.transform(lms)
 
 		return lms, label_indices
