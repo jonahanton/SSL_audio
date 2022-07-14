@@ -45,7 +45,7 @@ checkpoint:
   save_epoch_it: 5
   ckpt_path:
 logging:
-  log_dir: checkpoint/{}
+  log_dir: byola/checkpoint/{}
 knn:
   track_knn: true
   track_knn_it: 1

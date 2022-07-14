@@ -104,6 +104,9 @@ class DINOTrainer:
 				output_device=self.cfg.gpu,
 			)
 			self.teacher_without_ddp = self.teacher.module
+		else:
+			self.student_without_ddp = self.student 
+			self.teacher_without_ddp = self.teacher
 
 		# there is no backpropagation through the teacher, so no need for gradients
 		for p in self.teacher.parameters():
@@ -250,7 +253,7 @@ class DINOTrainer:
 				knn_train_loader = AudioSetLoader(self.cfg, pretrain=False, balanced_only=True,test=False).get_loader(drop_last=False)
 				knn_test_loader = AudioSetLoader(self.cfg, pretrain=False, test=True).get_loader(drop_last=False)
 			# extract features + calculate knn mAP
-			knn_mAP = knn_metric.predict_knn(self.cfg, self.model.module.backbone, knn_train_loader, knn_test_loader)
+			knn_mAP = knn_metric.predict_knn(self.cfg, self.student_without_ddp.backbone, knn_train_loader, knn_test_loader)
 
 			print(f'knn mAP: {knn_mAP}')
 			utils.log_on_master(self.logger, f'knn mAP: {knn_mAP}')
