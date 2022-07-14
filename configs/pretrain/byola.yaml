@@ -35,7 +35,7 @@ optimizer:
   type: adam
   lr: 3.0e-4
   epochs: 40
-  batch_size_per_gpu: 128
+  batch_size_per_gpu: 256
 meta:
   distributed:
   seed: 32
@@ -45,7 +45,7 @@ checkpoint:
   save_epoch_it: 5
   ckpt_path:
 logging:
-  log_dir: checkpoint/{}
+  log_dir: /rds/general/user/jla21/ephemeral/SSL_audio/checkpoint/{}
 knn:
   track_knn: true
   track_knn_it: 1
