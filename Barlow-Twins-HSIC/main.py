@@ -283,5 +283,5 @@ if __name__ == '__main__':
 			if test_acc_1 > best_acc:
 				best_acc = test_acc_1
 				utils.save_on_master(model.state_dict(), 'results/{}/{}_model.pth'.format(dataset, save_name_pre))
-		if epoch % 5 == 0:
+		if epoch % 20 == 0:
 			utils.save_on_master(model.state_dict(), 'results/{}/{}_model_{}.pth'.format(dataset, save_name_pre, epoch))
