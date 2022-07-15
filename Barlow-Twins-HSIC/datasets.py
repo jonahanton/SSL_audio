@@ -102,23 +102,6 @@ class FSD50K(Dataset):
 				lms = F.pad(lms, pad_param, mode='constant', value=0)
 			lms = lms.to(torch.float)
 		else:
-<<<<<<< HEAD
-			audio_path = "data/FSD50K/FSD50K.eval_audio/" + fname + ".wav"
-		wav, org_sr = librosa.load(audio_path, sr=self.cfg.sample_rate)
-		wav = torch.tensor(wav)  # (length,)
-		# zero padding to both ends
-		length_adj = self.unit_length - len(wav)
-		if length_adj > 0:
-			half_adj = length_adj // 2
-			wav = F.pad(wav, (half_adj, length_adj - half_adj))
-		# random crop unit length wave
-		length_adj = len(wav) - self.unit_length
-		start = random.randint(0, length_adj) if length_adj > 0 else 0
-		wav = wav[start:start + self.unit_length]
-		# to log mel spectogram -> (1, n_mels, time)
-		lms = (self.to_melspecgram(wav) + torch.finfo().eps).log()
-		lms = lms.unsqueeze(0)  # if using torchaudio.transforms.MelSpectrogram
-=======
 			# load raw audio
 			if self.train:
 				audio_path = "data/FSD50K/FSD50K.dev_audio/" + fname + ".wav"
@@ -138,7 +121,6 @@ class FSD50K(Dataset):
 			# to log mel spectogram -> (1, n_mels, time)
 			lms = (self.to_melspecgram(wav) + torch.finfo().eps).log()
 			lms = lms.unsqueeze(0)
->>>>>>> 86c639bc81c341d7c05edefd9de57a87d7923b95
 		# normalise lms with pre-computed dataset statistics
 		if self.norm_stats is not None:
 			lms = (lms - self.norm_stats[0]) / self.norm_stats[1]
@@ -171,8 +153,6 @@ def calculate_norm_stats(args):
 
 if __name__ == "__main__":
 
-<<<<<<< HEAD
-=======
 	
 	def get_args_parser():
 		
@@ -202,7 +182,6 @@ if __name__ == "__main__":
 		return parser
 
 	
->>>>>>> 86c639bc81c341d7c05edefd9de57a87d7923b95
 	def off_diagonal(x):
 		# return a flattened view of the off-diagonal elements of a square matrix
 		n, m = x.shape

@@ -92,6 +92,7 @@ if __name__ == '__main__':
 	parser.add_argument('--epochs', type=int, default=200, help='Number of sweeps over the dataset to train')
 	# for audio processing
 	parser.add_argument('--unit_sec', type=float, default=0.95)
+	parser.add_argument('--crop_frames', type=int, default=96)
 	parser.add_argument('--sample_rate', type=int, default=16000)
 	parser.add_argument('--n_fft', type=int, default=1024)
 	parser.add_argument('--win_length', type=int, default=1024)
