@@ -16,21 +16,36 @@ import torchvision
 import datasets
 from sklearn.metrics import average_precision_score, roc_auc_score
 import wandb
+from model import ResNet, ViT
 
 
 class Net(nn.Module):
-	def __init__(self, num_class, pretrained_path, dataset):
+	def __init__(self, cfg, num_class, pretrained_path, dataset):
 		super(Net, self).__init__()
+		self.cfg = cfg
 
 		# encoder
-		from model import Model
-		self.f = Model(dataset=dataset).f
+		if cfg.model_type == 'resnet':
+			self.f = ResNet(dataset=dataset).f
+			out_dim = 2048
+		elif cfg.model_type == 'vit_base':
+			self.f = ViT(dataset=dataset, size='base', latent=cfg.latent).f
+			out_dim = self.f.embed_dim 
+	
 		# classifier
-		self.fc = nn.Linear(2048, num_class, bias=True)
+		self.fc = nn.Linear(out_dim, num_class, bias=True)
+		
+		# load weights
 		self.load_state_dict(torch.load(pretrained_path, map_location='cpu'), strict=False)
 
 	def forward(self, x):
-		x = self.f(x)
+		x = self.f(x, mask_ratio=0.)
+		if self.cfg.model_type == 'vit_base':
+			if self.cfg.latent == 'cls':
+				x = x[..., 0]
+			elif self.cfg.latent == 'pool':
+				x = torch.mean(x[..., 1:], dim=-1)
+			x = x.contiguous()
 		feature = torch.flatten(x, start_dim=1)
 		out = self.fc(feature)
 		return out
@@ -91,6 +106,8 @@ if __name__ == '__main__':
 	parser.add_argument('--dataset', default='fsd50k', type=str, help='Dataset: cifar10 or tiny_imagenet or stl10 or fsd50k')
 	parser.add_argument('--model_path', type=str, default='results/fsd50k/0.005_128_128_fsd50k_model_5.pth',
 						help='The base string of the pretrained model path')
+	parser.add_argument('--model_type', default='resnet50', type=str, help='Encoder: resnet50 or vit [tiny, small, base]')
+	parser.add_argument('--latent', default='cls', type=str, help='[CLS] token or mean pool vit outputs')
 	parser.add_argument('--batch_size', type=int, default=512, help='Number of images in each mini-batch')
 	parser.add_argument('--epochs', type=int, default=50, help='Number of sweeps over the dataset to train')
 	# for audio processing
@@ -109,6 +126,7 @@ if __name__ == '__main__':
 	args = parser.parse_args()
 	model_path, batch_size, epochs = args.model_path, args.batch_size, args.epochs
 	dataset = args.dataset
+	model_type = args.model_type
 
 	# wandb init
 	wandb_run = wandb.init(
@@ -148,7 +166,7 @@ if __name__ == '__main__':
 	else:
 		c = len(train_data.classes)
 	
-	model = Net(num_class=c, pretrained_path=model_path, dataset=dataset).cuda()
+	model = Net(args, num_class=c, pretrained_path=model_path, dataset=dataset).cuda()
 	for param in model.f.parameters():
 		param.requires_grad = False
 
