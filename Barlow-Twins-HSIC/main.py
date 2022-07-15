@@ -74,7 +74,8 @@ def train(net, data_loader, train_optimizer, wandb_run):
 		train_bar.set_description('Train Epoch: [{}/{}] Loss: {:.4f} off_corr:{} lmbda:{:.4f} bsz:{} f_dim:{} dataset: {}'.format(\
 								epoch, epochs, total_loss / total_num, off_corr, lmbda, batch_size, feature_dim, dataset))
 
-		wandb_run.log({'Loss': total_loss / total_num})
+		if wandb_run is not None:
+			wandb_run.log({'Loss': total_loss / total_num})
 
 	return total_loss / total_num
 
@@ -154,7 +155,7 @@ if __name__ == '__main__':
 	parser.add_argument('--n_norm_calc', type=int, default=10000)
 
 	# load pre-computed lms 
-	parser.add_argument('--load_lms', action='store_true', default=False)
+	parser.add_argument('--load_lms', action='store_true', default=True)
 
 	# distributed training 
 	parser.add_argument('--distributed', action='store_true', default=False)
@@ -169,15 +170,18 @@ if __name__ == '__main__':
 	corr_neg_one = args.corr_neg_one
 	distributed = args.distributed
 
-	# wandb init
-	wandb_run = wandb.init(
-			project='barlow twins {}'.format(dataset),
-			config=args,
-			settings=wandb.Settings(start_method="fork"),
-		)
-
 	# distributed training 
 	utils.init_distributed_mode(args)
+
+	# wandb init
+	if utils.is_main_process():
+		wandb_run = wandb.init(
+				project='barlow twins {}'.format(dataset),
+				config=args,
+				settings=wandb.Settings(start_method="fork"),
+			)
+	else:
+		wandb_run = None
 		
 	# data prepare
 	if dataset == 'cifar10':
@@ -268,10 +272,11 @@ if __name__ == '__main__':
 			test_acc_1, test_acc_5 = test(model, memory_loader, test_loader)
 			results['test_acc@1'].append(test_acc_1)
 			results['test_acc@5'].append(test_acc_5)
-			wandb_run.log({
-				'test_acc@1': test_acc_1,
-				'test_acc@5': test_acc_5,
-			})
+			if wandb_run is not None:
+				wandb_run.log({
+					'test_acc@1': test_acc_1,
+					'test_acc@5': test_acc_5,
+				})
 			# save statistics
 			data_frame = pd.DataFrame(data=results, index=range(5, epoch + 1, 5))
 			data_frame.to_csv('results/{}/{}_statistics.csv'.format(dataset, save_name_pre), index_label='epoch')

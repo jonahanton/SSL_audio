@@ -16,6 +16,8 @@ nodelist
 hear/submit_hear.pbs
 additional_scripts
 byol-a
+*.pth 
+*.pth.tar
 
 
 # Byte-compiled / optimized / DLL files

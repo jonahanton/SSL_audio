@@ -21,7 +21,7 @@ class FSD50KPairTransform:
 				augmentations.RandomLinearFader(),
 			)
 		else:
-			self.transform = None
+			self.transform = nn.Identity()
 		self.pair_transform = pair_transform 
 	def __call__(self, x):
 		if self.pair_transform is True:

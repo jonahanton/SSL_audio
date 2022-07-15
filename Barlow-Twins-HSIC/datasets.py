@@ -125,7 +125,7 @@ class FSD50K(Dataset):
 		if self.norm_stats is not None:
 			lms = (lms - self.norm_stats[0]) / self.norm_stats[1]
 		# transforms to lms
-		if self.transform:
+		if self.transform is not None:
 			lms = self.transform(lms)
 
 		return lms, label_indices
@@ -153,36 +153,7 @@ def calculate_norm_stats(args):
 
 if __name__ == "__main__":
 
-	
-	def get_args_parser():
-		
-		parser = argparse.ArgumentParser(description='Train barlow twins')
-		parser.add_argument('--dataset', default='fsd50k', type=str, help='Dataset: fsd50k or cifar10 or tiny_imagenet or stl10')
-		parser.add_argument('--feature_dim', default=128, type=int, help='Feature dim for latent vector')
-		parser.add_argument('--temperature', default=0.5, type=float, help='Temperature used in softmax')
-		parser.add_argument('--k', default=200, type=int, help='Top k most similar images used to predict the label')
-		parser.add_argument('--batch_size', default=128, type=int, help='Number of images in each mini-batch')
-		parser.add_argument('--epochs', default=20, type=int, help='Number of sweeps over the dataset to train')
-		# for barlow twins
-		parser.add_argument('--lmbda', default=0.005, type=float, help='Lambda that controls the on- and off-diagonal terms')
-		parser.add_argument('--corr_neg_one', dest='corr_neg_one', action='store_true')
-		parser.add_argument('--corr_zero', dest='corr_neg_one', action='store_false')
-		parser.set_defaults(corr_neg_one=False)
-		parser.add_argument('--unit_sec', type=float, default=0.95)
-		parser.add_argument('--crop_frames', type=int, default=96) 
-		parser.add_argument('--sample_rate', type=int, default=16000)
-		parser.add_argument('--n_fft', type=int, default=1024)
-		parser.add_argument('--win_length', type=int, default=1024)
-		parser.add_argument('--hop_length', type=int, default=160)
-		parser.add_argument('--n_mels', type=int, default=64)
-		parser.add_argument('--f_min', type=int, default=60)
-		parser.add_argument('--f_max', type=int, default=7800)
-		parser.add_argument('--n_norm_calc', type=int, default=10000)
-		# load pre-computed lms 
-		parser.add_argument('--load_lms', action='store_true', default=False)
-		return parser
 
-	
 	def off_diagonal(x):
 		# return a flattened view of the off-diagonal elements of a square matrix
 		n, m = x.shape
@@ -210,7 +181,7 @@ if __name__ == "__main__":
 	parser.add_argument('--n_mels', type=int, default=64)
 	parser.add_argument('--f_min', type=int, default=60)
 	parser.add_argument('--f_max', type=int, default=7800)
-	parser.add_argument('--n_norm_calc', type=int, default=10000)
+	parser.add_argument('--load_lms', action='store_true', default=True)
 
 	args = parser.parse_args()
 
