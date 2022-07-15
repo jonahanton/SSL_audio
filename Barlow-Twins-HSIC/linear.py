@@ -90,6 +90,18 @@ if __name__ == '__main__':
 						help='The base string of the pretrained model path')
 	parser.add_argument('--batch_size', type=int, default=512, help='Number of images in each mini-batch')
 	parser.add_argument('--epochs', type=int, default=200, help='Number of sweeps over the dataset to train')
+	# for audio processing
+	parser.add_argument('--unit_sec', type=float, default=0.95)
+	parser.add_argument('--sample_rate', type=int, default=16000)
+	parser.add_argument('--n_fft', type=int, default=1024)
+	parser.add_argument('--win_length', type=int, default=1024)
+	parser.add_argument('--hop_length', type=int, default=160)
+	parser.add_argument('--n_mels', type=int, default=64)
+	parser.add_argument('--f_min', type=int, default=60)
+	parser.add_argument('--f_max', type=int, default=7800)
+	parser.add_argument('--n_norm_calc', type=int, default=10000)
+	# load pre-computed lms 
+	parser.add_argument('--load_lms', action='store_true', default=False)
 
 	args = parser.parse_args()
 	model_path, batch_size, epochs = args.model_path, args.batch_size, args.epochs

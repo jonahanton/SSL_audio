@@ -33,6 +33,7 @@ class FSD50K(Dataset):
 		self.train = train
 		self.transform = transform
 		self.norm_stats = norm_stats
+
 		self.unit_length = int(cfg.unit_sec * cfg.sample_rate)
 		self.to_melspecgram = AT.MelSpectrogram(
 			sample_rate=cfg.sample_rate,
@@ -68,25 +69,44 @@ class FSD50K(Dataset):
 		for label_str in labels.split(','):
 			label_indices[int(self.index_dict[label_str])] = 1.0
 		label_indices = torch.FloatTensor(label_indices)
-		# load raw audio
-		if self.train:
-			audio_path = "data/FSD50K/FSD50K.dev_audio/" + fname + ".wav"
+		if self.cfg.load_lms:
+			# load lms
+			if self.train:
+				audio_path = "data/FSD50K_lms/FSD50K.dev_audio/" + fname + ".npy"
+			else:
+				audio_path = "data/FSD50K_lms/FSD50K.eval_audio/" + fname + ".npy"
+			lms = torch.tensor(np.load(audio_path)).unsqueeze(0)
+			# Trim or pad
+			l = lms.shape[-1]
+			if l > self.cfg.crop_frames:
+				start = np.random.randint(l - self.cfg.crop_frames)
+				lms = lms[..., start:start + self.cfg.crop_frames]
+			elif l < self.cfg.crop_frames:
+				pad_param = []
+				for i in range(len(lms.shape)):
+					pad_param += [0, self.cfg.crop_frames - l] if i == 0 else [0, 0]
+				lms = F.pad(lms, pad_param, mode='constant', value=0)
+			lms = lms.to(torch.float)
 		else:
-			audio_path = "data/FSD50K/FSD50K.eval_audio/" + fname + ".wav"
-		wav, org_sr = librosa.load(audio_path, sr=self.cfg.sample_rate)
-		wav = torch.tensor(wav)  # (length,)
-		# zero padding to both ends
-		length_adj = self.unit_length - len(wav)
-		if length_adj > 0:
-			half_adj = length_adj // 2
-			wav = F.pad(wav, (half_adj, length_adj - half_adj))
-		# random crop unit length wave
-		length_adj = len(wav) - self.unit_length
-		start = random.randint(0, length_adj) if length_adj > 0 else 0
-		wav = wav[start:start + self.unit_length]
-		# to log mel spectogram -> (1, n_mels, time)
-		lms = (self.to_melspecgram(wav) + torch.finfo().eps).log()
-		lms = lms.unsqueeze(0)
+			# load raw audio
+			if self.train:
+				audio_path = "data/FSD50K/FSD50K.dev_audio/" + fname + ".wav"
+			else:
+				audio_path = "data/FSD50K/FSD50K.eval_audio/" + fname + ".wav"
+			wav, org_sr = librosa.load(audio_path, sr=self.cfg.sample_rate)
+			wav = torch.tensor(wav)  # (length,)
+			# zero padding to both ends
+			length_adj = self.unit_length - len(wav)
+			if length_adj > 0:
+				half_adj = length_adj // 2
+				wav = F.pad(wav, (half_adj, length_adj - half_adj))
+			# random crop unit length wave
+			length_adj = len(wav) - self.unit_length
+			start = random.randint(0, length_adj) if length_adj > 0 else 0
+			wav = wav[start:start + self.unit_length]
+			# to log mel spectogram -> (1, n_mels, time)
+			lms = (self.to_melspecgram(wav) + torch.finfo().eps).log()
+			lms = lms.unsqueeze(0)
 		# normalise lms with pre-computed dataset statistics
 		if self.norm_stats is not None:
 			lms = (lms - self.norm_stats[0]) / self.norm_stats[1]
@@ -143,6 +163,8 @@ if __name__ == "__main__":
 		parser.add_argument('--f_min', type=int, default=60)
 		parser.add_argument('--f_max', type=int, default=7800)
 		parser.add_argument('--n_norm_calc', type=int, default=10000)
+		# load pre-computed lms 
+		parser.add_argument('--load_lms', action='store_true', default=False)
 		return parser
 
 	

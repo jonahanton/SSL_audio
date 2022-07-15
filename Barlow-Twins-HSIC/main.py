@@ -152,6 +152,9 @@ if __name__ == '__main__':
 	parser.add_argument('--f_max', type=int, default=7800)
 	parser.add_argument('--n_norm_calc', type=int, default=10000)
 
+	# load pre-computed lms 
+	parser.add_argument('--load_lms', action='store_true', default=False)
+
 	# distributed training 
 	parser.add_argument('--distributed', action='store_true', default=False)
 	
