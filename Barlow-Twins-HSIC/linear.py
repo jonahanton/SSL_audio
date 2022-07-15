@@ -42,9 +42,9 @@ class Net(nn.Module):
 		x = self.f(x, mask_ratio=0.)
 		if self.cfg.model_type == 'vit_base':
 			if self.cfg.latent == 'cls':
-				x = x[..., 0]
+				x = x[:, 0]
 			elif self.cfg.latent == 'pool':
-				x = torch.mean(x[..., 1:], dim=-1)
+				x = torch.mean(x[:, 1:], dim=1)
 			x = x.contiguous()
 		feature = torch.flatten(x, start_dim=1)
 		out = self.fc(feature)

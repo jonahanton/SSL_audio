@@ -23,11 +23,10 @@ class ViT(nn.Module):
     def forward(self, x, mask_ratio=0.):
         x = self.f(x, mask_ratio=mask_ratio)
         if self.latent == 'cls':
-            x = x[..., 0]
+            x = x[:, 0]
         elif self.latent == 'pool':
-            x = torch.mean(x[..., 1:], dim=-1)
-        x = x.contiguous()
-        feature = torch.flatten(x, start_dim=1)
+            x = torch.mean(x[:, 1:], dim=1)
+        feature = x.contiguous()
         out = self.g(feature)
         return F.normalize(feature, dim=-1), F.normalize(out, dim=-1)
 
@@ -67,7 +66,7 @@ class ResNet(nn.Module):
 if __name__ == "__main__":
 
     model = ViT(dataset='fsd50k')
-    x = torch.randn(1, 1, 64, 96)
+    x = torch.randn(3, 1, 64, 96)
     feature, out = model(x)
     print(feature.shape)
     print(out.shape)
