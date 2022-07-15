@@ -145,6 +145,13 @@ if __name__ == "__main__":
 		parser.add_argument('--n_norm_calc', type=int, default=10000)
 		return parser
 
+	
+	def off_diagonal(x):
+		# return a flattened view of the off-diagonal elements of a square matrix
+		n, m = x.shape
+		assert n == m
+		return x.flatten()[:-1].view(n - 1, n + 1)[:, 1:].flatten()
+
 
 	parser = argparse.ArgumentParser('', parents=[get_args_parser()])
 	args = parser.parse_args()
@@ -165,12 +172,12 @@ if __name__ == "__main__":
 	optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-6)
 
 	norm_stats = [-4.950, 5.855]
-	train_data = datasets.FSD50K(args, train=True, transform=utils.FSD50KPairTransform(train_transform = True), norm_stats=norm_stats)
+	train_data = FSD50K(args, train=True, transform=utils.FSD50KPairTransform(train_transform = True), norm_stats=norm_stats)
 	train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True, drop_last=True)
 
 	import time 
 	data_time, forward_time, loss_time, backward_time = [], [], [], []
-	for _ in tqdm(range(10))
+	for _ in tqdm(range(10)):
 		tflag = time.time()
 		data_tuple = next(train_loader)
 		data_time.append(time.time() - tflag) 
@@ -179,8 +186,8 @@ if __name__ == "__main__":
 		pos_1, pos_2 = pos_1.cuda(non_blocking=True), pos_2.cuda(non_blocking=True)
 		
 		tflag = time.time()
-		feature_1, out_1 = net(pos_1)
-		feature_2, out_2 = net(pos_2)
+		feature_1, out_1 = model(pos_1)
+		feature_2, out_2 = model(pos_2)
 		forward_time.append(time.time() - tflag)
 
 		tflag = time.time()
@@ -209,9 +216,9 @@ if __name__ == "__main__":
 		loss_time.append(time.time() - tflag)
 
 		tflag = time.time()
-		train_optimizer.zero_grad()
+		optimizer.zero_grad()
 		loss.backward()
-		train_optimizer.step()
+		optimizer.step()
 		backward_time.append(time.time() - tflag)
 
 	print(f'Data time: mean {np.mean(data_time)} std {np.std(data_time)}\n'
