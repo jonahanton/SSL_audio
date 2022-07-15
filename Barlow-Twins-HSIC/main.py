@@ -2,6 +2,7 @@ import argparse
 import os
 import pandas as pd
 import torch
+import torch.nn as nn
 import torch.optim as optim
 from thop import profile, clever_format
 from torch.utils.data import DataLoader
@@ -14,6 +15,7 @@ import torchvision
 
 import wandb 
 import datasets
+import torch.distributed as dist
 
 
 if torch.cuda.is_available():
@@ -42,6 +44,9 @@ def train(net, data_loader, train_optimizer, wandb_run):
 		
 		# cross-correlation matrix
 		c = torch.matmul(out_1_norm.T, out_2_norm) / batch_size
+		# reduce between gpus
+		if distributed:
+			torch.distributed.all_reduce(c)
 
 		# loss
 		on_diag = torch.diagonal(c).add_(-1).pow_(2).sum()
@@ -146,6 +151,9 @@ if __name__ == '__main__':
 	parser.add_argument('--f_min', type=int, default=60)
 	parser.add_argument('--f_max', type=int, default=7800)
 	parser.add_argument('--n_norm_calc', type=int, default=10000)
+
+	# distributed training 
+	parser.add_argument('--distributed', action='store_true', default=False)
 	
 
 	# args parse
@@ -155,6 +163,7 @@ if __name__ == '__main__':
 	batch_size, epochs = args.batch_size, args.epochs
 	lmbda = args.lmbda
 	corr_neg_one = args.corr_neg_one
+	distributed = args.distributed
 
 	# wandb init
 	wandb_run = wandb.init(
@@ -162,7 +171,10 @@ if __name__ == '__main__':
 			config=args,
 			settings=wandb.Settings(start_method="fork"),
 		)
-	
+
+	# distributed training 
+	utils.init_distributed_mode(args)
+		
 	# data prepare
 	if dataset == 'cifar10':
 		train_data = torchvision.datasets.CIFAR10(root='data', train=True, \
@@ -192,13 +204,33 @@ if __name__ == '__main__':
 		memory_data = datasets.FSD50K(args, train=True, transform=utils.FSD50KPairTransform(train_transform = False), norm_stats=norm_stats)
 		test_data = datasets.FSD50K(args, train=False, transform=utils.FSD50KPairTransform(train_transform = False), norm_stats=norm_stats)
 	
-	train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True,
-							drop_last=True)
-	memory_loader = DataLoader(memory_data, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True)
-	test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True)
+	if distributed:
+		train_sampler = torch.utils.data.distributed.DistributedSampler(train_data)
+		memory_sampler = torch.utils.data.distributed.DistributedSampler(memory_data)
+		test_sampler = torch.utils.data.distributed.DistributedSampler(test_data)
+	else:
+		train_sampler, memory_sampler, test_sampler = None, None, None
+		
+	train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=(True if train_sampler is None else False),
+							  num_workers=4, pin_memory=True, sampler=train_sampler, drop_last=True)
+	memory_loader = DataLoader(memory_data, batch_size=batch_size, shuffle=(True if memory_sampler is None else False),
+							   num_workers=4, pin_memory=True, sampler=memory_sampler)
+	test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=(True if test_sampler is None else False),
+							 num_workers=4, pin_memory=True, sampler=test_sampler)
 
 	# model setup and optimizer config
 	model = Model(feature_dim, dataset).cuda()
+	if distributed:
+		# sync batch norms
+		model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
+		# wrap model with ddp
+		model = nn.parallel.DistributedDataParallel(
+			model,
+			device_ids=[args.gpu],
+			output_device=args.gpu,
+			)
+		model_without_ddp = model.module
+
 	if dataset == 'cifar10':
 		flops, params = profile(model, inputs=(torch.randn(1, 3, 32, 32).cuda(),))
 	elif dataset == 'tiny_imagenet' or dataset == 'stl10':
@@ -241,6 +273,6 @@ if __name__ == '__main__':
 			data_frame.to_csv('results/{}/{}_statistics.csv'.format(dataset, save_name_pre), index_label='epoch')
 			if test_acc_1 > best_acc:
 				best_acc = test_acc_1
-				torch.save(model.state_dict(), 'results/{}/{}_model.pth'.format(dataset, save_name_pre))
+				utils.save_on_master(model.state_dict(), 'results/{}/{}_model.pth'.format(dataset, save_name_pre))
 		if epoch % 5 == 0:
-			torch.save(model.state_dict(), 'results/{}/{}_model_{}.pth'.format(dataset, save_name_pre, epoch))
+			utils.save_on_master(model.state_dict(), 'results/{}/{}_model_{}.pth'.format(dataset, save_name_pre, epoch))

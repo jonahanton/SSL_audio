@@ -14,7 +14,7 @@ import utils
 import torchvision
 
 import datasets
-from sklearn.metrics import average_precision_score
+from sklearn.metrics import average_precision_score, roc_auc_score
 
 
 class Net(nn.Module):
@@ -77,7 +77,8 @@ def train_val(net, data_loader, train_optimizer):
 		all_preds = torch.cat(all_preds, dim=0)
 		all_targets = torch.cat(all_targets, dim=0)
 		mAP = average_precision_score(y_true=all_targets.detach().cpu(), y_score=all_preds.detach().cpu(), average='macro') 
-		return total_loss / total_num, {'mAP': mAP}
+		AUC = roc_auc_score(y_true=all_targets.detach().cpu(), y_score=all_preds.detach().cpu(), average='macro') 
+		return total_loss / total_num, {'mAP': mAP, 'AUC': AUC}
 	else:
 		return total_loss / total_num, {'acc_1': total_correct_1 / total_num * 100, 'acc_5': total_correct_5 / total_num * 100}
 
@@ -135,8 +136,8 @@ if __name__ == '__main__':
 	optimizer = optim.Adam(model.fc.parameters(), lr=1e-3, weight_decay=1e-6)
 	if dataset == 'fsd50k':
 		loss_criterion = nn.BCEWithLogitsLoss()
-		results = {'train_loss': [], 'train_mAP': [],
-				   'test_loss': [], 'test_mAP': []}
+		results = {'train_loss': [], 'train_mAP': [], 'train_AUC': [],
+				   'test_loss': [], 'test_mAP': [], 'test_AUC': []}
 	else:
 		loss_criterion = nn.CrossEntropyLoss()
 		results = {'train_loss': [], 'train_acc@1': [], 'train_acc@5': [],
@@ -150,6 +151,7 @@ if __name__ == '__main__':
 		results['train_loss'].append(train_loss)
 		if dataset == 'fsd50k':
 			results['train_mAP'].append(train_stats['mAP'])
+			results['train_AUC'].append(train_stats['AUC'])
 		else:
 			results['train_acc@1'].append(train_stats['acc_1'])
 			results['train_acc@5'].append(train_stats['acc_5'])
@@ -157,6 +159,7 @@ if __name__ == '__main__':
 		results['test_loss'].append(test_loss)
 		if dataset == 'fsd50k':
 			results['test_mAP'].append(test_stats['mAP'])
+			results['test_AUC'].append(test_stats['AUC'])
 		else:
 			results['test_acc@1'].append(test_stats['acc_1'])
 			results['test_acc@5'].append(test_stats['acc_5'])
