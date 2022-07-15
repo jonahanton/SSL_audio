@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 import utils
-from model import Model
+from model import ResNet, ViT
 
 import torchvision
 
@@ -28,14 +28,14 @@ def off_diagonal(x):
 	return x.flatten()[:-1].view(n - 1, n + 1)[:, 1:].flatten()
 
 # train for one epoch to learn unique features
-def train(net, data_loader, train_optimizer, wandb_run):
+def train(cfg, net, data_loader, train_optimizer, wandb_run):
 	net.train()
 	total_loss, total_num, train_bar = 0.0, 0, tqdm(data_loader)
 	for data_tuple in train_bar:
 		(pos_1, pos_2), _ = data_tuple
 		pos_1, pos_2 = pos_1.cuda(non_blocking=True), pos_2.cuda(non_blocking=True)
-		feature_1, out_1 = net(pos_1)
-		feature_2, out_2 = net(pos_2)
+		feature_1, out_1 = net(pos_1, mask_ratio=cfg.mask_ratio)
+		feature_2, out_2 = net(pos_2, mask_ratio=0.)
 		# Barlow Twins
 		
 		# normalize the representations along the batch dimension
@@ -135,8 +135,13 @@ if __name__ == '__main__':
 	parser.add_argument('--k', default=200, type=int, help='Top k most similar images used to predict the label')
 	parser.add_argument('--batch_size', default=128, type=int, help='Number of images in each mini-batch')
 	parser.add_argument('--epochs', default=20, type=int, help='Number of sweeps over the dataset to train')
-	# for barlow twins
 
+	# model type 
+	parser.add_argument('--model_type', default='resnet50', type=str, help='Encoder: resnet50 or vit [tiny, small, base]')
+	parser.add_argument('--latent', default='cls', type=str, help='[CLS] token or mean pool vit outputs')
+	parser.add_argument('--mask_ratio', default=0., type=float, help='masking ratio')
+
+	# for barlow twins
 	parser.add_argument('--lmbda', default=0.005, type=float, help='Lambda that controls the on- and off-diagonal terms')
 	parser.add_argument('--corr_neg_one', dest='corr_neg_one', action='store_true')
 	parser.add_argument('--corr_zero', dest='corr_neg_one', action='store_false')
@@ -169,6 +174,7 @@ if __name__ == '__main__':
 	lmbda = args.lmbda
 	corr_neg_one = args.corr_neg_one
 	distributed = args.distributed
+	model_type = args.model_type
 
 	# distributed training 
 	utils.init_distributed_mode(args)
@@ -227,7 +233,11 @@ if __name__ == '__main__':
 							 num_workers=4, pin_memory=True, sampler=test_sampler)
 
 	# model setup and optimizer config
-	model = Model(feature_dim, dataset).cuda()
+	if model_type == 'resnet':
+		model = ResNet(feature_dim, dataset).cuda()
+	elif model_type == 'vit_base':
+		model = ViT(feature_dim, dataset, size='base', latent=args.latent)
+
 	if distributed:
 		# sync batch norms
 		model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
@@ -266,7 +276,7 @@ if __name__ == '__main__':
 		os.mkdir('results/{}'.format(dataset))
 	best_acc = 0.0
 	for epoch in range(1, epochs + 1):
-		train_loss = train(model, train_loader, optimizer, wandb_run)
+		train_loss = train(args, model, train_loader, optimizer, wandb_run)
 		if epoch % 5 == 0 and dataset != 'fsd50k':
 			results['train_loss'].append(train_loss)
 			test_acc_1, test_acc_5 = test(model, memory_loader, test_loader)
