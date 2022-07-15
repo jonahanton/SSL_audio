@@ -14,7 +14,8 @@ import utils
 import torchvision
 
 import datasets
-from sklearn.metrics import average_precision_score
+from sklearn.metrics import average_precision_score, roc_auc_score
+import wandb
 
 
 class Net(nn.Module):
@@ -35,7 +36,7 @@ class Net(nn.Module):
 		return out
 
 # train or test for one epoch
-def train_val(net, data_loader, train_optimizer):
+def train_val(net, data_loader, train_optimizer, wandb_run):
 	is_train = train_optimizer is not None
 	net.train() if is_train else net.eval()
 
@@ -59,7 +60,7 @@ def train_val(net, data_loader, train_optimizer):
 			total_loss += loss.item() * data.size(0)
 			if dataset == 'fsd50k':
 				all_targets.append(target)
-				all_preds.append(data.sigmoid())
+				all_preds.append(out.sigmoid())
 				data_bar.set_description('{} Epoch: [{}/{}] Loss: {:.4f} model: {}'
 										.format('Train' if is_train else 'Test', epoch, epochs, total_loss / total_num,
 												model_path.split('/')[-1]))
@@ -72,27 +73,50 @@ def train_val(net, data_loader, train_optimizer):
 										.format('Train' if is_train else 'Test', epoch, epochs, total_loss / total_num,
 												total_correct_1 / total_num * 100, total_correct_5 / total_num * 100,
 												model_path.split('/')[-1]))
+			if is_train:
+				wandb_run.log({'Loss': total_loss / total_num})
 
 	if dataset == 'fsd50k':
 		all_preds = torch.cat(all_preds, dim=0)
 		all_targets = torch.cat(all_targets, dim=0)
 		mAP = average_precision_score(y_true=all_targets.detach().cpu(), y_score=all_preds.detach().cpu(), average='macro') 
-		return total_loss / total_num, {'mAP': mAP}
+		AUC = roc_auc_score(y_true=all_targets.detach().cpu(), y_score=all_preds.detach().cpu(), average='macro') 
+		return total_loss / total_num, {'mAP': mAP, 'AUC': AUC}
 	else:
 		return total_loss / total_num, {'acc_1': total_correct_1 / total_num * 100, 'acc_5': total_correct_5 / total_num * 100}
 
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='Linear Evaluation')
-	parser.add_argument('--dataset', default='cifar10', type=str, help='Dataset: cifar10 or tiny_imagenet or stl10')
-	parser.add_argument('--model_path', type=str, default='results/Barlow_Twins/0.005_64_128_model.pth',
+	parser.add_argument('--dataset', default='fsd50k', type=str, help='Dataset: cifar10 or tiny_imagenet or stl10 or fsd50k')
+	parser.add_argument('--model_path', type=str, default='results/fsd50k/0.005_128_128_fsd50k_model_5.pth',
 						help='The base string of the pretrained model path')
 	parser.add_argument('--batch_size', type=int, default=512, help='Number of images in each mini-batch')
-	parser.add_argument('--epochs', type=int, default=200, help='Number of sweeps over the dataset to train')
+	parser.add_argument('--epochs', type=int, default=50, help='Number of sweeps over the dataset to train')
+	# for audio processing
+	parser.add_argument('--unit_sec', type=float, default=0.95)
+	parser.add_argument('--crop_frames', type=int, default=96)
+	parser.add_argument('--sample_rate', type=int, default=16000)
+	parser.add_argument('--n_fft', type=int, default=1024)
+	parser.add_argument('--win_length', type=int, default=1024)
+	parser.add_argument('--hop_length', type=int, default=160)
+	parser.add_argument('--n_mels', type=int, default=64)
+	parser.add_argument('--f_min', type=int, default=60)
+	parser.add_argument('--f_max', type=int, default=7800)
+	# load pre-computed lms 
+	parser.add_argument('--load_lms', action='store_true', default=True)
 
 	args = parser.parse_args()
 	model_path, batch_size, epochs = args.model_path, args.batch_size, args.epochs
 	dataset = args.dataset
+
+	# wandb init
+	wandb_run = wandb.init(
+			project='barlow twins {} linear'.format(dataset),
+			config=args,
+			settings=wandb.Settings(start_method="fork"),
+		)
+
 	if dataset == 'cifar10':
 		train_data = CIFAR10(root='data', train=True,\
 			transform=utils.CifarPairTransform(train_transform = True, pair_transform=False), download=True)
@@ -116,10 +140,15 @@ if __name__ == '__main__':
 		test_data = datasets.FSD50K(args, train=False, transform=utils.FSD50KPairTransform(train_transform=False, pair_transform=False), 
 									norm_stats=norm_stats)
 
-	train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=16, pin_memory=True)
-	test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False, num_workers=16, pin_memory=True)
+	train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
+	test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True)
 
-	model = Net(num_class=len(train_data.classes), pretrained_path=model_path, dataset=dataset).cuda()
+	if dataset == 'fsd50k':
+		c = train_data.label_num
+	else:
+		c = len(train_data.classes)
+	
+	model = Net(num_class=c, pretrained_path=model_path, dataset=dataset).cuda()
 	for param in model.f.parameters():
 		param.requires_grad = False
 
@@ -135,8 +164,8 @@ if __name__ == '__main__':
 	optimizer = optim.Adam(model.fc.parameters(), lr=1e-3, weight_decay=1e-6)
 	if dataset == 'fsd50k':
 		loss_criterion = nn.BCEWithLogitsLoss()
-		results = {'train_loss': [], 'train_mAP': [],
-				   'test_loss': [], 'test_mAP': []}
+		results = {'train_loss': [], 'train_mAP': [], 'train_AUC': [],
+				   'test_loss': [], 'test_mAP': [], 'test_AUC': []}
 	else:
 		loss_criterion = nn.CrossEntropyLoss()
 		results = {'train_loss': [], 'train_acc@1': [], 'train_acc@5': [],
@@ -146,20 +175,38 @@ if __name__ == '__main__':
 
 	best_acc = 0.0
 	for epoch in range(1, epochs + 1):
-		train_loss, train_stats = train_val(model, train_loader, optimizer)
+		train_loss, train_stats = train_val(model, train_loader, optimizer, wandb_run)
 		results['train_loss'].append(train_loss)
 		if dataset == 'fsd50k':
 			results['train_mAP'].append(train_stats['mAP'])
+			results['train_AUC'].append(train_stats['AUC'])
+			wandb_run.log({
+				'train_mAP': train_stats['mAP'],
+				'train_AUC': train_stats['AUC'],
+			})
 		else:
 			results['train_acc@1'].append(train_stats['acc_1'])
 			results['train_acc@5'].append(train_stats['acc_5'])
-		test_loss, test_stats = train_val(model, test_loader, None)
+			wandb_run.log({
+				'train_acc@1': train_stats['acc_1'],
+				'train_acc@5': train_stats['acc_5'],
+			})
+		test_loss, test_stats = train_val(model, test_loader, None, wandb_run)
 		results['test_loss'].append(test_loss)
 		if dataset == 'fsd50k':
 			results['test_mAP'].append(test_stats['mAP'])
+			results['test_AUC'].append(test_stats['AUC'])
+			wandb_run.log({
+				'test_mAP': test_stats['mAP'],
+				'test_AUC': test_stats['AUC'],
+			})
 		else:
 			results['test_acc@1'].append(test_stats['acc_1'])
 			results['test_acc@5'].append(test_stats['acc_5'])
+			wandb_run.log({
+				'test_acc@1': test_stats['acc_1'],
+				'test_acc@5': test_stats['acc_5'],
+			})
 		# save statistics
 		data_frame = pd.DataFrame(data=results, index=range(1, epoch + 1))
 		data_frame.to_csv(save_name, index_label='epoch')
