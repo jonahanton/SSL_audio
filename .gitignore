@@ -18,6 +18,7 @@ additional_scripts
 byol-a
 *.pth 
 *.pth.tar
+*_linear.csv
 
 
 # Byte-compiled / optimized / DLL files
