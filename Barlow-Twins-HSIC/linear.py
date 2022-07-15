@@ -110,7 +110,7 @@ if __name__ == '__main__':
 							utils.TinyImageNetPairTransform(train_transform = False, pair_transform=False))
 	elif dataset == 'fsd50k':
 		# fsd50k [mean, std] (lms)
-		norm_stats = None
+		norm_stats = [-4.950, 5.855]
 		train_data = datasets.FSD50K(args, train=True, transform=utils.FSD50KPairTransform(train_transform=True, pair_transform=False),
 									 norm_stats=norm_stats)
 		test_data = datasets.FSD50K(args, train=False, transform=utils.FSD50KPairTransform(train_transform=False, pair_transform=False), 

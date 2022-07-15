@@ -128,7 +128,7 @@ if __name__ == '__main__':
 	parser.add_argument('--temperature', default=0.5, type=float, help='Temperature used in softmax')
 	parser.add_argument('--k', default=200, type=int, help='Top k most similar images used to predict the label')
 	parser.add_argument('--batch_size', default=256, type=int, help='Number of images in each mini-batch')
-	parser.add_argument('--epochs', default=100, type=int, help='Number of sweeps over the dataset to train')
+	parser.add_argument('--epochs', default=20, type=int, help='Number of sweeps over the dataset to train')
 	# for barlow twins
 
 	parser.add_argument('--lmbda', default=0.005, type=float, help='Lambda that controls the on- and off-diagonal terms')
@@ -187,7 +187,7 @@ if __name__ == '__main__':
 													  utils.TinyImageNetPairTransform(train_transform = False))
 	elif dataset == 'fsd50k':
 		# fsd50k [mean, std] (lms)
-		norm_stats = None
+		norm_stats = [-4.950, 5.855]
 		train_data = datasets.FSD50K(args, train=True, transform=utils.FSD50KPairTransform(train_transform = True), norm_stats=norm_stats)
 		memory_data = datasets.FSD50K(args, train=True, transform=utils.FSD50KPairTransform(train_transform = False), norm_stats=norm_stats)
 		test_data = datasets.FSD50K(args, train=False, transform=utils.FSD50KPairTransform(train_transform = False), norm_stats=norm_stats)

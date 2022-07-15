@@ -11,7 +11,7 @@ import csv
 import argparse
 from tqdm import tqdm
 import librosa
-
+import json
 
 
 def make_index_dict(label_csv):
@@ -49,8 +49,8 @@ class FSD50K(Dataset):
 			self.df = pd.read_csv("data/FSD50K/FSD50K.ground_truth/dev.csv", header=None)
 		else:
 			self.df = pd.read_csv("data/FSD50K/FSD50K.ground_truth/eval.csv", header=None)	
-		self.files = np.asarray(self.df.iloc[:, 0])
-		self.labels = np.asarray(self.df.iloc[:, 2])  # mids (separated by ,)
+		self.files = np.asarray(self.df.iloc[:, 0], dtype=str)
+		self.labels = np.asarray(self.df.iloc[:, 2], dtype=str)  # mids (separated by ,)
 		self.index_dict = make_index_dict("data/FSD50K/FSD50K.ground_truth/vocabulary.csv")
 		self.label_num = len(self.index_dict)
 
@@ -97,39 +97,43 @@ class FSD50K(Dataset):
 		return lms, label_indices
 
 
-def get_args_parser():
-	
-	parser = argparse.ArgumentParser(description='Calculate dataset normalization stats', add_help=False)
-	parser.add_argument('--unit_sec', type=float, default=0.95)
-	parser.add_argument('--sample_rate', type=int, default=16000)
-	parser.add_argument('--n_fft', type=int, default=1024)
-	parser.add_argument('--win_length', type=int, default=1024)
-	parser.add_argument('--hop_length', type=int, default=160)
-	parser.add_argument('--n_mels', type=int, default=64)
-	parser.add_argument('--f_min', type=int, default=60)
-	parser.add_argument('--f_max', type=int, default=7800)
-	parser.add_argument('--n_norm_calc', type=int, default=10000)
-	return parser
-
-
-def calculate_norm_stats(args):
-
-	# load dataset
-	dataset = FSD50K(args)
-
-	# calculate norm stats (randomly sample n_norm_calc points from dataset)
-	idxs = np.random.randint(0, len(dataset), size=args.n_norm_calc)
-	lms_vectors = []
-	for i in tqdm(idxs):
-		lms_vectors.append(dataset[i][0])
-	lms_vectors = torch.stack(lms_vectors)
-	norm_stats = lms_vectors.mean(), lms_vectors.std() + torch.finfo().eps
-
-	print(f'Dataset contains {len(dataset)} files with normalizing stats\n'
-		  f'mean: {norm_stats[0]}\t std: {norm_stats[1]}')
-
-
 if __name__ == "__main__":
+
+	
+	def get_args_parser():
+		
+		parser = argparse.ArgumentParser(description='Calculate dataset normalization stats', add_help=False)
+		parser.add_argument('--unit_sec', type=float, default=0.95)
+		parser.add_argument('--sample_rate', type=int, default=16000)
+		parser.add_argument('--n_fft', type=int, default=1024)
+		parser.add_argument('--win_length', type=int, default=1024)
+		parser.add_argument('--hop_length', type=int, default=160)
+		parser.add_argument('--n_mels', type=int, default=64)
+		parser.add_argument('--f_min', type=int, default=60)
+		parser.add_argument('--f_max', type=int, default=7800)
+		parser.add_argument('--n_norm_calc', type=int, default=10000)
+		return parser
+
+
+	def calculate_norm_stats(args):
+
+		# load dataset
+		dataset = FSD50K(args)
+
+		# calculate norm stats (randomly sample n_norm_calc points from dataset)
+		idxs = np.random.randint(0, len(dataset), size=args.n_norm_calc)
+		lms_vectors = []
+		for i in tqdm(idxs):
+			lms_vectors.append(dataset[i][0])
+		lms_vectors = torch.stack(lms_vectors)
+		norm_stats = lms_vectors.mean(), lms_vectors.std() + torch.finfo().eps
+
+		print(f'Dataset contains {len(dataset)} files with normalizing stats\n'
+			f'mean: {norm_stats[0]}\t std: {norm_stats[1]}')
+		norm_stats_dict = {'mean': norm_stats[0], 'std': norm_stats[1]}
+		with open('norm_stats.json', mode='w') as jsonfile:
+			json.dump(norm_stats_dict, jsonfile, indent=2)
+
 
 	parser = argparse.ArgumentParser('Norm-stats', parents=[get_args_parser()])
 	args = parser.parse_args()
