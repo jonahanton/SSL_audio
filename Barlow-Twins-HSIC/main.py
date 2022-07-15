@@ -209,7 +209,10 @@ if __name__ == '__main__':
 	flops, params = clever_format([flops, params])
 	print('# Model Params: {} FLOPs: {}'.format(params, flops))
 	optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-6)
-	c = len(memory_data.classes)
+	if dataset == 'fsd50k':
+		c = memory_data.label_num
+	else:
+		c = len(memory_data.classes)
 
 	# training loop
 	results = {'train_loss': [], 'test_acc@1': [], 'test_acc@5': []}
