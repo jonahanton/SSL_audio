@@ -137,7 +137,7 @@ if __name__ == '__main__':
 	parser.add_argument('--epochs', default=20, type=int, help='Number of sweeps over the dataset to train')
 
 	# model type 
-	parser.add_argument('--model_type', default='resnet50', type=str, help='Encoder: resnet50 or vit [tiny, small, base]')
+	parser.add_argument('--model_type', default='resnet', type=str, help='Encoder: resnet or vit [tiny, small, base]')
 	parser.add_argument('--latent', default='cls', type=str, help='[CLS] token or mean pool vit outputs')
 	parser.add_argument('--mask_ratio', default=0., type=float, help='masking ratio')
 
@@ -270,7 +270,7 @@ if __name__ == '__main__':
 		corr_neg_one_str = 'neg_corr_'
 	else:
 		corr_neg_one_str = ''
-	save_name_pre = '{}{}_{}_{}_{}'.format(corr_neg_one_str, lmbda, feature_dim, batch_size, dataset)
+	save_name_pre = '{}_{}{}_{}_{}_{}'.format(model_type, corr_neg_one_str, lmbda, feature_dim, batch_size, dataset)
 	
 	if not os.path.exists('results/{}'.format(dataset)):
 		os.mkdir('results/{}'.format(dataset))

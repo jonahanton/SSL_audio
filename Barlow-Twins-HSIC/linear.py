@@ -39,7 +39,7 @@ class Net(nn.Module):
 		self.load_state_dict(torch.load(pretrained_path, map_location='cpu'), strict=False)
 
 	def forward(self, x):
-		x = self.f(x, mask_ratio=0.)
+		x = self.f(x)
 		if self.cfg.model_type == 'vit_base':
 			if self.cfg.latent == 'cls':
 				x = x[:, 0]
@@ -106,7 +106,7 @@ if __name__ == '__main__':
 	parser.add_argument('--dataset', default='fsd50k', type=str, help='Dataset: cifar10 or tiny_imagenet or stl10 or fsd50k')
 	parser.add_argument('--model_path', type=str, default='results/fsd50k/0.005_128_128_fsd50k_model_5.pth',
 						help='The base string of the pretrained model path')
-	parser.add_argument('--model_type', default='resnet50', type=str, help='Encoder: resnet50 or vit [tiny, small, base]')
+	parser.add_argument('--model_type', default='resnet', type=str, help='Encoder: resnet or vit [tiny, small, base]')
 	parser.add_argument('--latent', default='cls', type=str, help='[CLS] token or mean pool vit outputs')
 	parser.add_argument('--batch_size', type=int, default=512, help='Number of images in each mini-batch')
 	parser.add_argument('--epochs', type=int, default=50, help='Number of sweeps over the dataset to train')
