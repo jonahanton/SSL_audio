@@ -4,6 +4,8 @@ import torch.nn.functional as F
 import torchaudio.transforms as AT
 from torch.utils.data import Dataset
 
+import nnAudio.features
+
 import numpy as np
 import random
 import pandas as pd
@@ -44,6 +46,18 @@ class FSD50K(Dataset):
 			f_max=cfg.f_max,
 			power=2,
 		)
+		# self.to_melspecgram = nnAudio.features.mel.MelSpectrogram(
+		# 	sr=cfg.sample_rate,
+		# 	n_fft=cfg.n_fft,
+		# 	win_length=cfg.win_length,
+		# 	hop_length=cfg.hop_length,
+		# 	n_mels=cfg.n_mels,
+		# 	fmin=cfg.f_min,
+		# 	fmax=cfg.f_max,
+		# 	center=True,
+		# 	power=2,
+		# 	verbose=False,
+		# )
 		# load in csv files
 		if train:
 			self.df = pd.read_csv("data/FSD50K/FSD50K.ground_truth/dev.csv", header=None)
@@ -86,7 +100,7 @@ class FSD50K(Dataset):
 		wav = wav[start:start + self.unit_length]
 		# to log mel spectogram -> (1, n_mels, time)
 		lms = (self.to_melspecgram(wav) + torch.finfo().eps).log()
-		lms = lms.unsqueeze(0)
+		lms = lms.unsqueeze(0)  # if using torchaudio.transforms.MelSpectrogram
 		# normalise lms with pre-computed dataset statistics
 		if self.norm_stats is not None:
 			lms = (lms - self.norm_stats[0]) / self.norm_stats[1]
@@ -119,41 +133,34 @@ def calculate_norm_stats(args):
 
 if __name__ == "__main__":
 
-	
-	def get_args_parser():
-		
-		parser = argparse.ArgumentParser(description='Train barlow twins')
-		parser.add_argument('--dataset', default='fsd50k', type=str, help='Dataset: fsd50k or cifar10 or tiny_imagenet or stl10')
-		parser.add_argument('--feature_dim', default=128, type=int, help='Feature dim for latent vector')
-		parser.add_argument('--temperature', default=0.5, type=float, help='Temperature used in softmax')
-		parser.add_argument('--k', default=200, type=int, help='Top k most similar images used to predict the label')
-		parser.add_argument('--batch_size', default=128, type=int, help='Number of images in each mini-batch')
-		parser.add_argument('--epochs', default=20, type=int, help='Number of sweeps over the dataset to train')
-		# for barlow twins
-		parser.add_argument('--lmbda', default=0.005, type=float, help='Lambda that controls the on- and off-diagonal terms')
-		parser.add_argument('--corr_neg_one', dest='corr_neg_one', action='store_true')
-		parser.add_argument('--corr_zero', dest='corr_neg_one', action='store_false')
-		parser.set_defaults(corr_neg_one=False)
-		parser.add_argument('--unit_sec', type=float, default=0.95)
-		parser.add_argument('--sample_rate', type=int, default=16000)
-		parser.add_argument('--n_fft', type=int, default=1024)
-		parser.add_argument('--win_length', type=int, default=1024)
-		parser.add_argument('--hop_length', type=int, default=160)
-		parser.add_argument('--n_mels', type=int, default=64)
-		parser.add_argument('--f_min', type=int, default=60)
-		parser.add_argument('--f_max', type=int, default=7800)
-		parser.add_argument('--n_norm_calc', type=int, default=10000)
-		return parser
-
-	
 	def off_diagonal(x):
 		# return a flattened view of the off-diagonal elements of a square matrix
 		n, m = x.shape
 		assert n == m
 		return x.flatten()[:-1].view(n - 1, n + 1)[:, 1:].flatten()
 
+	parser = argparse.ArgumentParser(description='Train barlow twins')
+	parser.add_argument('--dataset', default='fsd50k', type=str, help='Dataset: fsd50k or cifar10 or tiny_imagenet or stl10')
+	parser.add_argument('--feature_dim', default=128, type=int, help='Feature dim for latent vector')
+	parser.add_argument('--temperature', default=0.5, type=float, help='Temperature used in softmax')
+	parser.add_argument('--k', default=200, type=int, help='Top k most similar images used to predict the label')
+	parser.add_argument('--batch_size', default=128, type=int, help='Number of images in each mini-batch')
+	parser.add_argument('--epochs', default=20, type=int, help='Number of sweeps over the dataset to train')
+	# for barlow twins
+	parser.add_argument('--lmbda', default=0.005, type=float, help='Lambda that controls the on- and off-diagonal terms')
+	parser.add_argument('--corr_neg_one', dest='corr_neg_one', action='store_true')
+	parser.add_argument('--corr_zero', dest='corr_neg_one', action='store_false')
+	parser.set_defaults(corr_neg_one=False)
+	parser.add_argument('--unit_sec', type=float, default=0.95)
+	parser.add_argument('--sample_rate', type=int, default=16000)
+	parser.add_argument('--n_fft', type=int, default=1024)
+	parser.add_argument('--win_length', type=int, default=1024)
+	parser.add_argument('--hop_length', type=int, default=160)
+	parser.add_argument('--n_mels', type=int, default=64)
+	parser.add_argument('--f_min', type=int, default=60)
+	parser.add_argument('--f_max', type=int, default=7800)
+	parser.add_argument('--n_norm_calc', type=int, default=10000)
 
-	parser = argparse.ArgumentParser('', parents=[get_args_parser()])
 	args = parser.parse_args()
 
 	dataset = args.dataset
@@ -177,9 +184,11 @@ if __name__ == "__main__":
 
 	import time 
 	data_time, forward_time, loss_time, backward_time = [], [], [], []
-	for _ in tqdm(range(10)):
-		tflag = time.time()
-		data_tuple = next(train_loader)
+	tflag = time.time()
+	for it, data_tuple in tqdm(enumerate(train_loader)):
+
+		if it >= 10:
+			break
 		data_time.append(time.time() - tflag) 
 
 		(pos_1, pos_2), _ = data_tuple
@@ -221,7 +230,9 @@ if __name__ == "__main__":
 		optimizer.step()
 		backward_time.append(time.time() - tflag)
 
+		tflag = time.time()
+
 	print(f'Data time: mean {np.mean(data_time)} std {np.std(data_time)}\n'
-		  f'Forward time: mean {np.mean(forward_time)} std {np.std(forward_time)}'
-		  f'Loss time: mean {np.mean(loss_time)} std {np.std(loss_time)}'
-		  f'Backward time: mean {np.mean(backward_time)} std {np.std(backward_time)}')
+		  f'Forward time: mean {np.mean(forward_time)} std {np.std(forward_time)}\n'
+		  f'Loss time: mean {np.mean(loss_time)} std {np.std(loss_time)}\n'
+		  f'Backward time: mean {np.mean(backward_time)} std {np.std(backward_time)}\n')
