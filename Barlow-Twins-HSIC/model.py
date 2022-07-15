@@ -11,13 +11,17 @@ class Model(nn.Module):
         self.f = []
         for name, module in resnet50().named_children():
             if name == 'conv1':
-                module = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
+                if dataset == 'fsd50k':
+                    module = nn.Conv2d(1, 64, kernel_size=3, stride=1, padding=1, bias=False)
+                else:
+                    module = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
             if dataset == 'cifar10':
                 if not isinstance(module, nn.Linear) and not isinstance(module, nn.MaxPool2d):
                     self.f.append(module)
-            elif dataset == 'tiny_imagenet' or dataset == 'stl10':
+            elif dataset == 'tiny_imagenet' or dataset == 'stl10' or dataset == 'fsd50k':
                 if not isinstance(module, nn.Linear):
                     self.f.append(module)
+
         # encoder
         self.f = nn.Sequential(*self.f)
         # projection head
@@ -29,3 +33,13 @@ class Model(nn.Module):
         feature = torch.flatten(x, start_dim=1)
         out = self.g(feature)
         return F.normalize(feature, dim=-1), F.normalize(out, dim=-1)
+
+
+
+if __name__ == "__main__":
+
+    model = Model(dataset='fsd50k')
+    print(model)
+    x = torch.randn(1, 1, 64, 96)
+    feature = model.f(x)
+    print(feature.shape)
