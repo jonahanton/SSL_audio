@@ -383,3 +383,13 @@ def mae_vit_base_patch80x2(**kwargs):
 
 def mae_vit_base_patch80x1(**kwargs):
 	return mae_vit_base_patchX([80, 1], **kwargs)
+
+
+
+if __name__ == "__main__":
+
+	mae = mae_vit_base_patch16x16()
+	
+	x = torch.randn(1, 1, 64, 96)
+	out = mae(x, mask_ratio=0.)
+	print(out.shape)
