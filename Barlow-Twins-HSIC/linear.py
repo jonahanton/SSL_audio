@@ -170,16 +170,21 @@ if __name__ == '__main__':
 	for param in model.f.parameters():
 		param.requires_grad = False
 
-	if dataset == 'cifar10':
-		flops, params = profile(model, inputs=(torch.randn(1, 3, 32, 32).cuda(),))
-	elif dataset == 'tiny_imagenet' or dataset == 'stl10':
-		flops, params = profile(model, inputs=(torch.randn(1, 3, 64, 64).cuda(),))
-	elif dataset == 'fsd50k':
-		flops, params = profile(model, inputs=(torch.randn(1, 1, 64, 96).cuda(),))
-	flops, params = clever_format([flops, params])
-	print('# Model Params: {} FLOPs: {}'.format(params, flops))
+	if 'vit' not in model_type:
+		if dataset == 'cifar10':
+			flops, params = profile(model, inputs=(torch.randn(1, 3, 32, 32).cuda(),))
+		elif dataset == 'tiny_imagenet' or dataset == 'stl10':
+			flops, params = profile(model, inputs=(torch.randn(1, 3, 64, 64).cuda(),))
+		elif dataset == 'fsd50k':
+			flops, params = profile(model, inputs=(torch.randn(1, 1, 64, 96).cuda(),))
+		flops, params = clever_format([flops, params])
+		print('# Model Params: {} FLOPs: {}'.format(params, flops))
 
-	optimizer = optim.Adam(model.fc.parameters(), lr=1e-3, weight_decay=1e-6)
+	if 'vit' in model_type:
+		optimizer = optim.AdamW(model.parameters(), lr=1e-4, weight_decay=0.1) 
+	else:
+		optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-6)
+
 	if dataset == 'fsd50k':
 		loss_criterion = nn.BCEWithLogitsLoss()
 		results = {'train_loss': [], 'train_mAP': [], 'train_AUC': [],

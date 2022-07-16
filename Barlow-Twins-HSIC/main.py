@@ -249,16 +249,20 @@ if __name__ == '__main__':
 			)
 		model_without_ddp = model.module
 
-	if dataset == 'cifar10':
-		flops, params = profile(model, inputs=(torch.randn(1, 3, 32, 32).cuda(),))
-	elif dataset == 'tiny_imagenet' or dataset == 'stl10':
-		flops, params = profile(model, inputs=(torch.randn(1, 3, 64, 64).cuda(),))
-	elif dataset == 'fsd50k':
-		flops, params = profile(model, inputs=(torch.randn(1, 1, 64, 96).cuda(),))
-
-	flops, params = clever_format([flops, params])
-	print('# Model Params: {} FLOPs: {}'.format(params, flops))
-	optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-6)
+	if model_type == 'resnet':
+		if dataset == 'cifar10':
+			flops, params = profile(model, inputs=(torch.randn(1, 3, 32, 32).cuda(),))
+		elif dataset == 'tiny_imagenet' or dataset == 'stl10':
+			flops, params = profile(model, inputs=(torch.randn(1, 3, 64, 64).cuda(),))
+		elif dataset == 'fsd50k':
+			flops, params = profile(model, inputs=(torch.randn(1, 1, 64, 96).cuda(),))
+		flops, params = clever_format([flops, params])
+		print('# Model Params: {} FLOPs: {}'.format(params, flops))
+	
+	if 'vit' in model_type:
+		optimizer = optim.AdamW(model.parameters(), lr=1e-4, weight_decay=0.1) 
+	else:
+		optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-6)
 	if dataset == 'fsd50k':
 		c = memory_data.label_num
 	else:
@@ -293,5 +297,5 @@ if __name__ == '__main__':
 			if test_acc_1 > best_acc:
 				best_acc = test_acc_1
 				utils.save_on_master(model.state_dict(), 'results/{}/{}_model.pth'.format(dataset, save_name_pre))
-		if epoch % 10 == 0:
+		if epoch % 5 == 0:
 			utils.save_on_master(model.state_dict(), 'results/{}/{}_model_{}.pth'.format(dataset, save_name_pre, epoch))
