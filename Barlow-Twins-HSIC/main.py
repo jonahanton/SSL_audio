@@ -225,13 +225,13 @@ if __name__ == '__main__':
 		test_data = datasets.FSD50K(args, train=False, transform=utils.AudioPairTransform(train_transform = False), norm_stats=norm_stats)
 	elif dataset == 'librispeech':
 		# librispeech960 [mean, std] (lms)
-		norm_stats = [0, 0]
+		norm_stats = [-3.332, 4.205]
 		train_data = datasets.LibriSpeech(args, train=True, transform=utils.AudioPairTransform(train_transform = True), norm_stats=norm_stats)
 		memory_data = datasets.LibriSpeech(args, train=True, transform=utils.AudioPairTransform(train_transform = False), norm_stats=norm_stats)
 		test_data = datasets.LibriSpeech(args, train=False, transform=utils.AudioPairTransform(train_transform = False), norm_stats=norm_stats)
 	elif dataset == 'fsd50k+librispeech':
 		norm_stats_fsd50k = [-4.950, 5.855]
-		norm_stats_librispeech = [0, 0]
+		norm_stats_librispeech = [-3.332, 4.205]
 		train_data = torch.utils.data.dataset.ConcatDataset([
 			datasets.FSD50K(args, train=True, transform=utils.AudioPairTransform(train_transform = True), norm_stats=norm_stats_fsd50k),
 			datasets.LibriSpeech(args, train=True, transform=utils.AudioPairTransform(train_transform = True), norm_stats=norm_stats_librispeech),

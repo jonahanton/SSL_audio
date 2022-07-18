@@ -132,7 +132,7 @@ class LibriSpeech(Dataset):
 		if self.cfg.load_lms:
 			self.base_path= "data/LibriSpeech_lms/"
 		else:
-			self.base_path = "data/LibriSpeech"
+			self.base_path = "data/LibriSpeech/"
 
 		self.unit_length = int(cfg.unit_sec * cfg.sample_rate)
 		self.to_melspecgram = AT.MelSpectrogram(
@@ -157,7 +157,8 @@ class LibriSpeech(Dataset):
 		
 		
 	def __getitem__(self, idx):
-		fname, label = self.data[idx]
+		datum = self.data[idx]
+		fname = datum.get('wav')
 
 		if self.cfg.load_lms:
 			# load lms
@@ -251,9 +252,10 @@ if __name__ == "__main__":
 	parser.add_argument('--n_mels', type=int, default=64)
 	parser.add_argument('--f_min', type=int, default=60)
 	parser.add_argument('--f_max', type=int, default=7800)
-	parser.add_argument('--load_lms', action='store_true', default=True)
+	parser.add_argument('--load_lms', action='store_true', default=False)
 
 	args = parser.parse_args()
+	calculate_norm_stats(args)
 
 	# dataset = args.dataset
 	# feature_dim, temperature, k = args.feature_dim, args.temperature, args.k
