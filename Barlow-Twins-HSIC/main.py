@@ -135,7 +135,8 @@ if __name__ == '__main__':
 	parser.add_argument('--k', default=200, type=int, help='Top k most similar images used to predict the label')
 	parser.add_argument('--batch_size', default=128, type=int, help='Number of images in each mini-batch')
 	parser.add_argument('--epochs', default=20, type=int, help='Number of sweeps over the dataset to train')
-
+	parser.add_argument('--save_every', default=20, type=int)
+	
 	# model type 
 	parser.add_argument('--model_type', default='resnet', type=str, help='Encoder: resnet or vit [tiny, small, base]')
 	parser.add_argument('--latent', default='cls', type=str, help='[CLS] token or mean pool vit outputs')
@@ -175,6 +176,7 @@ if __name__ == '__main__':
 	corr_neg_one = args.corr_neg_one
 	distributed = args.distributed
 	model_type = args.model_type
+	mask_ratio = args.mask_ratio
 
 	# distributed training 
 	utils.init_distributed_mode(args)
@@ -274,7 +276,7 @@ if __name__ == '__main__':
 		corr_neg_one_str = 'neg_corr_'
 	else:
 		corr_neg_one_str = ''
-	save_name_pre = '{}_{}{}_{}_{}_{}'.format(model_type, corr_neg_one_str, lmbda, feature_dim, batch_size, dataset)
+	save_name_pre = '{}_maskratio{}_{}{}_{}_{}_{}'.format(model_type, mask_ratio, corr_neg_one_str, lmbda, feature_dim, batch_size, dataset)
 	
 	if not os.path.exists('results/{}'.format(dataset)):
 		os.mkdir('results/{}'.format(dataset))
@@ -297,5 +299,5 @@ if __name__ == '__main__':
 			if test_acc_1 > best_acc:
 				best_acc = test_acc_1
 				utils.save_on_master(model.state_dict(), 'results/{}/{}_model.pth'.format(dataset, save_name_pre))
-		if epoch % 5 == 0:
+		if epoch % args.save_every == 0:
 			utils.save_on_master(model.state_dict(), 'results/{}/{}_model_{}.pth'.format(dataset, save_name_pre, epoch))
