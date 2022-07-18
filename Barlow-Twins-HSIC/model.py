@@ -23,6 +23,8 @@ class ViT(nn.Module):
 	def forward(self, x, mask_ratio=0., masked_recon=False):
 		if masked_recon:
 			recon_loss, x = self.f(x, mask_ratio=mask_ratio, masked_recon=masked_recon)
+		else:
+			x = self.f(x, mask_ratio=mask_ratio)
 		if self.latent == 'cls':
 			x = x[:, 0]
 		elif self.latent == 'pool':
