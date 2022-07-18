@@ -140,6 +140,7 @@ def calculate_norm_stats(args):
 
 
 if __name__ == "__main__":
+	pass
 
 
 	# def off_diagonal(x):
