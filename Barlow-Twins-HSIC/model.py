@@ -131,6 +131,7 @@ def mean_max_pooling(frame_embeddings):
 class AudioNTT2022(AudioNTT2022Encoder):
 	def __init__(self, n_mels=64, d=3072, mlp_hidden_d=2048):
 		super().__init__(n_mels=n_mels, d=d, mlp_hidden_d=mlp_hidden_d)
+		self.d = d
 
 	def forward(self, x):
 		x = super().forward(x)

@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 import utils
-from model import ResNet, ViT
+from model import BYOLAv2encoder, ResNet, ViT
 
 import torchvision
 
@@ -129,7 +129,7 @@ def test(net, memory_data_loader, test_data_loader):
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='Train barlow twins')
-	parser.add_argument('--dataset', default='fsd50k', type=str, help='Dataset: fsd50k or librispeech or cifar10 or tiny_imagenet or stl10')
+	parser.add_argument('--dataset', default='fsd50k', type=str, help='Dataset: fsd50k or librispeech (or both) or cifar10 or tiny_imagenet or stl10')
 	parser.add_argument('--feature_dim', default=128, type=int, help='Feature dim for latent vector')
 	parser.add_argument('--temperature', default=0.5, type=float, help='Temperature used in softmax')
 	parser.add_argument('--k', default=200, type=int, help='Top k most similar images used to predict the label')
@@ -138,7 +138,7 @@ if __name__ == '__main__':
 	parser.add_argument('--save_every', default=20, type=int, help='Frequency (in epochs) to save model')
 
 	# model type 
-	parser.add_argument('--model_type', default='resnet', type=str, help='Encoder: resnet or vit [tiny, small, base]')
+	parser.add_argument('--model_type', default='resnet', type=str, help='Encoder: resnet or byola or vit [tiny, small, base]')
 	parser.add_argument('--latent', default='cls', type=str, help='[CLS] token or mean pool vit outputs')
 	parser.add_argument('--mask_ratio', default=0., type=float, help='masking ratio')
 
@@ -181,6 +181,7 @@ if __name__ == '__main__':
 	mask_ratio = args.mask_ratio
 	save_every = args.save_every
 	combine = args.combine
+	n_mels = args.n_mels
 
 	# distributed training 
 	utils.init_distributed_mode(args)
@@ -266,6 +267,9 @@ if __name__ == '__main__':
 	elif model_type == 'vit_base':
 		model = ViT(feature_dim, dataset, size='base', latent=args.latent).cuda()
 		save_name_pre = '{}_maskratio={}_fdim{}_bs{}_{}'.format(model_type, mask_ratio, feature_dim, batch_size, dataset)
+	elif model_type == 'byola':
+		model = BYOLAv2encoder(feature_dim, dataset, n_mels).cuda()
+		save_name_pre = '{}_fdim{}_bs{}_{}'.format(model_type, args.imagenet, feature_dim, batch_size, dataset)
 
 	if distributed:
 		# sync batch norms
@@ -278,7 +282,7 @@ if __name__ == '__main__':
 			)
 		model_without_ddp = model.module
 
-	if model_type == 'resnet':
+	if 'vit' not in model_type:
 		if dataset == 'cifar10':
 			flops, params = profile(model, inputs=(torch.randn(1, 3, 32, 32).cuda(),))
 		elif dataset == 'tiny_imagenet' or dataset == 'stl10':

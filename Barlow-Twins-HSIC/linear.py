@@ -16,7 +16,7 @@ import torchvision
 import datasets
 from sklearn.metrics import average_precision_score, roc_auc_score
 import wandb
-from model import ResNet, ViT
+from model import ResNet, ViT, BYOLAv2encoder
 
 
 class Net(nn.Module):
@@ -31,6 +31,9 @@ class Net(nn.Module):
 		elif cfg.model_type == 'vit_base':
 			self.f = ViT(dataset=dataset, size='base', latent=cfg.latent).f
 			out_dim = self.f.embed_dim 
+		elif cfg.model_type == 'byola':
+			self.f = BYOLAv2encoder(dataset=dataset).f
+			out_dim = self.f.d
 	
 		# classifier
 		self.fc = nn.Linear(out_dim, num_class, bias=True)
