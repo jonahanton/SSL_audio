@@ -34,7 +34,8 @@ def train(cfg, net, data_loader, train_optimizer, wandb_run):
 	for data_tuple in train_bar:
 		(pos_1, pos_2), _ = data_tuple
 		pos_1, pos_2 = pos_1.cuda(non_blocking=True), pos_2.cuda(non_blocking=True)
-		feature_1, out_1 = net(pos_1, mask_ratio=cfg.mask_ratio)
+		if masked_recon:
+			feature_1, out_1, recon_loss = net(pos_1, mask_ratio=cfg.mask_ratio, masked_recon=masked_recon)
 		feature_2, out_2 = net(pos_2, mask_ratio=0.)
 		# Barlow Twins
 		
@@ -44,9 +45,11 @@ def train(cfg, net, data_loader, train_optimizer, wandb_run):
 		
 		# cross-correlation matrix
 		c = torch.matmul(out_1_norm.T, out_2_norm) / batch_size
-		# reduce between gpus
+		# synchronise between gpus
 		if distributed:
 			torch.distributed.all_reduce(c)
+			if masked_recon:
+				torch.distributed.all_reduce(recon_loss)
 
 		# loss
 		on_diag = torch.diagonal(c).add_(-1).pow_(2).sum()
@@ -59,7 +62,10 @@ def train(cfg, net, data_loader, train_optimizer, wandb_run):
 			# encouraging off_diag to be negative ones
 			off_diag = off_diagonal(c).add_(1).pow_(2).sum()
 		loss = on_diag + lmbda * off_diag
-		
+
+		# add masked patch reconstruction loss
+		if masked_recon:
+			loss = loss + recon_loss
 
 		train_optimizer.zero_grad()
 		loss.backward()
@@ -147,6 +153,8 @@ if __name__ == '__main__':
 	parser.add_argument('--corr_neg_one', dest='corr_neg_one', action='store_true')
 	parser.add_argument('--corr_zero', dest='corr_neg_one', action='store_false')
 	parser.set_defaults(corr_neg_one=False)
+	# joint masked patch reconstruction objective
+	parser.add_argument('--masked_recon', action='store_true', default=False, help='Can only be used with a mask ratio > 0 and a vit encoder')
 
 	# for audio processing
 	parser.add_argument('--unit_sec', type=float, default=0.95)
@@ -180,6 +188,7 @@ if __name__ == '__main__':
 	distributed = args.distributed
 	model_type = args.model_type
 	mask_ratio = args.mask_ratio
+	masked_recon = args.masked_recon
 	save_every = args.save_every
 
 	# distributed training 
@@ -264,8 +273,8 @@ if __name__ == '__main__':
 		model = ResNet(feature_dim, dataset, pretrained=args.imagenet).cuda()
 		save_name_pre = '{}_pretrained={}_fdim{}_bs{}_{}'.format(model_type, args.imagenet, feature_dim, batch_size, dataset)
 	elif model_type == 'vit_base':
-		model = ViT(feature_dim, dataset, size='base', latent=args.latent).cuda()
-		save_name_pre = '{}_maskratio={}_fdim{}_bs{}_{}'.format(model_type, mask_ratio, feature_dim, batch_size, dataset)
+		model = ViT(feature_dim, dataset, size='base', latent=args.latent, masked_recon=masked_recon).cuda()
+		save_name_pre = '{}_maskratio={}_masked_recon={}_fdim{}_bs{}_{}'.format(model_type, masked_recon, mask_ratio, feature_dim, batch_size, dataset)
 	elif model_type == 'byola':
 		model = BYOLAv2encoder(feature_dim, dataset, n_mels).cuda()
 		save_name_pre = '{}_fdim{}_bs{}_{}'.format(model_type, args.imagenet, feature_dim, batch_size, dataset)

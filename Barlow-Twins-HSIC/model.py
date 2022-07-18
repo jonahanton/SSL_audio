@@ -7,27 +7,30 @@ from vision_transformer import mae
 
 
 class ViT(nn.Module):
-	def __init__(self, feature_dim=128, dataset='fsd50k', size='base', latent='cls'):
+	def __init__(self, feature_dim=128, dataset='fsd50k', size='base', latent='cls', masked_recon=False):
 		super(ViT, self).__init__()
 		self.latent = latent 
 
 		# encoder
 		if size == 'base':
-			self.f = mae.mae_vit_base_patch16x16()
+			self.f = mae.mae_vit_base_patch16x16(use_decoder=masked_recon)
 		embed_dim = self.f.embed_dim
 		bottleneck_dim = int(embed_dim / 4)
 		# projection head
 		self.g = nn.Sequential(nn.Linear(embed_dim, bottleneck_dim, bias=False), nn.BatchNorm1d(bottleneck_dim),
 							   nn.ReLU(inplace=True), nn.Linear(bottleneck_dim, feature_dim, bias=True))
 
-	def forward(self, x, mask_ratio=0.):
-		x = self.f(x, mask_ratio=mask_ratio)
+	def forward(self, x, mask_ratio=0., masked_recon=False):
+		if masked_recon:
+			recon_loss, x = self.f(x, mask_ratio=mask_ratio, masked_recon=masked_recon)
 		if self.latent == 'cls':
 			x = x[:, 0]
 		elif self.latent == 'pool':
 			x = torch.mean(x[:, 1:], dim=1)
 		feature = x.contiguous()
 		out = self.g(feature)
+		if masked_recon:
+			return F.normalize(feature, dim=-1), F.normalize(out, dim=-1), recon_loss
 		return F.normalize(feature, dim=-1), F.normalize(out, dim=-1)
 
 
@@ -55,7 +58,7 @@ class ResNet(nn.Module):
 		self.g = nn.Sequential(nn.Linear(2048, 512, bias=False), nn.BatchNorm1d(512),
 							   nn.ReLU(inplace=True), nn.Linear(512, feature_dim, bias=True))
 
-	def forward(self, x, mask_ratio=0.):
+	def forward(self, x, mask_ratio=0., masked_recon=False):
 		x = self.f(x)
 		feature = torch.flatten(x, start_dim=1)
 		out = self.g(feature)
@@ -72,7 +75,7 @@ class BYOLAv2encoder(nn.Module):
 		self.g = nn.Sequential(nn.Linear(embed_dim, bottleneck_dim, bias=False), nn.BatchNorm1d(bottleneck_dim),
 							   nn.ReLU(inplace=True), nn.Linear(bottleneck_dim, feature_dim, bias=True))
 
-	def forward(self, x, mask_ratio=0.):
+	def forward(self, x, mask_ratio=0., masked_recon=False):
 		feature = self.f(x)
 		out = self.g(feature)
 		return F.normalize(feature, dim=-1), F.normalize(out, dim=-1)
