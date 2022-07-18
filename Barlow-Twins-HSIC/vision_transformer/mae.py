@@ -334,12 +334,14 @@ class MaskedAutoencoderViT(nn.Module):
 		loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
 		return loss
 
-	def forward(self, imgs, mask_ratio=0.):
+	def forward(self, imgs, mask_ratio=0., masked_recon=False):
 		latent, mask, ids_restore = self.forward_encoder(imgs, mask_ratio)
-		# pred = self.forward_decoder(latent, ids_restore)  # [N, L, p*p*3]
-		# loss = self.forward_loss(imgs, pred, mask)
-		# return loss, pred, mask
-		return latent
+		if masked_recon:
+			pred = self.forward_decoder(latent, ids_restore)  # [N, L, p*p*3]
+			loss = self.forward_loss(imgs, pred, mask)
+			# return loss, pred, mask
+			return loss, latent
+		return latent 
 
 	def forward_viz(self, imgs, mask_ratio=0.75):
 		loss, pred, mask = self.forward(imgs, mask_ratio)
@@ -388,8 +390,8 @@ def mae_vit_base_patch80x1(**kwargs):
 
 if __name__ == "__main__":
 
-	mae = mae_vit_base_patch16x16()
+	mae = mae_vit_base_patch16x16(use_decoder=True)
 	
 	x = torch.randn(1, 1, 64, 96)
-	out = mae(x, mask_ratio=0.)
-	print(out.shape)
+	loss, latent = mae(x, mask_ratio=0., masked_recon=True)
+	print(latent.shape)
