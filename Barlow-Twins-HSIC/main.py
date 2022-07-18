@@ -190,6 +190,9 @@ if __name__ == '__main__':
 	mask_ratio = args.mask_ratio
 	masked_recon = args.masked_recon
 	save_every = args.save_every
+	if masked_recon:
+		assert 'vit' in model_type, 'model type must be a ViT variant to use joint masked patch reconstruction objective'
+		assert mask_ratio > 0, 'mask ratio must be > 0 if using joint masked patch reconstruction objective'
 
 	# distributed training 
 	utils.init_distributed_mode(args)
