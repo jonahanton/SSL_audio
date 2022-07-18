@@ -181,11 +181,7 @@ if __name__ == '__main__':
 	corr_neg_one = args.corr_neg_one
 	distributed = args.distributed
 	model_type = args.model_type
-<<<<<<< HEAD
-	mask_ratio = args.mask_ratio
-=======
 	save_every = args.save_every
->>>>>>> ffbbe05f930c5feff938216c4ed18c997e27db3c
 
 	# distributed training 
 	utils.init_distributed_mode(args)
@@ -308,9 +304,5 @@ if __name__ == '__main__':
 			if test_acc_1 > best_acc:
 				best_acc = test_acc_1
 				utils.save_on_master(model.state_dict(), 'results/{}/{}_model.pth'.format(dataset, save_name_pre))
-<<<<<<< HEAD
-		if epoch % args.save_every == 0:
-=======
 		if epoch % save_every == 0:
->>>>>>> ffbbe05f930c5feff938216c4ed18c997e27db3c
 			utils.save_on_master(model.state_dict(), 'results/{}/{}_model_{}.pth'.format(dataset, save_name_pre, epoch))
