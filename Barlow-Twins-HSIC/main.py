@@ -162,6 +162,8 @@ if __name__ == '__main__':
 
 	# load pre-computed lms 
 	parser.add_argument('--load_lms', action='store_true', default=True)
+	# load ImageNet pre-trained weights
+	parser.add_argument('--imagenet', action='store_true', default=False)
 
 	# distributed training 
 	parser.add_argument('--distributed', action='store_true', default=False)
@@ -237,7 +239,7 @@ if __name__ == '__main__':
 
 	# model setup and optimizer config
 	if model_type == 'resnet':
-		model = ResNet(feature_dim, dataset).cuda()
+		model = ResNet(feature_dim, dataset, pretrained=args.imagenet).cuda()
 	elif model_type == 'vit_base':
 		model = ViT(feature_dim, dataset, size='base', latent=args.latent).cuda()
 

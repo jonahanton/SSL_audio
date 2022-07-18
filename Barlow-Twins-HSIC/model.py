@@ -32,11 +32,11 @@ class ViT(nn.Module):
 
 
 class ResNet(nn.Module):
-    def __init__(self, feature_dim=128, dataset='cifar10'):
+    def __init__(self, feature_dim=128, dataset='cifar10', pretrained=False):
         super(ResNet, self).__init__()
 
         self.f = []
-        for name, module in resnet50().named_children():
+        for name, module in resnet50(pretrained=pretrained).named_children():
             if name == 'conv1':
                 if dataset == 'fsd50k':
                     module = nn.Conv2d(1, 64, kernel_size=3, stride=1, padding=1, bias=False)
