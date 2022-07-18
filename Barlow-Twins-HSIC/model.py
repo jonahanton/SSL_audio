@@ -73,7 +73,7 @@ class BYOLAv2encoder(nn.Module):
 							   nn.ReLU(inplace=True), nn.Linear(bottleneck_dim, feature_dim, bias=True))
 
 	def forward(self, x, mask_ratio=0.):
-		x = self.f(x)
+		feature = self.f(x)
 		out = self.g(feature)
 		return F.normalize(feature, dim=-1), F.normalize(out, dim=-1)
 
