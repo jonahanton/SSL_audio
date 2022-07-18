@@ -392,6 +392,6 @@ if __name__ == "__main__":
 
 	mae = mae_vit_base_patch16x16(use_decoder=True)
 	
-	x = torch.randn(1, 1, 64, 96)
-	loss, latent = mae(x, mask_ratio=0., masked_recon=True)
-	print(latent.shape)
+	x = torch.randn(128, 1, 64, 96)
+	loss, latent = mae(x, mask_ratio=0.75, masked_recon=True)
+	print(loss)

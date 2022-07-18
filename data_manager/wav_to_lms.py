@@ -98,7 +98,7 @@ def _converter_worker(args):
 	return to_name.name
 
 
-def convert_wav(from_dir, to_dir, sample_rate=16000, suffix='.wav', skip=0, verbose=False):
+def convert_wav(from_dir, to_dir, sample_rate=16000, suffix='.flac', skip=0, verbose=False):
 	from_dir = str(from_dir)
 	files = [str(f).replace(from_dir, '') for f in Path(from_dir).glob(f'**/*{suffix}')]
 	files = [f[1:] if f[0] == '/' else f for f in files]

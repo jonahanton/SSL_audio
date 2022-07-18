@@ -280,7 +280,7 @@ if __name__ == '__main__':
 		save_name_pre = '{}_maskratio={}_masked_recon={}_fdim{}_bs{}_{}'.format(model_type, masked_recon, mask_ratio, feature_dim, batch_size, dataset)
 	elif model_type == 'byola':
 		model = BYOLAv2encoder(feature_dim, dataset, n_mels).cuda()
-		save_name_pre = '{}_fdim{}_bs{}_{}'.format(model_type, args.imagenet, feature_dim, batch_size, dataset)
+		save_name_pre = '{}_fdim{}_bs{}_{}'.format(model_type, feature_dim, batch_size, dataset)
 
 	if distributed:
 		# sync batch norms
