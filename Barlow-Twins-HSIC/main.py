@@ -174,14 +174,13 @@ if __name__ == '__main__':
 	dataset = args.dataset
 	feature_dim, temperature, k = args.feature_dim, args.temperature, args.k
 	batch_size, epochs = args.batch_size, args.epochs
+	n_mels = args.n_mels
 	lmbda = args.lmbda
 	corr_neg_one = args.corr_neg_one
 	distributed = args.distributed
 	model_type = args.model_type
 	mask_ratio = args.mask_ratio
 	save_every = args.save_every
-	combine = args.combine
-	n_mels = args.n_mels
 
 	# distributed training 
 	utils.init_distributed_mode(args)
