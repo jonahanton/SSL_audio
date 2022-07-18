@@ -119,6 +119,86 @@ class FSD50K(Dataset):
 		return lms, label_indices
 
 
+class LibriSpeech(Dataset):
+	
+	def __init__(self, cfg, base_path="data/LibriSpeech/", train=True, transform=None, norm_stats=None):
+		super().__init__()
+		
+		# initializations
+		self.cfg = cfg
+		self.base_path = base_path
+		self.train = train
+		self.transform = transform
+		self.norm_stats = norm_stats
+
+		self.unit_length = int(cfg.unit_sec * cfg.sample_rate)
+		self.to_melspecgram = AT.MelSpectrogram(
+			sample_rate=cfg.sample_rate,
+			n_fft=cfg.n_fft,
+			win_length=cfg.win_length,
+			hop_length=cfg.hop_length,
+			n_mels=cfg.n_mels,
+			f_min=cfg.f_min,
+			f_max=cfg.f_max,
+			power=2,
+		)
+		# load in json file
+		self.datapath = base_path + "librispeech_tr960_cut.json"
+		with open(self.datapath, 'r') as fp:
+			data_json = json.load(fp)
+		self.data = data_json.get('data')
+		
+
+	def __len__(self):
+		return len(self.data)
+		
+		
+	def __getitem__(self, idx):
+		fname, label = self.data[idx]
+
+		if self.cfg.load_lms:
+			# load lms
+			audio_path = self.base_path + fname[:-len(".flac")] + ".npy"
+			lms = torch.tensor(np.load(audio_path)).unsqueeze(0)
+			# Trim or pad
+			l = lms.shape[-1]
+			if l > self.cfg.crop_frames:
+				start = np.random.randint(l - self.cfg.crop_frames)
+				lms = lms[..., start:start + self.cfg.crop_frames]
+			elif l < self.cfg.crop_frames:
+				pad_param = []
+				for i in range(len(lms.shape)):
+					pad_param += [0, self.cfg.crop_frames - l] if i == 0 else [0, 0]
+				lms = F.pad(lms, pad_param, mode='constant', value=0)
+			lms = lms.to(torch.float)
+		else:
+			# load raw audio
+			audio_path = self.base_path + fname
+			wav, org_sr = librosa.load(audio_path, sr=self.cfg.sample_rate)
+			wav = torch.tensor(wav)  # (length,)
+			# zero padding to both ends
+			length_adj = self.unit_length - len(wav)
+			if length_adj > 0:
+				half_adj = length_adj // 2
+				wav = F.pad(wav, (half_adj, length_adj - half_adj))
+			# random crop unit length wave
+			length_adj = len(wav) - self.unit_length
+			start = random.randint(0, length_adj) if length_adj > 0 else 0
+			wav = wav[start:start + self.unit_length]
+			# to log mel spectogram -> (1, n_mels, time)
+			lms = (self.to_melspecgram(wav) + torch.finfo().eps).log()
+			lms = lms.unsqueeze(0)
+		# normalise lms with pre-computed dataset statistics
+		if self.norm_stats is not None:
+			lms = (lms - self.norm_stats[0]) / self.norm_stats[1]
+		# transforms to lms
+		if self.transform is not None:
+			lms = self.transform(lms)
+
+		return lms, None
+
+
+
 def calculate_norm_stats(args):
 
 		# load dataset
