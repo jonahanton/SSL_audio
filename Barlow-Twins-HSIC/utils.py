@@ -11,8 +11,8 @@ import os
 import torch
 
 
-# for FSD50K (audio)
-class FSD50KPairTransform:
+# for audio
+class AudioPairTransform:
 	def __init__(self, train_transform = True, pair_transform=True):
 		if train_transform is True:
 			self.transform = nn.Sequential(

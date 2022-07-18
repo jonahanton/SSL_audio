@@ -129,7 +129,7 @@ def test(net, memory_data_loader, test_data_loader):
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='Train barlow twins')
-	parser.add_argument('--dataset', default='fsd50k', type=str, help='Dataset: fsd50k or cifar10 or tiny_imagenet or stl10')
+	parser.add_argument('--dataset', default='fsd50k', type=str, help='Dataset: fsd50k or librispeech or cifar10 or tiny_imagenet or stl10')
 	parser.add_argument('--feature_dim', default=128, type=int, help='Feature dim for latent vector')
 	parser.add_argument('--temperature', default=0.5, type=float, help='Temperature used in softmax')
 	parser.add_argument('--k', default=200, type=int, help='Top k most similar images used to predict the label')
@@ -180,6 +180,7 @@ if __name__ == '__main__':
 	model_type = args.model_type
 	mask_ratio = args.mask_ratio
 	save_every = args.save_every
+	combine = args.combine
 
 	# distributed training 
 	utils.init_distributed_mode(args)
@@ -219,9 +220,30 @@ if __name__ == '__main__':
 	elif dataset == 'fsd50k':
 		# fsd50k [mean, std] (lms)
 		norm_stats = [-4.950, 5.855]
-		train_data = datasets.FSD50K(args, train=True, transform=utils.FSD50KPairTransform(train_transform = True), norm_stats=norm_stats)
-		memory_data = datasets.FSD50K(args, train=True, transform=utils.FSD50KPairTransform(train_transform = False), norm_stats=norm_stats)
-		test_data = datasets.FSD50K(args, train=False, transform=utils.FSD50KPairTransform(train_transform = False), norm_stats=norm_stats)
+		train_data = datasets.FSD50K(args, train=True, transform=utils.AudioPairTransform(train_transform = True), norm_stats=norm_stats)
+		memory_data = datasets.FSD50K(args, train=True, transform=utils.AudioPairTransform(train_transform = False), norm_stats=norm_stats)
+		test_data = datasets.FSD50K(args, train=False, transform=utils.AudioPairTransform(train_transform = False), norm_stats=norm_stats)
+	elif dataset == 'librispeech':
+		# librispeech960 [mean, std] (lms)
+		norm_stats = [0, 0]
+		train_data = datasets.LibriSpeech(args, train=True, transform=utils.AudioPairTransform(train_transform = True), norm_stats=norm_stats)
+		memory_data = datasets.LibriSpeech(args, train=True, transform=utils.AudioPairTransform(train_transform = False), norm_stats=norm_stats)
+		test_data = datasets.LibriSpeech(args, train=False, transform=utils.AudioPairTransform(train_transform = False), norm_stats=norm_stats)
+	elif dataset == 'fsd50k+librispeech':
+		norm_stats_fsd50k = [-4.950, 5.855]
+		norm_stats_librispeech = [0, 0]
+		train_data = torch.utils.data.dataset.ConcatDataset([
+			datasets.FSD50K(args, train=True, transform=utils.AudioPairTransform(train_transform = True), norm_stats=norm_stats_fsd50k),
+			datasets.LibriSpeech(args, train=True, transform=utils.AudioPairTransform(train_transform = True), norm_stats=norm_stats_librispeech),
+		])
+		memory_data = torch.utils.data.dataset.ConcatDataset([
+			datasets.FSD50K(args, train=True, transform=utils.AudioPairTransform(train_transform = False), norm_stats=norm_stats_fsd50k),
+			datasets.LibriSpeech(args, train=True, transform=utils.AudioPairTransform(train_transform = False), norm_stats=norm_stats_librispeech),
+		])
+		test_data = torch.utils.data.dataset.ConcatDataset([
+			datasets.FSD50K(args, train=False, transform=utils.AudioPairTransform(train_transform = False), norm_stats=norm_stats_fsd50k),
+			datasets.LibriSpeech(args, train=False, transform=utils.AudioPairTransform(train_transform = False), norm_stats=norm_stats_librispeech),
+		])
 	
 	if distributed:
 		train_sampler = torch.utils.data.distributed.DistributedSampler(train_data)
@@ -261,7 +283,7 @@ if __name__ == '__main__':
 			flops, params = profile(model, inputs=(torch.randn(1, 3, 32, 32).cuda(),))
 		elif dataset == 'tiny_imagenet' or dataset == 'stl10':
 			flops, params = profile(model, inputs=(torch.randn(1, 3, 64, 64).cuda(),))
-		elif dataset == 'fsd50k':
+		elif dataset == ('fsd50k' or 'librispeech' or 'fsd50k+librispeech'):
 			flops, params = profile(model, inputs=(torch.randn(1, 1, 64, 96).cuda(),))
 		flops, params = clever_format([flops, params])
 		print('# Model Params: {} FLOPs: {}'.format(params, flops))
@@ -287,7 +309,7 @@ if __name__ == '__main__':
 	best_acc = 0.0
 	for epoch in range(1, epochs + 1):
 		train_loss = train(args, model, train_loader, optimizer, wandb_run)
-		if epoch % 5 == 0 and dataset != 'fsd50k':
+		if epoch % 5 == 0 and dataset in ['cifar10', 'stl10', 'tiny_imagenet']:
 			results['train_loss'].append(train_loss)
 			test_acc_1, test_acc_5 = test(model, memory_loader, test_loader)
 			results['test_acc@1'].append(test_acc_1)
