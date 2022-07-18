@@ -240,8 +240,10 @@ if __name__ == '__main__':
 	# model setup and optimizer config
 	if model_type == 'resnet':
 		model = ResNet(feature_dim, dataset, pretrained=args.imagenet).cuda()
+		save_name_pre = '{}_pretrained={}_{}{}_{}_{}_{}'.format(model_type, args.imagenet, feature_dim, batch_size, dataset)
 	elif model_type == 'vit_base':
 		model = ViT(feature_dim, dataset, size='base', latent=args.latent).cuda()
+		save_name_pre = '{}_maskratio={}_{}{}_{}_{}_{}'.format(model_type, mask_ratio, feature_dim, batch_size, dataset)
 
 	if distributed:
 		# sync batch norms
@@ -279,7 +281,6 @@ if __name__ == '__main__':
 		corr_neg_one_str = 'neg_corr_'
 	else:
 		corr_neg_one_str = ''
-	save_name_pre = '{}_maskratio{}_{}{}_{}_{}_{}'.format(model_type, mask_ratio, corr_neg_one_str, lmbda, feature_dim, batch_size, dataset)
 	
 	if not os.path.exists('results/{}'.format(dataset)):
 		os.mkdir('results/{}'.format(dataset))
