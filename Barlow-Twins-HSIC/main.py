@@ -135,13 +135,8 @@ if __name__ == '__main__':
 	parser.add_argument('--k', default=200, type=int, help='Top k most similar images used to predict the label')
 	parser.add_argument('--batch_size', default=128, type=int, help='Number of images in each mini-batch')
 	parser.add_argument('--epochs', default=20, type=int, help='Number of sweeps over the dataset to train')
-<<<<<<< HEAD
-	parser.add_argument('--save_every', default=20, type=int)
-	
-=======
 	parser.add_argument('--save_every', default=20, type=int, help='Frequency (in epochs) to save model')
 
->>>>>>> ffbbe05f930c5feff938216c4ed18c997e27db3c
 	# model type 
 	parser.add_argument('--model_type', default='resnet', type=str, help='Encoder: resnet or vit [tiny, small, base]')
 	parser.add_argument('--latent', default='cls', type=str, help='[CLS] token or mean pool vit outputs')
@@ -181,6 +176,7 @@ if __name__ == '__main__':
 	corr_neg_one = args.corr_neg_one
 	distributed = args.distributed
 	model_type = args.model_type
+	mask_ratio = args.mask_ratio
 	save_every = args.save_every
 
 	# distributed training 
