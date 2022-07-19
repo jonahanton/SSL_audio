@@ -50,8 +50,10 @@ def train(cfg, net, data_loader, train_optimizer, wandb_run):
 		# synchronise between gpus
 		if distributed:
 			torch.distributed.all_reduce(c)
-			if masked_recon:
-				torch.distributed.all_reduce(recon_loss)
+
+			### Is this right? 
+			# if masked_recon:
+			# 	torch.distributed.all_reduce(recon_loss)
 
 		# loss
 		on_diag = torch.diagonal(c).add_(-1).pow_(2).sum()
