@@ -53,18 +53,7 @@ class ToLogMelSpec:
 			f_max=cfg.f_max,
 			power=2,
 		)
-		# self.to_spec = nnAudio.features.mel.MelSpectrogram(
-		# 	sr=cfg.sample_rate,
-		# 	n_fft=cfg.n_fft,
-		# 	win_length=cfg.window_size,
-		# 	hop_length=cfg.hop_size,
-		# 	n_mels=cfg.n_mels,
-		# 	fmin=cfg.f_min,
-		# 	fmax=cfg.f_max,
-		# 	center=True,
-		# 	power=2,
-		# 	verbose=False,
-		# )
+
 
 	def __call__(self, audio):
 		x = self.to_spec(torch.tensor(audio))
@@ -98,7 +87,7 @@ def _converter_worker(args):
 	return to_name.name
 
 
-def convert_wav(from_dir, to_dir, sample_rate=16000, suffix='.flac', skip=0, verbose=False):
+def convert_wav(from_dir, to_dir, sample_rate=16000, suffix='.wav', skip=0, verbose=False):
 	from_dir = str(from_dir)
 	files = [str(f).replace(from_dir, '') for f in Path(from_dir).glob(f'**/*{suffix}')]
 	files = [f[1:] if f[0] == '/' else f for f in files]
