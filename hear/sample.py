@@ -11,7 +11,7 @@ from torch import Tensor
 from torchaudio.transforms import MelSpectrogram
 
 from model import BYOLAv2encoder, ResNet, ViT
-import utils 
+import hear.utils as utils
 
 # Default frame duration in milliseconds
 TIMESTAMP_FRAME_DUR = 1000
@@ -32,15 +32,15 @@ def get_model(model_name: str="", cfg: EasyDict={}) -> torch.nn.Module:
 	torch.nn.Module object or a tensorflow "trackable" object
 	"""
 	if model_name == 'resnet':
-		model = ResNet(cfg.feature_dim)
+		model = ResNet().f
 	elif model_name == 'byola':
-		model = BYOLAv2encoder(cfg.feature_dim)
+		model = BYOLAv2encoder().f
 	else:
 		raise ValueError(f'Model {model_name} not supported!')
 	return model
 
 
-def load_model(model_file_path: str = "", model_name: str = "default", cfg_path: str = "hear/config.yaml") -> torch.nn.Module:
+def load_model(model_file_path: str = "", model_name: str = "resnet", cfg_path: str = "hear/config.yaml") -> torch.nn.Module:
 	"""Load pre-trained model
 	Parameters
 	----------
@@ -60,7 +60,7 @@ def load_model(model_file_path: str = "", model_name: str = "default", cfg_path:
 	model = get_model(model_name, cfg)
 	
 	state_dict = torch.load(model_file_path, map_location='cpu')
-	model.load_state_dict(state_dict)
+	model.load_state_dict(state_dict, strict=False)
 	return model
 
 
@@ -108,7 +108,7 @@ def get_timestamp_embeddings(
 	# of audio frames that can be batch processed.
 	frames, timestamps = utils.frame_audio(
 		audio_list,
-		frame_size=(frame_duration/1000)*cfg.sample_rate,
+		frame_size=int((frame_duration/1000)*cfg.sample_rate),
 		hop_size=hop_size,
 		sample_rate=cfg.sample_rate,
 	)

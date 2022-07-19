@@ -8,5 +8,3 @@ hop_length: 160
 n_mels: 64
 f_min: 60
 f_max: 7800
-# Dimensions of feature representation
-feature_dim: 128
