@@ -43,14 +43,14 @@ class ResNet(nn.Module):
 		self.f = []
 		for name, module in resnet50(pretrained=pretrained).named_children():
 			if name == 'conv1':
-				if dataset == 'fsd50k':
+				if dataset in ['fsd50k', 'librispeech', 'nsynth'] :
 					module = nn.Conv2d(1, 64, kernel_size=3, stride=1, padding=1, bias=False)
 				else:
 					module = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
 			if dataset == 'cifar10':
 				if not isinstance(module, nn.Linear) and not isinstance(module, nn.MaxPool2d):
 					self.f.append(module)
-			elif dataset == 'tiny_imagenet' or dataset == 'stl10' or dataset == 'fsd50k':
+			else:
 				if not isinstance(module, nn.Linear):
 					self.f.append(module)
 

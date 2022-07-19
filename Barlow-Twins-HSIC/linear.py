@@ -82,6 +82,8 @@ def train_val(net, data_loader, train_optimizer, wandb_run):
 				data_bar.set_description('{} Epoch: [{}/{}] Loss: {:.4f} model: {}'
 										.format('Train' if is_train else 'Test', epoch, epochs, total_loss / total_num,
 												model_path.split('/')[-1]))
+				if is_train:
+					wandb_run.log({'Loss': total_loss / total_num})
 			else:
 				prediction = torch.argsort(out, dim=-1, descending=True)
 				total_correct_1 += torch.sum((prediction[:, 0:1] == target.unsqueeze(dim=-1)).any(dim=-1).float()).item()
@@ -91,8 +93,12 @@ def train_val(net, data_loader, train_optimizer, wandb_run):
 										.format('Train' if is_train else 'Test', epoch, epochs, total_loss / total_num,
 												total_correct_1 / total_num * 100, total_correct_5 / total_num * 100,
 												model_path.split('/')[-1]))
-			if is_train:
-				wandb_run.log({'Loss': total_loss / total_num})
+				if is_train:
+					wandb_run.log({
+						'Loss': total_loss / total_num,
+						'ACC@1': total_correct_1 / total_num * 100,
+						'ACC@5': total_correct_5 / total_num * 100,
+					})
 
 	if dataset == 'fsd50k':
 		all_preds = torch.cat(all_preds, dim=0)
@@ -124,12 +130,15 @@ if __name__ == '__main__':
 	parser.add_argument('--f_min', type=int, default=60)
 	parser.add_argument('--f_max', type=int, default=7800)
 	# load pre-computed lms 
-	parser.add_argument('--load_lms', action='store_true', default=True)
+	parser.add_argument('--load_lms', action='store_true', default=False)
+	# end-to-end finetune 
+	parser.add_argument('--finetune', action='store_true', default=False)
 
 	args = parser.parse_args()
 	model_path, batch_size, epochs = args.model_path, args.batch_size, args.epochs
 	dataset = args.dataset
 	model_type = args.model_type
+	finetune = args.finetune
 
 	# wandb init
 	wandb_run = wandb.init(
@@ -161,12 +170,13 @@ if __name__ == '__main__':
 		test_data = datasets.FSD50K(args, train=False, transform=utils.AudioPairTransform(train_transform=False, pair_transform=False), 
 									norm_stats=norm_stats)
 	elif dataset == 'nsynth':
-		assert args.crop_frames == 4001, 'nsynth average audio length is 4s'
+		if args.load_lms:
+			assert args.crop_frames == 4001, 'nsynth average audio length is 4s'
 		assert 'vit' not in model_type, 'vit encoder not yet supported when using nsynth (due to different audio length)'
 		# nysnth [mean, std] (lms)
 		norm_stats = [-8.82, 7.03]
-		train_data = datasets.NSynth(args, split='train', transform=utils.AudioPairTransform(train_transform=True, pair_transform=False,
-									 norm_stats=norm_stats))
+		train_data = datasets.NSynth(args, split='train', transform=utils.AudioPairTransform(train_transform=True, pair_transform=False),
+									 norm_stats=norm_stats)
 		test_data = datasets.NSynth(args, split='test', transform=utils.AudioPairTransform(train_transform=False, pair_transform=False), 
 									norm_stats=norm_stats)
 
@@ -191,10 +201,12 @@ if __name__ == '__main__':
 			flops, params = profile(model, inputs=(torch.randn(1, 3, 64, 64).cuda(),))
 		elif dataset == 'fsd50k':
 			flops, params = profile(model, inputs=(torch.randn(1, 1, 64, 96).cuda(),))
+		elif dataset == 'nsynth':
+			flops, params = profile(model, inputs=(torch.randn(1, 1, 64, 4001).cuda(),))
 		flops, params = clever_format([flops, params])
 		print('# Model Params: {} FLOPs: {}'.format(params, flops))
 
-	if 'vit' in model_type:
+	if finetune and 'vit' in model_type:
 		optimizer = optim.AdamW(model.parameters(), lr=1e-4, weight_decay=0.1) 
 	else:
 		optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-6)
@@ -208,7 +220,7 @@ if __name__ == '__main__':
 		results = {'train_loss': [], 'train_acc@1': [], 'train_acc@5': [],
 				   'test_loss': [], 'test_acc@1': [], 'test_acc@5': []}
 
-	save_name = model_path.split('.pth')[0] + '_linear.csv'
+	save_name = model_path.split('.pth')[0] + '_linear_{}.csv'.format(dataset)
 
 	best_acc = 0.0
 	for epoch in range(1, epochs + 1):

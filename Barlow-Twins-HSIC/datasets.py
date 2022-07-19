@@ -235,7 +235,6 @@ class NSynth(Dataset):
 		self.data = [(name, data.get("instrument_family")) for name, data in data_json.items()]
 		
 		
-
 	def __len__(self):
 		return len(self.data)
 		
@@ -338,15 +337,12 @@ if __name__ == "__main__":
 	parser.add_argument('--load_lms', action='store_true', default=False)
 
 	args = parser.parse_args()
-	# NSynth av duration is 4s -> crop_frames = 401
-	args.unit_sec = 4
-	calculate_norm_stats(args)
 
-	# dataset = args.dataset
-	# feature_dim, temperature, k = args.feature_dim, args.temperature, args.k
-	# batch_size, epochs = args.batch_size, args.epochs
-	# lmbda = args.lmbda
-	# corr_neg_one = args.corr_neg_one
+	dataset = args.dataset
+	feature_dim, temperature, k = args.feature_dim, args.temperature, args.k
+	batch_size, epochs = args.batch_size, args.epochs
+	lmbda = args.lmbda
+	corr_neg_one = args.corr_neg_one
 
 	# from torch.utils.data import DataLoader
 	# import torch.optim as optim
