@@ -53,7 +53,7 @@ checkpoint:
   save_epoch_it: 10
   ckpt_path:
 logging:
-  log_dir: checkpoint/{}
+  log_dir: /rds/general/user/jla21/ephemeral/SSL_audio/checkpoint/{}
 knn:
   track_knn: true
   track_knn_it: 1
