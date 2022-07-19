@@ -106,7 +106,7 @@ def train_val(net, data_loader, train_optimizer, wandb_run):
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='Linear Evaluation')
-	parser.add_argument('--dataset', default='fsd50k', type=str, help='Dataset: cifar10 or tiny_imagenet or stl10 or fsd50k')
+	parser.add_argument('--dataset', default='fsd50k', type=str, help='Dataset: cifar10 or tiny_imagenet or stl10 or fsd50k or nsynth')
 	parser.add_argument('--model_path', type=str, default='results/fsd50k/0.005_128_128_fsd50k_model_5.pth',
 						help='The base string of the pretrained model path')
 	parser.add_argument('--model_type', default='resnet', type=str, help='Encoder: resnet or vit [tiny, small, base]')
@@ -160,12 +160,23 @@ if __name__ == '__main__':
 									 norm_stats=norm_stats)
 		test_data = datasets.FSD50K(args, train=False, transform=utils.AudioPairTransform(train_transform=False, pair_transform=False), 
 									norm_stats=norm_stats)
+	elif dataset == 'nsynth':
+		assert args.crop_frames == 4001, 'nsynth average audio length is 4s'
+		assert 'vit' not in model_type, 'vit encoder not yet supported when using nsynth (due to different audio length)'
+		# nysnth [mean, std] (lms)
+		norm_stats = [0, 0]
+		train_data = datasets.NSynth(args, split='train', transform=utils.AudioPairTransform(train_transform=True, pair_transform=False,
+									 norm_stats=norm_stats))
+		test_data = datasets.NSynth(args, split='test', transform=utils.AudioPairTransform(train_transform=False, pair_transform=False), 
+									norm_stats=norm_stats)
 
 	train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
 	test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True)
 
 	if dataset == 'fsd50k':
 		c = train_data.label_num
+	elif dataset == 'nsynth':
+		c = 11
 	else:
 		c = len(train_data.classes)
 	
