@@ -7,6 +7,7 @@ from typing import List, Tuple
 from tqdm import tqdm
 from easydict import EasyDict
 import torch
+import torch.nn as nn
 from torch import Tensor
 from torchaudio.transforms import MelSpectrogram
 
@@ -21,23 +22,28 @@ TIMESTAMP_HOP_SIZE = 50
 BATCH_SIZE = 512
 
 
-def get_model(model_name: str="", cfg: EasyDict={}) -> torch.nn.Module:
-	"""Define the model object.
-	Parameters
-	----------
-	model_name: str, the name for pretrained model
-	cfg: dict, the cfg parameters
-	Returns
-	-------
-	torch.nn.Module object or a tensorflow "trackable" object
-	"""
-	if model_name == 'resnet':
-		model = ResNet().f
-	elif model_name == 'byola':
-		model = BYOLAv2encoder().f
-	else:
-		raise ValueError(f'Model {model_name} not supported!')
-	return model
+class ModelWrapper(nn.Module):
+	def __init__(self, cfg, model_name, model_file_path):
+		# needed for HEAR API
+		self.sample_rate = cfg.sample_rate
+		self.model, embed_size = self._get_model(model_name)
+		self._load_weights(model_file_path)
+		self.scene_embedding_size = embed_size
+		self.timestamp_embedding_size = embed_size
+
+	def forward(self, x):
+		return self.model(x)
+
+	def _get_model(self, model_name):
+		if model_name == 'resnet':
+			return ResNet().f, 2048
+		elif model_name == 'byola':
+			return BYOLAv2encoder().f, 3072
+		else:
+			raise ValueError(f'Model {model_name} not supported!')
+
+	def _load_weights(self, model_file_path):
+		self.model.load_state_dict(torch.load(model_file_path, map_location='cpu'), strict=False)
 
 
 def load_model(model_file_path: str = "", model_name: str = "resnet", cfg_path: str = "hear/config.yaml") -> torch.nn.Module:
@@ -52,15 +58,10 @@ def load_model(model_file_path: str = "", model_name: str = "resnet", cfg_path: 
 	torch.nn.Module object 
 		Model loaded with pre-training weights
 	"""
-
 	# Load config file
 	cfg = utils.load_yaml_config(cfg_path)
-
-	# Load pretrained weights.
-	model = get_model(model_name, cfg)
-	
-	state_dict = torch.load(model_file_path, map_location='cpu')
-	model.load_state_dict(state_dict, strict=False)
+	# Load pretrained weights
+	model = ModelWrapper(cfg, model_name, model_file_path)
 	return model
 
 
