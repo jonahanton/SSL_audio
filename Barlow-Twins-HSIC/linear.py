@@ -164,7 +164,7 @@ if __name__ == '__main__':
 		assert args.crop_frames == 4001, 'nsynth average audio length is 4s'
 		assert 'vit' not in model_type, 'vit encoder not yet supported when using nsynth (due to different audio length)'
 		# nysnth [mean, std] (lms)
-		norm_stats = [0, 0]
+		norm_stats = [-8.82, 7.03]
 		train_data = datasets.NSynth(args, split='train', transform=utils.AudioPairTransform(train_transform=True, pair_transform=False,
 									 norm_stats=norm_stats))
 		test_data = datasets.NSynth(args, split='test', transform=utils.AudioPairTransform(train_transform=False, pair_transform=False), 
