@@ -20,8 +20,8 @@ class ViT(nn.Module):
 		self.g = nn.Sequential(nn.Linear(embed_dim, bottleneck_dim, bias=False), nn.BatchNorm1d(bottleneck_dim),
 							   nn.ReLU(inplace=True), nn.Linear(bottleneck_dim, feature_dim, bias=True))
 
-	def forward(self, x, mask_ratio=0., masked_recon=False):
-		x = self.f(x, mask_ratio=mask_ratio)
+	def forward(self, x):
+		x = self.f(x)
 		if self.latent == 'cls':
 			x = x[:, 0]
 		else:
@@ -50,14 +50,16 @@ class ResNet(nn.Module):
 					self.f.append(module)
 
 		# encoder
-		self.f = nn.Sequential(*self.f)
+		self.f = nn.Sequential(
+            *self.f,
+            nn.Flatten(start_dim=1),
+        )
 		# projection head
 		self.g = nn.Sequential(nn.Linear(2048, 512, bias=False), nn.BatchNorm1d(512),
 							   nn.ReLU(inplace=True), nn.Linear(512, feature_dim, bias=True))
 
 	def forward(self, x):
 		x = self.f(x)
-		feature = torch.flatten(x, start_dim=1)
 		out = self.g(feature)
 		return F.normalize(feature, dim=-1), F.normalize(out, dim=-1)
 
