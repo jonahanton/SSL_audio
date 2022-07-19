@@ -36,6 +36,8 @@ def train(cfg, net, data_loader, train_optimizer, wandb_run):
 		pos_1, pos_2 = pos_1.cuda(non_blocking=True), pos_2.cuda(non_blocking=True)
 		if masked_recon:
 			feature_1, out_1, recon_loss = net(pos_1, mask_ratio=cfg.mask_ratio, masked_recon=masked_recon)
+		else:
+			feature_1, out_1 = net(pos_1, mask_ratio=cfg.mask_ratio)
 		feature_2, out_2 = net(pos_2, mask_ratio=0.)
 		# Barlow Twins
 		
