@@ -1,4 +1,5 @@
 """
+Data augmentations on log mel spectrogram, taken from BYOL-A(v2)
 Copy-paste from https://github.com/nttcslab/byol-a/blob/master/v2/byol_a2/augmentations.py
 """
 import torch 

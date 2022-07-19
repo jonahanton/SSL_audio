@@ -1,21 +1,16 @@
-import argparse
-
-import pandas as pd
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from thop import profile, clever_format
 from torch.utils.data import DataLoader
-from torchvision.datasets import CIFAR10
+import torchvision
+from sklearn.metrics import average_precision_score, roc_auc_score
+import wandb
+import argparse
+import pandas as pd
 from tqdm import tqdm
 
 import utils
-
-import torchvision
-
 import datasets
-from sklearn.metrics import average_precision_score, roc_auc_score
-import wandb
 from model import ResNet, ViT, BYOLAv2encoder
 
 
@@ -44,22 +39,18 @@ class Net(nn.Module):
 	def forward(self, x):
 		x = self.f(x)
 		if self.cfg.model_type == 'vit_base':
-			if self.cfg.latent == 'cls':
-				x = x[:, 0]
-			elif self.cfg.latent == 'pool':
-				x = torch.mean(x[:, 1:], dim=1)
-			x = x.contiguous()
+			x = x[:, 0].contiguous()
 		feature = torch.flatten(x, start_dim=1)
 		out = self.fc(feature)
 		return out
 
-# train or test for one epoch
-def train_val(net, data_loader, train_optimizer, wandb_run):
+
+def train_val(args, net, data_loader, train_optimizer, wandb_run):
 	is_train = train_optimizer is not None
 	net.train() if is_train else net.eval()
 
 	total_loss, total_num, data_bar = 0.0, 0, tqdm(data_loader)
-	if dataset == 'fsd50k':
+	if args.dataset == 'fsd50k':
 		all_targets, all_preds = [], []
 	else:
 		total_correct_1, total_correct_5 = 0.0, 0.0 
@@ -76,12 +67,12 @@ def train_val(net, data_loader, train_optimizer, wandb_run):
 
 			total_num += data.size(0)
 			total_loss += loss.item() * data.size(0)
-			if dataset == 'fsd50k':
+			if args.dataset == 'fsd50k':
 				all_targets.append(target)
 				all_preds.append(out.sigmoid())
 				data_bar.set_description('{} Epoch: [{}/{}] Loss: {:.4f} model: {}'
-										.format('Train' if is_train else 'Test', epoch, epochs, total_loss / total_num,
-												model_path.split('/')[-1]))
+										.format('Train' if is_train else 'Test', epoch, args.epochs, total_loss / total_num,
+												args.model_path.split('/')[-1]))
 				if is_train:
 					wandb_run.log({'Loss': total_loss / total_num})
 			else:
@@ -90,9 +81,9 @@ def train_val(net, data_loader, train_optimizer, wandb_run):
 				total_correct_5 += torch.sum((prediction[:, 0:5] == target.unsqueeze(dim=-1)).any(dim=-1).float()).item()
 
 				data_bar.set_description('{} Epoch: [{}/{}] Loss: {:.4f} ACC@1: {:.2f}% ACC@5: {:.2f}% model: {}'
-										.format('Train' if is_train else 'Test', epoch, epochs, total_loss / total_num,
+										.format('Train' if is_train else 'Test', epoch, args.epochs, total_loss / total_num,
 												total_correct_1 / total_num * 100, total_correct_5 / total_num * 100,
-												model_path.split('/')[-1]))
+												args.model_path.split('/')[-1]))
 				if is_train:
 					wandb_run.log({
 						'Loss': total_loss / total_num,
@@ -100,7 +91,7 @@ def train_val(net, data_loader, train_optimizer, wandb_run):
 						'ACC@5': total_correct_5 / total_num * 100,
 					})
 
-	if dataset == 'fsd50k':
+	if args.dataset == 'fsd50k':
 		all_preds = torch.cat(all_preds, dim=0)
 		all_targets = torch.cat(all_targets, dim=0)
 		mAP = average_precision_score(y_true=all_targets.detach().cpu(), y_score=all_preds.detach().cpu(), average='macro') 
@@ -113,12 +104,13 @@ def train_val(net, data_loader, train_optimizer, wandb_run):
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='Linear Evaluation')
 	parser.add_argument('--dataset', default='fsd50k', type=str, help='Dataset: cifar10 or tiny_imagenet or stl10 or fsd50k or nsynth')
-	parser.add_argument('--model_path', type=str, default='results/fsd50k/0.005_128_128_fsd50k_model_5.pth',
-						help='The base string of the pretrained model path')
-	parser.add_argument('--model_type', default='resnet', type=str, help='Encoder: resnet or vit [tiny, small, base]')
-	parser.add_argument('--latent', default='cls', type=str, help='[CLS] token or mean pool vit outputs')
-	parser.add_argument('--batch_size', type=int, default=256, help='Number of images in each mini-batch')
+	parser.add_argument('--num_classes', default=200, type=int)
+	parser.add_argument('--model_path', type=str, default=None, help='The base string of the pretrained model path')
+	parser.add_argument('--model_type', default='resnet', type=str, help='Encoder: resnet or vit (base)')
+	parser.add_argument('--batch_size', type=int, default=256, help='Number of samples in each mini-batch')
 	parser.add_argument('--epochs', type=int, default=50, help='Number of sweeps over the dataset to train')
+	parser.add_argument('--lr', type=float, default=1e-3)
+	parser.add_argument('--wd', type=float, default=1e-6)
 	# for audio processing
 	parser.add_argument('--unit_sec', type=float, default=0.95)
 	parser.add_argument('--crop_frames', type=int, default=96)
@@ -133,46 +125,30 @@ if __name__ == '__main__':
 	parser.add_argument('--load_lms', action='store_true', default=False)
 	# end-to-end finetune 
 	parser.add_argument('--finetune', action='store_true', default=False)
+	parser.add_argument('--num_workers', type=int, default=4)
 
 	args = parser.parse_args()
-	model_path, batch_size, epochs = args.model_path, args.batch_size, args.epochs
-	dataset = args.dataset
-	model_type = args.model_type
-	finetune = args.finetune
 
 	# wandb init
 	wandb_run = wandb.init(
-			project='barlow twins {} linear'.format(dataset),
+			project='barlow twins {} linear'.format(args.dataset),
 			config=args,
 			settings=wandb.Settings(start_method="fork"),
 		)
 
-	if dataset == 'cifar10':
-		train_data = CIFAR10(root='data', train=True,\
-			transform=utils.CifarPairTransform(train_transform = True, pair_transform=False), download=True)
-		test_data = CIFAR10(root='data', train=False,\
-			transform=utils.CifarPairTransform(train_transform = False, pair_transform=False), download=True)
-	elif dataset == 'stl10':
-		train_data =  torchvision.datasets.STL10(root='data', split="train", \
-			transform=utils.StlPairTransform(train_transform = True, pair_transform=False), download=True)
-		test_data =  torchvision.datasets.STL10(root='data', split="test", \
-			transform=utils.StlPairTransform(train_transform = False, pair_transform=False), download=True)
-	elif dataset == 'tiny_imagenet':
-		train_data = torchvision.datasets.ImageFolder('data/tiny-imagenet-200/train', \
-							utils.TinyImageNetPairTransform(train_transform=True, pair_transform=False))
-		test_data = torchvision.datasets.ImageFolder('data/tiny-imagenet-200/val', \
-							utils.TinyImageNetPairTransform(train_transform = False, pair_transform=False))
-	elif dataset == 'fsd50k':
+	if args.dataset == 'cifar10':
+		train_data = torchvision.datasetsCIFAR10(root='data', train=True,\
+			transform=utils.CifarPairTransform(train_transform=True, pair_transform=False), download=True)
+		test_data = torchvision.datasetsCIFAR10(root='data', train=False,\
+			transform=utils.CifarPairTransform(train_transform=False, pair_transform=False), download=True)
+	elif args.dataset == 'fsd50k':
 		# fsd50k [mean, std] (lms)
 		norm_stats = [-4.950, 5.855]
 		train_data = datasets.FSD50K(args, train=True, transform=utils.AudioPairTransform(train_transform=True, pair_transform=False),
 									 norm_stats=norm_stats)
 		test_data = datasets.FSD50K(args, train=False, transform=utils.AudioPairTransform(train_transform=False, pair_transform=False), 
 									norm_stats=norm_stats)
-	elif dataset == 'nsynth':
-		if args.load_lms:
-			assert args.crop_frames == 4001, 'nsynth average audio length is 4s'
-		assert 'vit' not in model_type, 'vit encoder not yet supported when using nsynth (due to different audio length)'
+	elif args.dataset == 'nsynth':
 		# nysnth [mean, std] (lms)
 		norm_stats = [-8.82, 7.03]
 		train_data = datasets.NSynth(args, split='train', transform=utils.AudioPairTransform(train_transform=True, pair_transform=False),
@@ -180,39 +156,21 @@ if __name__ == '__main__':
 		test_data = datasets.NSynth(args, split='test', transform=utils.AudioPairTransform(train_transform=False, pair_transform=False), 
 									norm_stats=norm_stats)
 
-	train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
-	test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True)
+	train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True)
+	test_loader = DataLoader(test_data, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, pin_memory=True)
 
-	if dataset == 'fsd50k':
-		c = train_data.label_num
-	elif dataset == 'nsynth':
-		c = 11
-	else:
-		c = len(train_data.classes)
 	
-	model = Net(args, num_class=c, pretrained_path=model_path, dataset=dataset).cuda()
-	if not finetune:
+	model = Net(args, num_class=args.num_classes, pretrained_path=args.model_path, dataset=args.dataset).cuda()
+	if not args.finetune:
 		for param in model.f.parameters():
 			param.requires_grad = False
 
-	if 'vit' not in model_type:
-		if dataset == 'cifar10':
-			flops, params = profile(model, inputs=(torch.randn(1, 3, 32, 32).cuda(),))
-		elif dataset == 'tiny_imagenet' or dataset == 'stl10':
-			flops, params = profile(model, inputs=(torch.randn(1, 3, 64, 64).cuda(),))
-		elif dataset == 'fsd50k':
-			flops, params = profile(model, inputs=(torch.randn(1, 1, 64, 96).cuda(),))
-		elif dataset == 'nsynth':
-			flops, params = profile(model, inputs=(torch.randn(1, 1, 64, 4001).cuda(),))
-		flops, params = clever_format([flops, params])
-		print('# Model Params: {} FLOPs: {}'.format(params, flops))
-
-	if finetune and 'vit' in model_type:
-		optimizer = optim.AdamW(model.parameters(), lr=1e-4, weight_decay=0.1) 
+	if args.finetune and 'vit' in args.model_type:
+		optimizer = optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.lr) 
 	else:
-		optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-6)
+		optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.wd)
 
-	if dataset == 'fsd50k':
+	if args.dataset == 'fsd50k':
 		loss_criterion = nn.BCEWithLogitsLoss()
 		results = {'train_loss': [], 'train_mAP': [], 'train_AUC': [],
 				   'test_loss': [], 'test_mAP': [], 'test_AUC': []}
@@ -221,13 +179,13 @@ if __name__ == '__main__':
 		results = {'train_loss': [], 'train_acc@1': [], 'train_acc@5': [],
 				   'test_loss': [], 'test_acc@1': [], 'test_acc@5': []}
 
-	save_name = model_path.split('.pth')[0] + '_linear_{}.csv'.format(dataset)
+	save_name = args.model_path.split('.pth')[0] + '_linear_{}.csv'.format(args.dataset)
 
 	best_acc = 0.0
-	for epoch in range(1, epochs + 1):
-		train_loss, train_stats = train_val(model, train_loader, optimizer, wandb_run)
+	for epoch in range(1, args.epochs + 1):
+		train_loss, train_stats = train_val(args, model, train_loader, optimizer, wandb_run)
 		results['train_loss'].append(train_loss)
-		if dataset == 'fsd50k':
+		if args.dataset == 'fsd50k':
 			results['train_mAP'].append(train_stats['mAP'])
 			results['train_AUC'].append(train_stats['AUC'])
 			wandb_run.log({
@@ -243,7 +201,7 @@ if __name__ == '__main__':
 			})
 		test_loss, test_stats = train_val(model, test_loader, None, wandb_run)
 		results['test_loss'].append(test_loss)
-		if dataset == 'fsd50k':
+		if args.dataset == 'fsd50k':
 			results['test_mAP'].append(test_stats['mAP'])
 			results['test_AUC'].append(test_stats['AUC'])
 			wandb_run.log({
@@ -260,6 +218,3 @@ if __name__ == '__main__':
 		# save statistics
 		data_frame = pd.DataFrame(data=results, index=range(1, epoch + 1))
 		data_frame.to_csv(save_name, index_label='epoch')
-		#if test_acc_1 > best_acc:
-		#    best_acc = test_acc_1
-		#    torch.save(model.state_dict(), 'results/linear_model.pth')
