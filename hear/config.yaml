@@ -1,0 +1,12 @@
+# Unit duration in seconds for one audio segment
+unit_sec: 0.95
+# FFT parameters
+sample_rate: 16000
+n_fft: 1024
+win_length: 400
+hop_length: 160
+n_mels: 64
+f_min: 60
+f_max: 7800
+# Dimensions of feature representation
+feature_dim: 128

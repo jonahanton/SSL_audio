@@ -32,16 +32,16 @@ class ViT(nn.Module):
 
 
 class ResNet(nn.Module):
-	def __init__(self, feature_dim=128, dataset='cifar10'):
+	def __init__(self, feature_dim=128, dataset='fsd50k'):
 		super().__init__()
 
 		self.f = []
 		for name, module in resnet50().named_children():
 			if name == 'conv1':
-				if dataset in ['fsd50k', 'librispeech', 'nsynth'] :
-					module = nn.Conv2d(1, 64, kernel_size=3, stride=1, padding=1, bias=False)
-				else:
+				if dataset == 'cifar10' :
 					module = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
+				else:
+					module = nn.Conv2d(1, 64, kernel_size=3, stride=1, padding=1, bias=False)
 			if dataset == 'cifar10':
 				if not isinstance(module, nn.Linear) and not isinstance(module, nn.MaxPool2d):
 					self.f.append(module)
