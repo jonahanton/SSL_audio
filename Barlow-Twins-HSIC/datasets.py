@@ -286,7 +286,7 @@ class NSynth(Dataset):
 
 
 
-def calculate_norm_stats(args, n_norm_calc=2):
+def calculate_norm_stats(args, n_norm_calc=10000):
 
 		# load dataset
 		dataset = NSynth(args)
@@ -296,9 +296,8 @@ def calculate_norm_stats(args, n_norm_calc=2):
 		lms_vectors = []
 		for i in tqdm(idxs):
 			lms_vectors.append(dataset[i][0])
-		print(lms_vectors[0].shape)
 		lms_vectors = torch.stack(lms_vectors)
-		norm_stats = lms_vectors.mean(), lms_vectors.std() + torch.finfo().eps
+		norm_stats = float(lms_vectors.mean()), float(lms_vectors.std() + torch.finfo().eps)
 
 		print(f'Dataset contains {len(dataset)} files with normalizing stats\n'
 			  f'mean: {norm_stats[0]}\t std: {norm_stats[1]}')
@@ -339,7 +338,7 @@ if __name__ == "__main__":
 	parser.add_argument('--load_lms', action='store_true', default=False)
 
 	args = parser.parse_args()
-	# NSynth av duration is 4s 
+	# NSynth av duration is 4s -> crop_frames = 401
 	args.unit_sec = 4
 	calculate_norm_stats(args)
 
