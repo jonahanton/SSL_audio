@@ -117,7 +117,7 @@ if __name__ == '__main__':
 						help='The base string of the pretrained model path')
 	parser.add_argument('--model_type', default='resnet', type=str, help='Encoder: resnet or vit [tiny, small, base]')
 	parser.add_argument('--latent', default='cls', type=str, help='[CLS] token or mean pool vit outputs')
-	parser.add_argument('--batch_size', type=int, default=512, help='Number of images in each mini-batch')
+	parser.add_argument('--batch_size', type=int, default=256, help='Number of images in each mini-batch')
 	parser.add_argument('--epochs', type=int, default=50, help='Number of sweeps over the dataset to train')
 	# for audio processing
 	parser.add_argument('--unit_sec', type=float, default=0.95)
@@ -191,8 +191,9 @@ if __name__ == '__main__':
 		c = len(train_data.classes)
 	
 	model = Net(args, num_class=c, pretrained_path=model_path, dataset=dataset).cuda()
-	for param in model.f.parameters():
-		param.requires_grad = False
+	if not finetune:
+		for param in model.f.parameters():
+			param.requires_grad = False
 
 	if 'vit' not in model_type:
 		if dataset == 'cifar10':
