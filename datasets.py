@@ -281,6 +281,77 @@ class NSynth(Dataset):
 		return lms, label
 
 
+def make_index_dict(label_csv):
+	index_lookup = {}
+	with open(label_csv, 'r') as f:
+		csv_reader = csv.DictReader(f)
+		line_count = 0
+		for row in csv_reader:
+			index_lookup[row['mid']] = row['index']
+			line_count += 1
+	return index_lookup
+
+
+class AudioSet(Dataset):
+	def __init__(self, cfg, transform=None, norm_stas=None):
+		super().__init__()
+
+		self.cfg = cfg 
+		self.transform = transform
+		self.norm_stats = norm_stats
+		self.base_dir = "data/audioset_lms/unbalanced_train_segments"
+
+		# load in csv file
+		df = pd.read_csv(os.path.join(self.base_dir, "unbalanced_train_segments-downloaded.csv"), header=None)
+		# first column contains the audio fnames
+		self.audio_fnames = np.asarray(self.combined_df.iloc[:, 0])
+		# second column contains the labels (separated by # for multi-label)
+		self.labels = np.asarray(self.combined_df.iloc[:, 1])
+		# third column contains the identifier (balanced_train_segments or unbalanced_train_segments)
+		self.ident = np.asarray(self.combined_df.iloc[:, 2])
+		# load in class labels and create label -> index look-up dict 
+		self.index_dict = make_index_dict(os.path.join(self.base_dir, "class_labels_indices.csv"))
+		self.label_num = len(self.index_dict)
+
+
+	def __len__(self):
+		return len(self.audio_fnames)
+
+
+	def __getitem__(self, idx):
+		
+		audio_fname = self.audio_fnames[idx]
+		labels = self.labels[idx]
+		ident = self.ident[idx]
+		# initialize the label
+		label_indices = np.zeros(self.label_num)
+		# add sample labels
+		for label_str in labels.split('#'):
+			label_indices[int(self.index_dict[label_str])] = 1.0
+		label_indices = torch.FloatTensor(label_indices)
+		# load .npy spectrograms 
+		audio_fpath = os.path.join(os.path.join(*[self.base_dir, "unbalanced_train_segments", f"{audio_fname}.npy"]))
+		lms = torch.tensor(np.load(audio_fpath)).unsqueeze(0)
+		# Trim or pad
+		l = lms.shape[-1]
+		if l > self.cfg.crop_frames:
+			start = np.random.randint(l - self.cfg.crop_frames)
+			lms = lms[..., start:start + self.cfg.crop_frames]
+		elif l < self.cfg.crop_frames:
+			pad_param = []
+			for i in range(len(lms.shape)):
+				pad_param += [0, self.cfg.crop_frames - l] if i == 0 else [0, 0]
+			lms = F.pad(lms, pad_param, mode='constant', value=0)
+		lms = lms.to(torch.float)
+		# normalize
+		if self.norm_stats is not None:
+			lms = (lms - self.norm_stats[0]) / self.norm_stats[1]
+		# transforms
+		if self.transform is not None:
+			lms = self.transform(lms)
+			
+		return lms, label_indices
+
 
 def calculate_norm_stats(dataset, n_norm_calc=10000):
 
