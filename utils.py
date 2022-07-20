@@ -1,12 +1,13 @@
 from PIL import Image
 from torchvision import transforms
+import torch
 import torch.nn as nn
 import augmentations 
 import builtins
 import datetime
 import torch.distributed as dist
 import os
-import torch
+import sys
 
 
 """--------------------------------Data transforms---------------------------------"""
@@ -56,8 +57,7 @@ class CifarPairTransform:
 """--------------------------------For distributed training---------------------------------"""
 def init_distributed_mode(cfg):
 
-	if cfg.distributed:
-
+	if 'RANK' in os.environ:
 		cfg.rank = int(os.environ['RANK'])
 		cfg.gpu = int(os.environ['LOCAL_RANK'])
 		cfg.world_size = int(os.environ['WORLD_SIZE'])
@@ -73,8 +73,12 @@ def init_distributed_mode(cfg):
 			+ f"rank = {dist.get_rank()}, backend={dist.get_backend()}"
 		)
 		dist.barrier()
-	else:
+	elif torch.cuda.is_available():
+		print('Will run the code on one GPU.')
 		cfg.rank, cfg.gpu, cfg.world_size = 0, 0, 1
+	else:
+		print('Does not support training without GPU.')
+		sys.exit(1)
 		
 	torch.cuda.set_device(cfg.gpu)
 	setup_for_distributed(cfg.rank == 0)

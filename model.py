@@ -69,8 +69,9 @@ class BarlowTwins(nn.Module):
 
 
 class AudioResNet50(nn.Module):
-	def __init__(self):
+	def __init__(self, cfg):
 		super().__init__()
+		self.cfg = cfg
 
 		convs = []
 		for name, module in resnet50().named_children():
@@ -146,8 +147,9 @@ class AudioNTT2022Encoder(nn.Module):
 
 
 class AudioNTT2022(AudioNTT2022Encoder):
-	def __init__(self, n_mels=64, d=3072, mlp_hidden_d=2048):
+	def __init__(self, cfg, n_mels=64, d=3072, mlp_hidden_d=2048):
 		super().__init__(n_mels=n_mels, d=d, mlp_hidden_d=mlp_hidden_d)
+		self.cfg = cfg
 		self.embed_dim = d
 
 	def forward(self, x):
