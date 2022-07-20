@@ -70,7 +70,4 @@ def convert_wav(from_dir, to_dir, sample_rate=16000, suffix='.wav', skip=0, verb
 
 if __name__ == "__main__":
     mp.set_start_method('spawn', force=True)
-    convert_wav(
-        from_dir='data/mridangam_stroke-v1.5-full',
-        to_dir='data/mridangam_stroke-v1.5-full-16kHz'
-    )
+    fire.Fire(convert_wav)
