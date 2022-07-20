@@ -131,6 +131,9 @@ if __name__ == '__main__':
 			datasets.FSD50K(args, train=True, transform=utils.AudioPairTransform(train_transform = True), norm_stats=norm_stats_fsd50k),
 			datasets.LibriSpeech(args, train=True, transform=utils.AudioPairTransform(train_transform = True), norm_stats=norm_stats_librispeech),
 		])
+	elif args.dataset == 'audioset':
+		norm_stats = [-0.8294, 4.6230]
+		train_data = datasets.AudioSet(args, transform=utils.AudioPairTransform(train_transform = True), norm_stats=norm_stats)
 	
 	if args.distributed:
 		train_sampler = torch.utils.data.distributed.DistributedSampler(train_data)

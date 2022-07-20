@@ -11,6 +11,7 @@ import argparse
 from tqdm import tqdm
 import librosa
 import json
+import os
 
 
 def make_index_dict(label_csv):
@@ -281,19 +282,8 @@ class NSynth(Dataset):
 		return lms, label
 
 
-def make_index_dict(label_csv):
-	index_lookup = {}
-	with open(label_csv, 'r') as f:
-		csv_reader = csv.DictReader(f)
-		line_count = 0
-		for row in csv_reader:
-			index_lookup[row['mid']] = row['index']
-			line_count += 1
-	return index_lookup
-
-
 class AudioSet(Dataset):
-	def __init__(self, cfg, transform=None, norm_stas=None):
+	def __init__(self, cfg, transform=None, norm_stats=None):
 		super().__init__()
 
 		self.cfg = cfg 
@@ -304,11 +294,11 @@ class AudioSet(Dataset):
 		# load in csv file
 		df = pd.read_csv(os.path.join(self.base_dir, "unbalanced_train_segments-downloaded.csv"), header=None)
 		# first column contains the audio fnames
-		self.audio_fnames = np.asarray(self.combined_df.iloc[:, 0])
+		self.audio_fnames = np.asarray(df.iloc[:, 0])
 		# second column contains the labels (separated by # for multi-label)
-		self.labels = np.asarray(self.combined_df.iloc[:, 1])
+		self.labels = np.asarray(df.iloc[:, 1])
 		# third column contains the identifier (balanced_train_segments or unbalanced_train_segments)
-		self.ident = np.asarray(self.combined_df.iloc[:, 2])
+		self.ident = np.asarray(df.iloc[:, 2])
 		# load in class labels and create label -> index look-up dict 
 		self.index_dict = make_index_dict(os.path.join(self.base_dir, "class_labels_indices.csv"))
 		self.label_num = len(self.index_dict)
