@@ -4,80 +4,104 @@ import torch.nn.functional as F
 from torchvision.models.resnet import resnet50
 
 from vision_transformer import mae
+import utils 
+
+
+def off_diagonal(x):
+	# return a flattened view of the off-diagonal elements of a square matrix
+	n, m = x.shape
+	assert n == m
+	return x.flatten()[:-1].view(n - 1, n + 1)[:, 1:].flatten()
+
+
+class BarlowTwins(nn.Module):
+	
+	def __init__(self, cfg):
+		super().__init__()
+		self.cfg = cfg
+		self._setup_model()
+	
+
+	def _setup_model(self):
+		
+		if self.cfg.model_type == 'resnet50':
+			self.encoder = AudioResNet50(self.cfg)
+		elif self.cfg.model_type == 'audiontt':
+			self.encoder = AudioNTT2022(self.cfg)
+		elif self.cfg.model_type == 'vit':
+			self.encoder = ViT(self.cfg)
+		else:
+			raise NotImplementedError(f'Model type {self.cfg.model_type} is not supported')
+		feature_dim = self.encoder.embed_dim
+		
+		sizes = [feature_dim, 4*feature_dim, 4*feature_dim, 4*feature_dim]
+		layers = []
+		for i in range(len(sizes) - 2):
+			layers.append(nn.Linear(sizes[i], sizes[i + 1], bias=False))
+			layers.append(nn.BatchNorm1d(sizes[i + 1]))
+			layers.append(nn.ReLU(inplace=True))
+		layers.append(nn.Linear(sizes[-2], sizes[-1], bias=False))
+		self.projector = nn.Sequential(*layers)
+
+		self.bn = nn.BatchNorm1d(sizes[-1], affine=False)
+	
+
+	def forward(self, y1, y2):
+		
+		feature1 = self.encoder(y1)
+		feature2 = self.encoder(y2)
+
+		z1 = self.projector(feature1)
+		z2 = self.projector(feature2)
+		
+		# empirical cross-correlation matrix
+		c = self.bn(z1).T @ self.bn(z2)
+		
+		# sum the cross-correlation matrix between all gpus
+		c.div_(z1.shape[0])
+		if utils.is_dist_avail_and_initialized():
+			torch.distributed.all_reduce(c)
+		
+		on_diag = torch.diagonal(c).add_(-1).pow_(2).sum()
+		off_diag = off_diagonal(c).pow_(2).sum()
+		loss = on_diag + self.cfg.lambd * off_diag
+		return loss
+
+
+class AudioResNet50(nn.Module):
+	def __init__(self):
+		super().__init__()
+
+		convs = []
+		for name, module in resnet50().named_children():
+			if name == 'conv1':
+				module = nn.Conv2d(1, 64, kernel_size=3, stride=1, padding=1, bias=False)
+			if not isinstance(module, nn.Linear):
+				convs.append(module)
+		self.features = nn.Sequential(*convs)
+		self.embed_dim = 2048
+
+	def forward(self, x):
+		out = self.features(x)
+		out = torch.flatten(x, start_dim=1)
+		return out
 
 
 class ViT(nn.Module):
-	def __init__(self, feature_dim=128, size='base', latent='cls'):
+	def __init__(self, cfg):
 		super().__init__()
-		self.latent = latent 
-
-		# encoder
-		if size == 'base':
-			self.f = mae.mae_vit_base_patch16x16()
-		embed_dim = self.f.embed_dim
-		bottleneck_dim = int(embed_dim / 4)
-		# projection head
-		self.g = nn.Sequential(nn.Linear(embed_dim, bottleneck_dim, bias=False), nn.BatchNorm1d(bottleneck_dim),
-							   nn.ReLU(inplace=True), nn.Linear(bottleneck_dim, feature_dim, bias=True))
+		self.cfg = cfg
+		self.encoder = mae.mae_vit_base_patch16x16()
+		self.embed_dim = self.encoder.embed_dim
 
 	def forward(self, x):
-		x = self.f(x)
-		if self.latent == 'cls':
+		x = self.encoder(x)
+		if self.cfg.latent == 'cls':
 			x = x[:, 0]
 		else:
 			x = torch.mean(x[:, 1:], dim=1)
 		feature = x.contiguous()
-		out = self.g(feature)
-		return F.normalize(feature, dim=-1), F.normalize(out, dim=-1)
-
-
-class ResNet(nn.Module):
-	def __init__(self, feature_dim=128, dataset='fsd50k'):
-		super().__init__()
-
-		self.f = []
-		for name, module in resnet50().named_children():
-			if name == 'conv1':
-				if dataset == 'cifar10' :
-					module = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
-				else:
-					module = nn.Conv2d(1, 64, kernel_size=3, stride=1, padding=1, bias=False)
-			if dataset == 'cifar10':
-				if not isinstance(module, nn.Linear) and not isinstance(module, nn.MaxPool2d):
-					self.f.append(module)
-			else:
-				if not isinstance(module, nn.Linear):
-					self.f.append(module)
-
-		# encoder
-		self.f = nn.Sequential(
-            *self.f,
-            nn.Flatten(start_dim=1),
-        )
-		# projection head
-		self.g = nn.Sequential(nn.Linear(2048, 512, bias=False), nn.BatchNorm1d(512),
-							   nn.ReLU(inplace=True), nn.Linear(512, feature_dim, bias=True))
-
-	def forward(self, x):
-		feature = self.f(x)
-		out = self.g(feature)
-		return F.normalize(feature, dim=-1), F.normalize(out, dim=-1)
-
-
-class BYOLAv2encoder(nn.Module):
-	def __init__(self, feature_dim=128, n_mels=64, embed_dim=3072, mlp_hidden_d=2048):
-		super().__init__()
-
-		self.f = AudioNTT2022(n_mels=n_mels, d=embed_dim, mlp_hidden_d=mlp_hidden_d)
-		bottleneck_dim = int(embed_dim / 4)
-		# projection head
-		self.g = nn.Sequential(nn.Linear(embed_dim, bottleneck_dim, bias=False), nn.BatchNorm1d(bottleneck_dim),
-							   nn.ReLU(inplace=True), nn.Linear(bottleneck_dim, feature_dim, bias=True))
-
-	def forward(self, x):
-		feature = self.f(x)
-		out = self.g(feature)
-		return F.normalize(feature, dim=-1), F.normalize(out, dim=-1)
+		return feature
 
 
 class AudioNTT2022Encoder(nn.Module):
@@ -121,24 +145,23 @@ class AudioNTT2022Encoder(nn.Module):
 		return x
 
 
-def mean_max_pooling(frame_embeddings):
-	assert len(frame_embeddings.shape) == 3 # Batch,Time,Dimension
-	(x1, _) = torch.max(frame_embeddings, dim=1)
-	x2 = torch.mean(frame_embeddings, dim=1)
-	x = x1 + x2
-	return x
-
-
 class AudioNTT2022(AudioNTT2022Encoder):
 	def __init__(self, n_mels=64, d=3072, mlp_hidden_d=2048):
 		super().__init__(n_mels=n_mels, d=d, mlp_hidden_d=mlp_hidden_d)
-		self.d = d
+		self.embed_dim = d
 
 	def forward(self, x):
 		x = super().forward(x)
 		x = mean_max_pooling(x)
 		return x
 
+
+def mean_max_pooling(frame_embeddings):
+	assert len(frame_embeddings.shape) == 3 # Batch,Time,Dimension
+	(x1, _) = torch.max(frame_embeddings, dim=1)
+	x2 = torch.mean(frame_embeddings, dim=1)
+	x = x1 + x2
+	return x
 
 
 if __name__ == "__main__":
