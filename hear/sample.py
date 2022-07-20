@@ -24,6 +24,7 @@ BATCH_SIZE = 512
 
 class ModelWrapper(nn.Module):
 	def __init__(self, cfg, model_name, model_file_path):
+		super().__init__()
 		# needed for HEAR API
 		self.sample_rate = cfg.sample_rate
 		self.model, embed_size = self._get_model(model_name)

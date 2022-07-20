@@ -289,7 +289,7 @@ class AudioSet(Dataset):
 		self.cfg = cfg 
 		self.transform = transform
 		self.norm_stats = norm_stats
-		self.base_dir = "data/audioset_lms/unbalanced_train_segments"
+		self.base_dir = "data/audioset_lms/"
 
 		# load in csv file
 		df = pd.read_csv(os.path.join(self.base_dir, "unbalanced_train_segments-downloaded.csv"), header=None)

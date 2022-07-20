@@ -1,6 +1,6 @@
 # Repo specific files
 data
-proj_venv
+*venv
 condor
 */__init__.py
 checkpoint
@@ -19,6 +19,8 @@ byol-a
 *.pth 
 *.pth.tar
 *_linear.csv
+tasks
+embeddings 
 
 
 # Byte-compiled / optimized / DLL files
