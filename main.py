@@ -68,7 +68,7 @@ def train_one_epoch(args, net, data_loader, train_optimizer, wandb_run):
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='Train barlow twins')
 	parser.add_argument('--dataset', default='fsd50k', type=str, help='dataset',
-						choices=['fsd50k', 'librispeech', 'fsd50k+librispeech', 'cifar10'])
+						choices=['fsd50k', 'audioset', 'librispeech', 'fsd50k+librispeech', 'cifar10'])
 	parser.add_argument('--feature_dim', default=128, type=int, help='Feature dim for latent vector')
 	parser.add_argument('--batch_size', default=128, type=int, help='Number of images in each mini-batch')
 	parser.add_argument('--epochs', default=20, type=int, help='Number of sweeps over the dataset to train')
@@ -175,5 +175,5 @@ if __name__ == '__main__':
 
 	for epoch in range(1, args.epochs+1):
 		train_loss = train_one_epoch(args, model, train_loader, optimizer, wandb_run)
-		if epoch % args.epoch_save_f == 0:
+		if epoch % args.epoch_save_f == 0 or epoch == args.epochs:
 			utils.save_on_master(model.state_dict(), 'results/{}/{}_model_{}.pth'.format(args.dataset, save_name_pre, epoch))
