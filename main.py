@@ -57,19 +57,18 @@ def train_one_epoch(args, epoch, net, data_loader, train_optimizer, wandb_run):
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='Train barlow twins')
 	parser.add_argument('--dataset', default='fsd50k', type=str, choices=DATASETS)
-	parser.add_argument('--batch_size', default=64, type=int, help='Number of images in each mini-batch')
+	parser.add_argument('--batch_size', default=128, type=int, help='Number of images in each mini-batch')
 	parser.add_argument('--epochs', default=100, type=int, help='Number of iterations over the dataset to train for')
 	parser.add_argument('--epoch_save_f', default=100, type=int)
 	parser.add_argument('--optimizer', default='Adam', type=str, choices = ['Adam', 'AdamW'])
-	parser.add_argument('--lr', type=float, default=1e-3)
-	parser.add_argument('--wd', type=float, default=1e-6)
+	parser.add_argument('--lr', type=float, default=1e-4)
 	# model type 
 	parser.add_argument('--model_type', default='resnet50', type=str, choices=MODELS)
 	# for barlow twins
 	parser.add_argument('--lmbda', default=0.005, type=float, help='Lambda that controls the on- and off-diagonal terms')
-	parser.add_argument('--projector_out_dim', default=8192, type=int)
+	parser.add_argument('--projector_out_dim', default=256, type=int)
 	parser.add_argument('--projector_n_hidden_layers', default=1, type=int)
-	parser.add_argument('--projector_hidden_dim', default=8192, type=int)
+	parser.add_argument('--projector_hidden_dim', default=4096, type=int)
 	# for audio processing
 	parser.add_argument('--unit_sec', type=float, default=0.95)
 	parser.add_argument('--crop_frames', type=int, default=96)
@@ -96,7 +95,7 @@ if __name__ == '__main__':
 	# wandb init
 	if utils.is_main_process():
 		wandb_run = wandb.init(
-				project='barlow twins (orig) {}'.format(args.dataset),
+				project='barlow twins {} {}'.format(args.dataset, args.model_type),
 				config=args,
 				settings=wandb.Settings(start_method="fork"),
 			)
