@@ -4,11 +4,12 @@ import augmentations
 
 
 class AudioPairTransform:
-	def __init__(self, train_transform = True, pair_transform=True):
+	def __init__(self, train_transform=True, pair_transform=True, 
+				 mixup_ratio=0.2, virtual_crop_scale=(1.0, 1.5)):
 		if train_transform is True:
 			self.transform = nn.Sequential(
-				augmentations.MixupBYOLA(),
-				augmentations.RandomResizeCrop(),
+				augmentations.MixupBYOLA(ratio=mixup_ratio),
+				augmentations.RandomResizeCrop(virtual_crop_scale=virtual_crop_scale),
 				augmentations.RandomLinearFader(),
 			)
 		else:

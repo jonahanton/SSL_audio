@@ -101,7 +101,7 @@ def train_test_sure_split(X, y, n_attempt=100, return_last=False, debug=False, *
 
 
 class EarlyStopping():
-	def __init__(self, target='acc', objective='max', patience=20, enable=True):
+	def __init__(self, target='acc', objective='max', patience=10, enable=True):
 		self.crit_targ = target
 		self.crit_obj = objective
 		self.patience = patience
@@ -182,7 +182,7 @@ def _calc_metric(metrics, targets, preds):
 
 
 def _train_model(device, model, criterion, optimizer, scheduler, trn_dl, val_dl, metric='acc',
-				num_epochs=200, seed=None, patience=20, stop_metric=None,
+				num_epochs=200, seed=None, patience=10, stop_metric=None,
 				early_stopping=False, logger=None):
 	seed_everything(seed)
 	logger = logger if logger else logging.getLogger(__name__)
