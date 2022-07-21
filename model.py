@@ -88,11 +88,7 @@ class ViT(nn.Module):
 
 	def forward(self, x):
 		x = self.encoder(x)
-		if self.cfg.latent == 'cls':
-			x = x[:, 0]
-		else:
-			x = torch.mean(x[:, 1:], dim=1)
-		feature = x.contiguous()
+		feature = x[:, 0].contiguous()  # Take [CLS] token as clip representation
 		return feature
 
 
