@@ -1,9 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchvision.models.resnet import resnet50
 
-from vision_transformer import mae
+from models import resnet, mae
 import utils 
 
 
@@ -25,16 +24,22 @@ class BarlowTwins(nn.Module):
 	def _setup_model(self):
 		
 		if self.cfg.model_type == 'resnet50':
-			self.encoder = AudioResNet50(self.cfg)
+			self.encoder = resnet.resnet50()
+			self.encoder.fc = nn.Identity()
+			self.encoder.embed_dim = 2048
+		elif self.cfg.model_type == 'resnet50_ReGP_NRF':
+			self.encoder = resnet.resnet50_ReGP_NRF()
+			self.encoder.fc = nn.Identity()
+			self.encoder.embed_dim = 16384
 		elif self.cfg.model_type == 'audiontt':
-			self.encoder = AudioNTT2022(self.cfg)
+			self.encoder = AudioNTT2022()
 		elif self.cfg.model_type == 'vit':
-			self.encoder = ViT(self.cfg)
+			self.encoder = ViT()
 		else:
 			raise NotImplementedError(f'Model type {self.cfg.model_type} is not supported')
 		feature_dim = self.encoder.embed_dim
 		
-		sizes = [feature_dim, 4*feature_dim, 4*feature_dim, 4*feature_dim]
+		sizes = [feature_dim] + self.cfg.projector_n_hidden_layers*[self.cfg.projector_hidden_dim] + [self.cfg.projector_out_dim]
 		layers = []
 		for i in range(len(sizes) - 2):
 			layers.append(nn.Linear(sizes[i], sizes[i + 1], bias=False))
@@ -68,30 +73,9 @@ class BarlowTwins(nn.Module):
 		return loss
 
 
-class AudioResNet50(nn.Module):
-	def __init__(self, cfg):
-		super().__init__()
-		self.cfg = cfg
-
-		convs = []
-		for name, module in resnet50().named_children():
-			if name == 'conv1':
-				module = nn.Conv2d(1, 64, kernel_size=3, stride=1, padding=1, bias=False)
-			if not isinstance(module, nn.Linear):
-				convs.append(module)
-		self.features = nn.Sequential(*convs)
-		self.embed_dim = 2048
-
-	def forward(self, x):
-		out = self.features(x)
-		out = torch.flatten(out, start_dim=1)
-		return out
-
-
 class ViT(nn.Module):
-	def __init__(self, cfg):
+	def __init__(self):
 		super().__init__()
-		self.cfg = cfg
 		self.encoder = mae.mae_vit_base_patch16x16()
 		self.embed_dim = self.encoder.embed_dim
 
@@ -147,9 +131,8 @@ class AudioNTT2022Encoder(nn.Module):
 
 
 class AudioNTT2022(AudioNTT2022Encoder):
-	def __init__(self, cfg, n_mels=64, d=3072, mlp_hidden_d=2048):
+	def __init__(self, n_mels=64, d=3072, mlp_hidden_d=2048):
 		super().__init__(n_mels=n_mels, d=d, mlp_hidden_d=mlp_hidden_d)
-		self.cfg = cfg
 		self.embed_dim = d
 
 	def forward(self, x):

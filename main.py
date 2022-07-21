@@ -8,6 +8,7 @@ from tqdm import tqdm
 import wandb 
 
 import utils
+from utils import LARS
 import datasets
 from model import BarlowTwins
 
@@ -48,12 +49,16 @@ if __name__ == '__main__':
 	parser.add_argument('--batch_size', default=64, type=int, help='Number of images in each mini-batch')
 	parser.add_argument('--epochs', default=20, type=int, help='Number of sweeps over the dataset to train')
 	parser.add_argument('--epoch_save_f', default=20, type=int)
+	parser.add_argument('--optimizer', default='adam', type=str, choices = ['adam', 'adamw'])
 	parser.add_argument('--lr', type=float, default=1e-3)
 	parser.add_argument('--wd', type=float, default=1e-6)
 	# model type 
-	parser.add_argument('--model_type', default='resnet50', type=str, choices=['resnet50', 'audiontt', 'vit'])
+	parser.add_argument('--model_type', default='resnet50', type=str, choices=['resnet50', 'resnet50_ReGP_NRF', 'audiontt', 'vit'])
 	# for barlow twins
 	parser.add_argument('--lmbda', default=0.005, type=float, help='Lambda that controls the on- and off-diagonal terms')
+	parser.add_argument('--projector_out_dim', default=8192, type=int)
+	parser.add_argument('--projector_n_hidden_layers', default=1, type=int)
+	parser.add_argument('--projector_hidden_dim', default=8192, type=int)
 	# for audio processing
 	parser.add_argument('--unit_sec', type=float, default=0.95)
 	parser.add_argument('--crop_frames', type=int, default=96)
@@ -131,10 +136,12 @@ if __name__ == '__main__':
 	else:
 		model_without_ddp = model
 
-	if args.model_type == 'vit':
-		optimizer = optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.wd) 
+	if args.optimizer == 'adam':
+		optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.wd) 
+	elif args.optimzier == 'adamw':
+		optimizer = optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.wd)
 	else:
-		optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.wd)
+		raise NotImplementedError(f'Optimizer {args.optimizer} not supported')
 
 	# model checkpoint path
 	ckpt_path = f'results/{args.dataset}/{args.model_type}'

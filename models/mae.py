@@ -17,7 +17,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 from timm.models.vision_transformer import PatchEmbed, DropPath, Mlp
-from vision_transformer.pos_embed import get_2d_sincos_pos_embed, get_sinusoid_encoding_table
+from models.pos_embed import get_2d_sincos_pos_embed, get_sinusoid_encoding_table
 
 
 class AttentionKBiasZero(nn.Module):
