@@ -12,6 +12,19 @@ import datasets
 from model import BarlowTwins
 
 
+MODELS = [
+	'resnet50', 'resnet50_ReGP_NRF',
+	'audiontt',
+	'vit_base', 'vit_small', 'vit_tiny',
+]
+
+DATASETS = [
+	'fsd50k',
+	'audioset',
+	'librispeech',
+	'fsd50k+librispeech',
+]
+
 if torch.cuda.is_available():
 	torch.backends.cudnn.benchmark = True
 
@@ -43,16 +56,15 @@ def train_one_epoch(args, epoch, net, data_loader, train_optimizer, wandb_run):
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='Train barlow twins')
-	parser.add_argument('--dataset', default='fsd50k', type=str, help='dataset',
-						choices=['fsd50k', 'audioset', 'librispeech', 'fsd50k+librispeech'])
+	parser.add_argument('--dataset', default='fsd50k', type=str, choices=DATASETS)
 	parser.add_argument('--batch_size', default=64, type=int, help='Number of images in each mini-batch')
-	parser.add_argument('--epochs', default=20, type=int, help='Number of sweeps over the dataset to train')
-	parser.add_argument('--epoch_save_f', default=20, type=int)
+	parser.add_argument('--epochs', default=100, type=int, help='Number of iterations over the dataset to train for')
+	parser.add_argument('--epoch_save_f', default=100, type=int)
 	parser.add_argument('--optimizer', default='adam', type=str, choices = ['adam', 'adamw'])
 	parser.add_argument('--lr', type=float, default=1e-3)
 	parser.add_argument('--wd', type=float, default=1e-6)
 	# model type 
-	parser.add_argument('--model_type', default='resnet50', type=str, choices=['resnet50', 'resnet50_ReGP_NRF', 'audiontt', 'vit'])
+	parser.add_argument('--model_type', default='resnet50', type=str, choices=MODELS)
 	# for barlow twins
 	parser.add_argument('--lmbda', default=0.005, type=float, help='Lambda that controls the on- and off-diagonal terms')
 	parser.add_argument('--projector_out_dim', default=8192, type=int)

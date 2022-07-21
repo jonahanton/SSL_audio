@@ -20,6 +20,35 @@ from timm.models.vision_transformer import PatchEmbed, DropPath, Mlp
 from models.pos_embed import get_2d_sincos_pos_embed, get_sinusoid_encoding_table
 
 
+class ConvEmbed(nn.Module):
+    """
+	Copy-paste from https://github.com/facebookresearch/msn/blob/main/src/deit.py
+    3x3 Convolution stems for ViT following ViTC models
+    """
+
+    def __init__(self, channels, strides, img_size=224, in_chans=3, batch_norm=True):
+        super().__init__()
+        # Build the stems
+        stem = []
+        channels = [in_chans] + channels
+        for i in range(len(channels) - 2):
+            stem += [nn.Conv2d(channels[i], channels[i+1], kernel_size=3,
+                               stride=strides[i], padding=1, bias=(not batch_norm))]
+            if batch_norm:
+                stem += [nn.BatchNorm2d(channels[i+1])]
+            stem += [nn.ReLU(inplace=True)]
+        stem += [nn.Conv2d(channels[-2], channels[-1], kernel_size=1, stride=strides[-1])]
+        self.stem = nn.Sequential(*stem)
+
+        # Comptute the number of patches
+        stride_prod = int(np.prod(strides))
+        self.num_patches = (img_size[0] // stride_prod)**2
+
+    def forward(self, x):
+        p = self.stem(x)
+        return p.flatten(2).transpose(1, 2)
+
+
 class AttentionKBiasZero(nn.Module):
 	def __init__(self, dim, num_heads=8, qkv_bias=True, attn_drop=0., proj_drop=0.):
 		super().__init__()
@@ -89,7 +118,8 @@ class MaskedAutoencoderViT(nn.Module):
 	""" Masked Autoencoder with VisionTransformer backbone
 	"""
 	def __init__(self, img_size=(64, 96), patch_size=(16, 16), in_chans=1,
-				 embed_dim=768, depth=12, num_heads=12,
+				 embed_dim=768, depth=12, num_heads=12, 
+				 conv_stem=False, conv_stem_channels=None, conv_stem_strides=None,
 				 use_decoder=False,
 				 decoder_embed_dim=384, decoder_depth=8, decoder_num_heads=12,
 				 mlp_ratio=4., norm_layer=nn.LayerNorm, norm_pix_loss=False,
@@ -103,7 +133,10 @@ class MaskedAutoencoderViT(nn.Module):
 
 		# --------------------------------------------------------------------------
 		# MAE encoder specifics
-		self.patch_embed = PatchEmbed(img_size, patch_size, in_chans, embed_dim)
+		if conv_stem:
+			self.patch_embed = ConvEmbed(conv_stem_channels, conv_stem_strides, in_chans=in_chans, img_size=img_size)
+		else:
+			self.patch_embed = PatchEmbed(img_size, patch_size, in_chans, embed_dim)
 		num_patches = self.patch_embed.num_patches
 
 		total_patches = num_patches + (1 if use_cls_token else 0)
@@ -358,33 +391,37 @@ class MaskedAutoencoderViT(nn.Module):
 def mae_vit_base_patchX(patch_size, **kwargs):
 	model = MaskedAutoencoderViT(
 		patch_size=patch_size, embed_dim=768, depth=12, num_heads=12,
-		mlp_ratio=4, norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
+		mlp_ratio=4, norm_layer=partial(nn.LayerNorm, eps=1e-6), 
+		**kwargs)
+	return model
+
+
+def mae_vit_small_patchX(patch_size, **kwargs):
+	model = MaskedAutoencoderViT(
+		patch_size=patch_size, embed_dim=384, depth=12, num_heads=6,
+		mlp_ratio=4, norm_layer=partial(nn.LayerNorm, eps=1e-6), 
+		**kwargs)
+	return model
+
+
+def mae_vit_tiny_patchX(patch_size, **kwargs):
+	model = MaskedAutoencoderViT(
+		patch_size=patch_size, embed_dim=192, depth=12, num_heads=3,
+		mlp_ratio=4, norm_layer=partial(nn.LayerNorm, eps=1e-6), 
+		**kwargs)
 	return model
 
 
 def mae_vit_base_patch16x16(**kwargs):
 	return mae_vit_base_patchX([16, 16], **kwargs)
 
-def mae_vit_base_patch16x8(**kwargs):
-	return mae_vit_base_patchX([16, 8], **kwargs)
 
-def mae_vit_base_patch16x4(**kwargs):
-	return mae_vit_base_patchX([16, 4], **kwargs)
+def mae_vit_small_patch16x16(**kwargs):
+	return mae_vit_base_patchX([16, 16], **kwargs)
 
-def mae_vit_base_patch8x16(**kwargs):
-	return mae_vit_base_patchX([8, 16], **kwargs)
 
-def mae_vit_base_patch80x4(**kwargs):
-	return mae_vit_base_patchX([80, 4], **kwargs)
-
-def mae_vit_base_patch8x8(**kwargs):
-	return mae_vit_base_patchX([8, 8], **kwargs)
-
-def mae_vit_base_patch80x2(**kwargs):
-	return mae_vit_base_patchX([80, 2], **kwargs)
-
-def mae_vit_base_patch80x1(**kwargs):
-	return mae_vit_base_patchX([80, 1], **kwargs)
+def mae_vit_tiny_patch16x16(**kwargs):
+	return mae_vit_tiny_patchX([16, 16], **kwargs)
 
 
 

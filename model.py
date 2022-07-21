@@ -33,8 +33,8 @@ class BarlowTwins(nn.Module):
 			self.encoder.embed_dim = 16384
 		elif self.cfg.model_type == 'audiontt':
 			self.encoder = AudioNTT2022()
-		elif self.cfg.model_type == 'vit':
-			self.encoder = ViT()
+		elif 'vit' in self.cfg.model_type:
+			self.encoder = ViT(size=self.cfg.model_type.split('_')[-1])
 		else:
 			raise NotImplementedError(f'Model type {self.cfg.model_type} is not supported')
 		feature_dim = self.encoder.embed_dim
@@ -74,9 +74,16 @@ class BarlowTwins(nn.Module):
 
 
 class ViT(nn.Module):
-	def __init__(self):
+	def __init__(self, size):
 		super().__init__()
-		self.encoder = mae.mae_vit_base_patch16x16()
+		if size == 'tiny':
+			self.encoder = mae.mae_vit_base_patch16x16()
+		elif size == 'small':
+			self.encoder = mae.mae_vit_small_patch16x16()
+		elif size == 'tiny':
+			self.encoder = mae.mae_vit_tiny_patch16x16()
+		else:
+			raise NotImplementedError(f'ViT size {size} is not supported')
 		self.embed_dim = self.encoder.embed_dim
 
 	def forward(self, x):
