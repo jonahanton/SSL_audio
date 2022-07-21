@@ -9,10 +9,6 @@ slurm
 misc
 wandb
 tests
-utils/torch_mlp_clf.py
-utils/mask_conv.py
-data_usage.txt
-nodelist
 hear/submit_hear.pbs
 additional_scripts
 byol-a

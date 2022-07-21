@@ -25,12 +25,12 @@ def make_index_dict(label_csv):
 
 class FSD50K(Dataset):
 	
-	def __init__(self, cfg, train=True, transform=None, norm_stats=None):
+	def __init__(self, cfg, split='train', transform=None, norm_stats=None):
 		super().__init__()
 		
 		# initializations
 		self.cfg = cfg
-		self.train = train
+		self.split = split
 		self.transform = transform
 		self.norm_stats = norm_stats
 
@@ -46,8 +46,14 @@ class FSD50K(Dataset):
 			power=2,
 		)
 		# load in csv files
-		if train:
+		if split != 'test':
 			self.df = pd.read_csv("data/FSD50K/FSD50K.ground_truth/dev.csv", header=None)
+			if split == 'train_val':
+				pass 
+			elif split == 'train':
+				self.df = self.df[self.df.iloc[:, 3] == 'train']
+			elif split == 'val':
+				self.df = self.df[self.df.iloc[:, 3] == 'val']
 		else:
 			self.df = pd.read_csv("data/FSD50K/FSD50K.ground_truth/eval.csv", header=None)	
 		self.files = np.asarray(self.df.iloc[:, 0], dtype=str)
@@ -71,7 +77,7 @@ class FSD50K(Dataset):
 		label_indices = torch.FloatTensor(label_indices)
 		if self.cfg.load_lms:
 			# load lms
-			if self.train:
+			if self.split != 'test':
 				audio_path = "data/FSD50K_lms/FSD50K.dev_audio/" + fname + ".npy"
 			else:
 				audio_path = "data/FSD50K_lms/FSD50K.eval_audio/" + fname + ".npy"
@@ -89,7 +95,7 @@ class FSD50K(Dataset):
 			lms = lms.to(torch.float)
 		else:
 			# load raw audio
-			if self.train:
+			if self.split != 'test':
 				audio_path = "data/FSD50K/FSD50K.dev_audio/" + fname + ".wav"
 			else:
 				audio_path = "data/FSD50K/FSD50K.eval_audio/" + fname + ".wav"

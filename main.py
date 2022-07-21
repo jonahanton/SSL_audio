@@ -7,8 +7,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 import wandb 
 
-import utils
-from utils import LARS
+from utils import utils, transforms
 import datasets
 from model import BarlowTwins
 
@@ -17,7 +16,7 @@ if torch.cuda.is_available():
 	torch.backends.cudnn.benchmark = True
 
 
-def train_one_epoch(args, net, data_loader, train_optimizer, wandb_run):
+def train_one_epoch(args, epoch, net, data_loader, train_optimizer, wandb_run):
 	net.train()
 	total_loss, total_num, train_bar = 0.0, 0, tqdm(data_loader)
 	for data_tuple in train_bar:
@@ -96,21 +95,21 @@ if __name__ == '__main__':
 	if args.dataset == 'fsd50k':
 		# fsd50k [mean, std] (lms)
 		norm_stats = [-4.950, 5.855]
-		train_data = datasets.FSD50K(args, train=True, transform=utils.AudioPairTransform(train_transform = True), norm_stats=norm_stats)
+		train_data = datasets.FSD50K(args, split='train_val', transform=transforms.AudioPairTransform(train_transform = True), norm_stats=norm_stats)
 	elif args.dataset == 'librispeech':
 		# librispeech960 [mean, std] (lms)
 		norm_stats = [-3.332, 4.205]
-		train_data = datasets.LibriSpeech(args, train=True, transform=utils.AudioPairTransform(train_transform = True), norm_stats=norm_stats)
+		train_data = datasets.LibriSpeech(args, train=True, transform=transforms.AudioPairTransform(train_transform = True), norm_stats=norm_stats)
 	elif args.dataset == 'fsd50k+librispeech':
 		norm_stats_fsd50k = [-4.950, 5.855]
 		norm_stats_librispeech = [-3.332, 4.205]
 		train_data = torch.utils.data.dataset.ConcatDataset([
-			datasets.FSD50K(args, train=True, transform=utils.AudioPairTransform(train_transform = True), norm_stats=norm_stats_fsd50k),
-			datasets.LibriSpeech(args, train=True, transform=utils.AudioPairTransform(train_transform = True), norm_stats=norm_stats_librispeech),
+			datasets.FSD50K(args, split='train_val', transform=transforms.AudioPairTransform(train_transform = True), norm_stats=norm_stats_fsd50k),
+			datasets.LibriSpeech(args, train=True, transform=transforms.AudioPairTransform(train_transform = True), norm_stats=norm_stats_librispeech),
 		])
 	elif args.dataset == 'audioset':
 		norm_stats = [-0.8294, 4.6230]
-		train_data = datasets.AudioSet(args, transform=utils.AudioPairTransform(train_transform = True), norm_stats=norm_stats)
+		train_data = datasets.AudioSet(args, transform=transforms.AudioPairTransform(train_transform = True), norm_stats=norm_stats)
 	
 	if args.distributed:
 		train_sampler = torch.utils.data.distributed.DistributedSampler(train_data)
@@ -150,6 +149,6 @@ if __name__ == '__main__':
 
 
 	for epoch in range(1, args.epochs+1):
-		train_loss = train_one_epoch(args, model, train_loader, optimizer, wandb_run)
+		train_loss = train_one_epoch(args, epoch, model, train_loader, optimizer, wandb_run)
 		if epoch % args.epoch_save_f == 0 or epoch == args.epochs:
 			utils.save_on_master(model_without_ddp.encoder.state_dict(), ckpt_path + f'/model_{epoch}.pth')
