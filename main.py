@@ -95,9 +95,10 @@ if __name__ == '__main__':
 	# wandb init
 	if utils.is_main_process():
 		wandb_run = wandb.init(
-				project='barlow twins {} {}'.format(args.dataset, args.model_type),
+				project='Barlow Twins {}'.format(args.dataset),
 				config=args,
 				settings=wandb.Settings(start_method="fork"),
+				name='{}_{}_epochs_bs_{}'.format(args.model_type, args.epochs, args.batch_size),
 			)
 	else:
 		wandb_run = None
