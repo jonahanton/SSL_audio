@@ -32,8 +32,8 @@ def train_one_epoch(args, net, data_loader, train_optimizer, wandb_run):
 		total_num += args.batch_size
 		total_loss += loss.item() * args.batch_size
 
-		train_bar.set_description('Train Epoch: [{}/{}] Loss: {:.4f} lmbda:{:.4f} bsz:{} f_dim:{} dataset: {}'.format(\
-								epoch, args.epochs, total_loss / total_num, args.lmbda, args.batch_size, args.feature_dim, args.dataset))
+		train_bar.set_description('Train Epoch: [{}/{}] Loss: {:.4f} lmbda:{:.4f} bsz:{} dataset: {}'.format(\
+								epoch, args.epochs, total_loss / total_num, args.lmbda, args.batch_size, args.dataset))
 
 		if wandb_run is not None:
 			wandb_run.log({'Loss': total_loss / total_num})
@@ -45,7 +45,7 @@ if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='Train barlow twins')
 	parser.add_argument('--dataset', default='fsd50k', type=str, help='dataset',
 						choices=['fsd50k', 'audioset', 'librispeech', 'fsd50k+librispeech'])
-	parser.add_argument('--batch_size', default=128, type=int, help='Number of images in each mini-batch')
+	parser.add_argument('--batch_size', default=64, type=int, help='Number of images in each mini-batch')
 	parser.add_argument('--epochs', default=20, type=int, help='Number of sweeps over the dataset to train')
 	parser.add_argument('--epoch_save_f', default=20, type=int)
 	parser.add_argument('--lr', type=float, default=1e-3)
@@ -80,7 +80,7 @@ if __name__ == '__main__':
 	# wandb init
 	if utils.is_main_process():
 		wandb_run = wandb.init(
-				project='barlow twins {}'.format(args.dataset),
+				project='barlow twins (orig) {}'.format(args.dataset),
 				config=args,
 				settings=wandb.Settings(start_method="fork"),
 			)

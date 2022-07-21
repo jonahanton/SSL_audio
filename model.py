@@ -64,7 +64,7 @@ class BarlowTwins(nn.Module):
 		
 		on_diag = torch.diagonal(c).add_(-1).pow_(2).sum()
 		off_diag = off_diagonal(c).pow_(2).sum()
-		loss = on_diag + self.cfg.lambd * off_diag
+		loss = on_diag + self.cfg.lmbda * off_diag
 		return loss
 
 
@@ -84,7 +84,7 @@ class AudioResNet50(nn.Module):
 
 	def forward(self, x):
 		out = self.features(x)
-		out = torch.flatten(x, start_dim=1)
+		out = torch.flatten(out, start_dim=1)
 		return out
 
 
