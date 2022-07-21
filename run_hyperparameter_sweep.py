@@ -35,33 +35,36 @@ HYPERPARAMETERS = [
 	'virtual_crop_scale',
 ]
 
+MODELS = [
+	'resnet50', 'resnet50_ReGP_NRF',
+	'audiontt',
+	'vit_base', 'vit_small', 'vit_tiny',
+]
 
-def get_std_config():
-	cfg = EasyDict(
-		epochs=5,
-		batch_size=64,
-		optimizer='Adam',
-		lr=1e-4,
-		model_type='resnet50',
-		lmbda=0.005,
-		projector_out_dim=256,
-		projector_n_hidden_layers=1,
-		projector_hidden_dim=4096,
-		unit_sec=0.95,
-		crop_frames=96,
-		sample_rate=16000,
-		n_fft=1024,
-		win_length=1024,
-		hop_length=160,
-		n_mels=64,
-		f_min=60,
-		f_max=7800,
-		load_lms=True,
-		num_workers=4,
-		mixup_ratio=0.2,
-		virtual_crop_scale=(1, 1.5),
-	)
-	return cfg
+
+def get_std_parser():
+	parser = argparse.ArgumentParser(add_help=False)
+	parser.add_argument('--epochs', type=int, default=5)
+	parser.add_argument('--batch_size', type=int, default=64)
+	parser.add_argument('--lr', type=float, default=1e-4)
+	parser.add_argument('--lmbda', type=str, default=0.005)
+	parser.add_argument('--projector_out_dim', default=8192, type=int)
+	parser.add_argument('--projector_n_hidden_layers', default=1, type=int)
+	parser.add_argument('--projector_hidden_dim', default=8192, type=int)
+	parser.add_argument('--unit_sec', type=float, default=0.95)
+	parser.add_argument('--crop_frames', type=int, default=96)
+	parser.add_argument('--sample_rate', type=int, default=16000)
+	parser.add_argument('--n_fft', type=int, default=1024)
+	parser.add_argument('--win_length', type=int, default=1024)
+	parser.add_argument('--hop_length', type=int, default=160)
+	parser.add_argument('--n_mels', type=int, default=64)
+	parser.add_argument('--f_min', type=int, default=60)
+	parser.add_argument('--f_max', type=int, default=7800)
+	parser.add_argument('--load_lms', action='store_true', default=True)
+	parser.add_argument('--num_workers', type=int, default=4)
+	parser.add_argument('--mixup_ratio', type=float, default=0.2)
+	parser.add_argument('--virtual_crop_scale', nargs='+', type=float, default=[1, 1.5])
+	return parser
 
 
 def objective(trial):
@@ -70,12 +73,12 @@ def objective(trial):
 	model = define_model(trial).cuda()
 
 	# Generate the optimizers 
-	if 'lr' in tune:
+	if 'lr' in args.tune:
 		args.lr = trial.suggest_float("lr", 1e-5, 1e-2, log=True)
 	optimizer = getattr(optim, args.optimizer)(model.parameters(), lr=args.lr)
 
 	# Get FSD50K 
-	train_loader, eval_train_loader, eval_val_loader, eval_test_loader = get_fsd50k(trial, args)
+	train_loader, eval_train_loader, eval_val_loader, eval_test_loader = get_fsd50k(trial)
 
 	# Train the model 
 	for epoch in range(1, args.epochs+1):
@@ -96,9 +99,9 @@ def objective(trial):
 
 
 def define_model(trial):
-	if 'projector_n_hidden_layers' in tune:
+	if 'projector_n_hidden_layers' in args.tune:
 		args.projector_n_hidden_layers = trial.suggest_int("projector_n_hidden_layers", 1, 2)
-	if 'projector_out_dim' in tune:
+	if 'projector_out_dim' in args.tune:	
 		args.projector_out_dim = trial.suggest_categorical("projector_out_dim", [128, 256, 1024, 4096, 16384])
 	return BarlowTwins(args)
 
@@ -163,11 +166,11 @@ def train_one_epoch(epoch, model, data_loader, optimizer):
 	return total_loss / total_num
 
 
-def get_fsd50k(trial, args):
+def get_fsd50k(trial):
 
-	if 'mixup_ratio' in tune:
+	if 'mixup_ratio' in args.tune:
 		args.mixup_ratio = trial.suggest_float("mixup_ratio", 0, 1)
-	if 'virtual_crop_scale' in tune:
+	if 'virtual_crop_scale' in args.tune:
 		args.virtual_crop_scale = (trial.suggest_float("virtual_crop_scale_F", 1, 2), trial.suggest_float("virtual_crop_scale_T", 1, 2))
 
 	norm_stats = [-4.950, 5.855]
@@ -198,16 +201,16 @@ def get_fsd50k(trial, args):
 
 if __name__ == '__main__':
 
-	args = get_std_config()
-	parser = argparse.ArgumentParser(description='Hyperparameter tuning')
+	parser = argparse.ArgumentParser(description='Hyperparameter tuning', parents=[get_std_parser()])
 	parser.add_argument('--tune', nargs='+', type=str, default=['lr'], choices=HYPERPARAMETERS)
 	parser.add_argument('--n_trials', type=int, default=5)
-	cfg = parser.parse_args()
-	tune, n_trials = cfg.tune, cfg.n_trials
+	parser.add_argument('--model_type', type=str, default='resnet50', choices=MODELS)
+	parser.add_argument('--optimizer', type=str, default='Adam', choices=['Adam', 'AdamW'])
+	args = parser.parse_args()
 
 	optuna.logging.get_logger("optuna").addHandler(logging.StreamHandler(sys.stdout))
 	study = optuna.create_study(direction='maximize')
-	study.optimize(objective, n_trials=n_trials)
+	study.optimize(objective, n_trials=args.n_trials)
 
 	pruned_trials = study.get_trials(deepcopy=False, states=[TrialState.PRUNED])
 	complete_trials = study.get_trials(deepcopy=False, states=[TrialState.COMPLETE])

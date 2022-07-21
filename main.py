@@ -60,7 +60,7 @@ if __name__ == '__main__':
 	parser.add_argument('--batch_size', default=64, type=int, help='Number of images in each mini-batch')
 	parser.add_argument('--epochs', default=100, type=int, help='Number of iterations over the dataset to train for')
 	parser.add_argument('--epoch_save_f', default=100, type=int)
-	parser.add_argument('--optimizer', default='adam', type=str, choices = ['adam', 'adamw'])
+	parser.add_argument('--optimizer', default='Adam', type=str, choices = ['Adam', 'AdamW'])
 	parser.add_argument('--lr', type=float, default=1e-3)
 	parser.add_argument('--wd', type=float, default=1e-6)
 	# model type 
@@ -147,12 +147,7 @@ if __name__ == '__main__':
 	else:
 		model_without_ddp = model
 
-	if args.optimizer == 'adam':
-		optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.wd) 
-	elif args.optimzier == 'adamw':
-		optimizer = optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.wd)
-	else:
-		raise NotImplementedError(f'Optimizer {args.optimizer} not supported')
+	optimizer = getattr(optim, args.optimizer)(model.parameters(), lr=args.lr)
 
 	# model checkpoint path
 	ckpt_path = f'results/{args.dataset}/{args.model_type}'
