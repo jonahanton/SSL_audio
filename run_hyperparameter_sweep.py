@@ -159,7 +159,7 @@ def get_fsd50k(args):
 if __name__ == '__main__':
 
 
-	study = optuna.create_study(direction='maximise')
+	study = optuna.create_study(direction='maximize')
 	study.optimize(objective, n_trials=5)
 
 	pruned_trials = study.get_trials(deepcopy=False, states=[TrialState.PRUNED])
