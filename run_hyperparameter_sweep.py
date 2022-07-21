@@ -13,6 +13,7 @@ from tqdm import tqdm
 import wandb 
 import optuna 
 from sklearn.preprocessing import StandardScaler
+import numpy as np
 
 from utils.torch_mlp_clf import TorchMLPClassifier
 from utils import transforms
@@ -25,13 +26,12 @@ from model import BarlowTwins
 def get_embeddings(net, data_loader):
 	net.eval()
 	embs, labels = [], []
-	N = len(data_loader)
-	bar = tqdm(data_loader)
-	for i, (X, label) in enumerate(bar):
+	for X, label in tqdm(data_loader):
 		emb = net(X.cuda(non_blocking=True)).detach().cpu().numpy()
 		embs.extend(emb)
 		labels.extend(label.numpy())
-		bar.set_description(f'Extracting features: [{i}/{N}]')
+	
+	return np.array(embs), np.array(labels)
 
 
 def eval(net, train_loader, val_loader, test_loader):
@@ -44,7 +44,7 @@ def eval(net, train_loader, val_loader, test_loader):
 		hidden_layer_sizes=(),
 		max_iter=200,
 		early_stopping=True,
-		debug=False,
+		debug=True,
 	)
 	clf.fit(X_train, y_train, X_val=X_val, y_val=y_val)
 	
@@ -139,7 +139,7 @@ if __name__ == '__main__':
 
 	for epoch in range(1, args.epochs+1):
 		train_loss = train_one_epoch(args, epoch, model, train_loader, optimizer)
-		test_mAP = eval(model, eval_train_loader, eval_val_loader, eval_test_loader)
+		test_mAP = eval(model.encoder, eval_train_loader, eval_val_loader, eval_test_loader)
 		print(f'Test mAP: {test_mAP}')
 
 

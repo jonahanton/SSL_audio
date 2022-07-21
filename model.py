@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from models import resnet, mae
-import utils 
+from utils import utils
 
 
 def off_diagonal(x):
