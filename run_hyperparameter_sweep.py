@@ -12,6 +12,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 import numpy as np
+import time
 
 import optuna 
 from optuna.trial import TrialState
@@ -63,10 +64,9 @@ def objective(trial):
 	# Train the model 
 	for epoch in range(1, args.epochs+1):
 		model.train()
-		print(f'TRAINING BT - EPOCH [{epoch}/{args.epochs}]')
+		print(f'Training [{epoch}/{args.epochs}]')
 		loss = train_one_epoch(epoch, model, train_loader, optimizer)
 		# Fit a linear classifier on frozen embeddings from encoder
-		print('TRAINING LINEAR CLASSIFIER')
 		score = eval(model.encoder, eval_train_loader, eval_val_loader, eval_test_loader)
 		trial.report(score, epoch)
 
@@ -85,7 +85,7 @@ def define_model(trial):
 def get_embeddings(model, data_loader):
 	model.eval()
 	embs, targets = [], []
-	for data, target in tqdm(data_loader):
+	for data, target in data_loader:
 		emb = model(data.cuda(non_blocking=True)).detach().cpu().numpy()
 		embs.extend(emb)
 		targets.extend(target.numpy())
@@ -95,12 +95,14 @@ def get_embeddings(model, data_loader):
 
 def eval(model, train_loader, val_loader, test_loader):
 	
-	print('EXTRACTING TRAIN,VAL,TEST EMBEDDINGS')
+	print('\nExtracting embeddings')
+	start = time.time()
 	X_train, y_train = get_embeddings(model, train_loader)
 	X_val, y_val = get_embeddings(model, val_loader)
 	X_test, y_test = get_embeddings(model, test_loader)
+	print(f'Done\nTime elapsed = {time.time() - start:.2f}s')
 
-	print('FITTING LINEAR CLASSIFIER')
+	print('Fitting linear classifier')
 	clf = TorchMLPClassifier(
 		hidden_layer_sizes=(),
 		max_iter=200,
