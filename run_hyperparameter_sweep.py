@@ -347,9 +347,9 @@ if __name__ == '__main__':
 	os.makedirs(log_dir, exist_ok=True)
 	log_path = os.path.join(log_dir, f"{'_'.join(args.tune)}.log")
 	logger = logging.getLogger()
-	logger.setLevel(logging.INFO)  # Setup the root logger
+	logger.setLevel(logging.DEBUG)  # Setup the root logger
 	logger.addHandler(logging.FileHandler(log_path, mode="w"))
-	optuna.logging.set_verbosity(optuna.logging.INFO)
+	optuna.logging.set_verbosity(optuna.logging.DEBUG)
 	optuna.logging.enable_propagation()  # Propagate logs to the root logger
 
 	study = optuna.create_study(
