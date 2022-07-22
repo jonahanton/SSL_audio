@@ -173,11 +173,7 @@ class MaskedAutoencoderViT(nn.Module):
 		self.norm_pix_loss = norm_pix_loss
 
 		self.initialize_weights(use_2d_dec_pos_embd)
-
-		print(f'{self.__class__.__name__}(patch size={self.patch_size()}, grid_size={self.grid_size()},\n'
-			  f'  embed_dim={embed_dim}, depth={depth}, num_heads={num_heads}, decoder_embed_dim={decoder_embed_dim},\n'
-			  f'  use_decoder={use_decoder}, decoder_depth={decoder_depth}, decoder_num_heads={decoder_num_heads}, mlp_ratio={mlp_ratio},\n'
-			  f'  norm_pix_loss={norm_pix_loss}, use_cls_token={use_cls_token}, use_2d_dec_pos_embd={use_2d_dec_pos_embd})')
+		
 
 	def patch_size(self):
 		return self.patch_embed.proj.kernel_size
@@ -417,7 +413,7 @@ def mae_vit_base_patch16x16(**kwargs):
 
 
 def mae_vit_small_patch16x16(**kwargs):
-	return mae_vit_base_patchX([16, 16], **kwargs)
+	return mae_vit_small_patchX([16, 16], **kwargs)
 
 
 def mae_vit_tiny_patch16x16(**kwargs):

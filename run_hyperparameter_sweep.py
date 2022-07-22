@@ -113,7 +113,7 @@ def eval_knn(model, memory_data_loader, test_data_loader, k=200, temperature=0.5
 	total_top1, total_top5, total_num, feature_bank, target_bank = 0.0, 0.0, 0, [], []
 	# generate feature bank and target bank
 	for data_tuple in tqdm(memory_data_loader, desc='Feature extracting'):
-		(data, _), target = data_tuple
+		data, target = data_tuple
 		target_bank.append(target)
 		feature = model(data.cuda(non_blocking=True))
 		feature_bank.append(feature)
@@ -124,7 +124,7 @@ def eval_knn(model, memory_data_loader, test_data_loader, k=200, temperature=0.5
 	# loop test data to predict the label by weighted knn search
 	test_bar = tqdm(test_data_loader)
 	for data_tuple in test_bar:
-		(data, _), target = data_tuple
+		data, target = data_tuple
 		data, target = data.cuda(non_blocking=True), target.cuda(non_blocking=True)
 		feature = model(data)
 

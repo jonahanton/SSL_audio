@@ -24,9 +24,8 @@ archs = {
     'vit_tiny':vit_tiny, 'vit_small':vit_small, 'vit_base':vit_base,
 }
 
-x = torch.randn((64, 1, 64, 96))
+x = torch.randn((1, 1, 64, 96))
 for k, v in archs.items():
     print(k)
     flops = FlopCountAnalysis(v, x)
-    print(flops.total())
-    print(flops.by_module())
+    print(f"{flops.total():,}")
