@@ -38,6 +38,7 @@ def train_one_epoch(args, epoch, model, data_loader, optimizer, wandb_run):
 	tflag = time.time()
 	for data_tuple in train_bar:
 		data_time = time.time() - tflag
+		tflag = time.time()
 
 		(pos_1, pos_2), _ = data_tuple
 		pos_1, pos_2 = pos_1.cuda(non_blocking=True), pos_2.cuda(non_blocking=True)
