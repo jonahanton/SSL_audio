@@ -124,14 +124,14 @@ if __name__ == '__main__':
 
 	# wandb init
 	timestamp = datetime.datetime.now().strftime('%H:%M_%m%h')
-	wandb_name = '{}_{}_epochs'.format(args.model_type, args.epochs) if args.name is None else args.name
-	wandb_name += timestamp
+	save_name = '{}_{}_epochs'.format(args.model_type, args.epochs) if args.name is None else args.name
+	save_name += timestamp
 	if utils.is_main_process():
 		wandb_run = wandb.init(
 				project='Pre-training {}'.format(args.dataset),
 				config=args,
 				settings=wandb.Settings(start_method="fork"),
-				name=wandb_name,
+				name=save_name,
 			)
 	else:
 		wandb_run = None
@@ -183,7 +183,7 @@ if __name__ == '__main__':
 	optimizer = getattr(optim, args.optimizer)(model.parameters(), lr=args.lr)
 
 	# model checkpoint path
-	ckpt_path = f'results/{args.dataset}/{args.model_type}_{timestamp}'
+	ckpt_path = f'results/{args.dataset}/{args.model_type}_{save_name}'
 	os.makedirs(ckpt_path, exist_ok=True)
 
 	for epoch in range(1, args.epochs+1):
