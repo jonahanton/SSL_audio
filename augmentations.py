@@ -118,3 +118,20 @@ class MixupBYOLA(nn.Module):
 		format_string = self.__class__.__name__ + f'(ratio={self.ratio},n={self.n}'
 		format_string += f',log_mixup_exp={self.log_mixup_exp})'
 		return format_string
+
+
+class MixGaussianNoise():
+    """Gaussian Noise Mixer.
+    This interpolates with random sample, unlike Mixup.
+    """
+    def __init__(self, ratio=0.3):
+        self.ratio = ratio
+
+    def forward(self, lms):
+        x = lms.exp()
+
+        lambd = self.ratio * np.random.rand()
+        z = torch.normal(0, lambd, x.shape).exp()
+        mixed = (1 - lambd) * x + z + torch.finfo(x.dtype).eps
+
+        return mixed.log()

@@ -6,6 +6,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 import time
+import datetime
 import wandb 
 
 from utils import utils, transforms
@@ -77,7 +78,7 @@ if __name__ == '__main__':
 	parser.add_argument('--dataset', default='fsd50k', type=str, choices=DATASETS)
 	parser.add_argument('--batch_size', default=128, type=int, help='Number of images in each mini-batch')
 	parser.add_argument('--epochs', default=100, type=int, help='Number of iterations over the dataset to train for')
-	parser.add_argument('--epoch_save_f', default=100, type=int)
+	parser.add_argument('--epoch_save_f', default=20, type=int)
 	parser.add_argument('--optimizer', default='Adam', type=str, choices = ['Adam', 'AdamW'])
 	parser.add_argument('--lr', type=float, default=1e-4)
 	# model type 
@@ -104,6 +105,7 @@ if __name__ == '__main__':
 	parser.add_argument('--no_RRC', action='store_false', dest='RRC')
 	parser.add_argument('--RLF', action='store_true', default=True)
 	parser.add_argument('--no_RLF', action='store_false', dest='RLF')
+	parser.add_argument('--Gnoise', action='store_true', default=False)
 	# load pre-computed lms 
 	parser.add_argument('--load_lms', action='store_true', default=True)
 	parser.add_argument('--load_wav', action='store_false', dest='load_lms')
@@ -120,12 +122,13 @@ if __name__ == '__main__':
 	args.batch_size_per_gpu = int(args.batch_size / args.world_size)
 
 	# wandb init
+	timestamp = datetime.datetime.now().strftime('%H:%M_%m%h')
 	if utils.is_main_process():
 		wandb_run = wandb.init(
-				project='Barlow Twins {}'.format(args.dataset),
+				project='Pre-training {}'.format(args.dataset),
 				config=args,
 				settings=wandb.Settings(start_method="fork"),
-				name='{}_{}_epochs_bs_{}'.format(args.model_type, args.epochs, args.batch_size_per_gpu),
+				name='{}_{}_epochs_{}'.format(args.model_type, args.epochs, timestamp),
 			)
 	else:
 		wandb_run = None
@@ -177,7 +180,7 @@ if __name__ == '__main__':
 	optimizer = getattr(optim, args.optimizer)(model.parameters(), lr=args.lr)
 
 	# model checkpoint path
-	ckpt_path = f'results/{args.dataset}/{args.model_type}'
+	ckpt_path = f'results/{args.dataset}/{args.model_type}_{timestamp}'
 	os.makedirs(ckpt_path, exist_ok=True)
 
 	for epoch in range(1, args.epochs+1):

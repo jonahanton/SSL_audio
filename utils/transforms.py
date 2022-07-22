@@ -4,14 +4,19 @@ import augmentations
 
 
 class AudioPairTransform:
-	def __init__(self, train_transform=True, pair_transform=True, 
-				 mixup_ratio=0.2, virtual_crop_scale=(1.0, 1.5)):
+	def __init__(self, args, train_transform=True, pair_transform=True, 
+				 mixup_ratio=0.2, gauss_noise_ratio=0.3, virtual_crop_scale=(1.0, 1.5)):
 		if train_transform is True:
-			self.transform = nn.Sequential(
-				augmentations.MixupBYOLA(ratio=mixup_ratio),
-				augmentations.RandomResizeCrop(virtual_crop_scale=virtual_crop_scale),
-				augmentations.RandomLinearFader(),
-			)
+			transforms = []
+			if args.mixup:
+				transforms.append(augmentations.MixupBYOLA(ratio=mixup_ratio))
+			elif args.Gnoise:
+				transforms.append(augmentations.MixGaussianNoise(ratio=gauss_noise_ratio))
+			if args.RRC:
+				transforms.append(augmentations.RandomResizeCrop(virtual_crop_scale=virtual_crop_scale))
+			if args.RLF:
+				transforms.append(augmentations.RandomLinearFader())
+			self.transform = nn.Sequential(*transforms)
 		else:
 			self.transform = nn.Identity()
 		self.pair_transform = pair_transform 
