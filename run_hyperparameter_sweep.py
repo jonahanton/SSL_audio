@@ -16,6 +16,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 import numpy as np
 import time
+import datetime
 import logging
 
 import optuna 
@@ -66,7 +67,6 @@ def get_std_parser():
 	parser.add_argument('--n_mels', type=int, default=64)
 	parser.add_argument('--f_min', type=int, default=60)
 	parser.add_argument('--f_max', type=int, default=7800)
-	parser.add_argument('--load_lms', action='store_true', default=True)
 	parser.add_argument('--num_workers', type=int, default=4)
 	parser.add_argument('--mixup_ratio', type=float, default=0.2)
 	parser.add_argument('--virtual_crop_scale', nargs='+', type=float, default=[1, 1.5])
@@ -92,7 +92,7 @@ def objective(trial):
 		model.train()
 		loss = train_one_epoch(epoch, model, train_loader, optimizer)
 		# Report intermediate objective value
-		score, _ = evaluate(model.encoder, eval_train_loader, eval_val_loader, eval_test_loader)
+		score = evaluate(model.encoder, eval_train_loader, eval_val_loader, eval_test_loader)
 		trial.report(score, epoch)
 
 		# Handle pruning based on the intermediate value.
@@ -163,7 +163,7 @@ def eval_knn(model, memory_data_loader, test_data_loader, k=200, temperature=0.5
 		test_bar.set_description('Acc@1:{:.2f}% Acc@5:{:.2f}%'
 									.format(total_top1 / total_num * 100, total_top5 / total_num * 100))
 
-	return total_top1 / total_num, total_top5 / total_num
+	return total_top1 / total_num
 
 
 @torch.no_grad()
@@ -212,6 +212,7 @@ def train_one_epoch(epoch, model, data_loader, optimizer):
 	tflag = time.time()
 	for data_tuple in train_bar:
 		data_time = time.time() - tflag
+		tflag = time.time()
 
 		(pos_1, pos_2), _ = data_tuple
 		pos_1, pos_2 = pos_1.cuda(non_blocking=True), pos_2.cuda(non_blocking=True)
@@ -325,12 +326,14 @@ if __name__ == '__main__':
 
 	parser = argparse.ArgumentParser(description='Hyperparameter tuning', parents=[get_std_parser()])
 	parser.add_argument('--dataset', type=str, default='fsd50k', choices=['fsd50k', 'nsynth'])
-	parser.add_argument('--eval', type=str, default='linear')
+	parser.add_argument('--eval', type=str, default='linear', choices=['linear', 'knn'])
 	parser.add_argument('--tune', nargs='+', type=str, default=['lr'], choices=HYPERPARAMETERS)
 	parser.add_argument('--n_trials', type=int, default=10)
-	parser.add_argument('--train_epochs', type=int, default=10)
+	parser.add_argument('--train_epochs', type=int, default=20)
 	parser.add_argument('--model_type', type=str, default='resnet50', choices=MODELS)
 	parser.add_argument('--optimizer', type=str, default='Adam', choices=['Adam', 'AdamW'])
+	parser.add_argument('--load_lms', action='store_true', default=True)
+	parser.add_argument('--load_wav', dest='load_lms', action='store_false')
 	args = parser.parse_args()
 
 	wandb_kwargs = dict(
@@ -345,11 +348,12 @@ if __name__ == '__main__':
 
 	log_dir = f"logs/hparams/{args.dataset}/{args.model_type}/"
 	os.makedirs(log_dir, exist_ok=True)
-	log_path = os.path.join(log_dir, f"{'_'.join(args.tune)}.log")
+	timestamp = datetime.datetime.now().strftime('%H:%M_%m%h')
+	log_path = os.path.join(log_dir, f"{'_'.join(args.tune)}_.log")
 	logger = logging.getLogger()
-	logger.setLevel(logging.DEBUG)  # Setup the root logger
+	logger.setLevel(logging.INFO)  # Setup the root logger
 	logger.addHandler(logging.FileHandler(log_path, mode="w"))
-	optuna.logging.set_verbosity(optuna.logging.DEBUG)
+	optuna.logging.set_verbosity(optuna.logging.INFO)
 	optuna.logging.enable_propagation()  # Propagate logs to the root logger
 
 	study = optuna.create_study(
