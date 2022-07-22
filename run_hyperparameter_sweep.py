@@ -8,16 +8,17 @@ References:
 import argparse
 import logging 
 import sys
+import os
 import torch
-import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 import numpy as np
 import time
-from easydict import EasyDict
+import logging
 
 import optuna 
+from optuna.integration.wandb import WeightsAndBiasesCallback
 from optuna.trial import TrialState
 import wandb
 
@@ -44,7 +45,7 @@ MODELS = [
 
 def get_std_parser():
 	parser = argparse.ArgumentParser(add_help=False)
-	parser.add_argument('--epochs', type=int, default=20)
+	parser.add_argument('--dataset', type=str, default='nsynth_pitch-50h')
 	parser.add_argument('--batch_size', type=int, default=64)
 	parser.add_argument('--lr', type=float, default=1e-4)
 	parser.add_argument('--lmbda', type=str, default=0.005)
@@ -77,19 +78,21 @@ def objective(trial):
 		args.lr = trial.suggest_float("lr", 1e-5, 1e-2, log=True)
 	optimizer = getattr(optim, args.optimizer)(model.parameters(), lr=args.lr)
 
-	# Get FSD50K 
-	train_loader, eval_train_loader, eval_val_loader, eval_test_loader = get_fsd50k(trial)
+	# Get data
+	train_loader, eval_train_loader, eval_test_loader = get_nsynth_50h(trial)
 
 	# Train the model 
-	print(f'Training model with BT objective\n Epoch [{epoch}/{args.epochs}]')
-	for epoch in range(1, args.epochs+1):
+	print('Running training...')
+	for epoch in range(1, args.train_epochs+1):
 		model.train()
 		loss = train_one_epoch(epoch, model, train_loader, optimizer)
+		# Report intermediate objective value
+		score, _ = eval_knn(model.encoder, eval_train_loader, eval_test_loader)
+		trial.report(score, epoch)
 
-	# Fit a linear classifier on frozen embeddings from encoder
-	score = eval(model.encoder, eval_train_loader, eval_val_loader, eval_test_loader)
-	trial.report(score, epoch)
-
+		# Handle pruning based on the intermediate value.
+		if trial.should_prune():
+			raise optuna.TrialPruned()
 	return score 
 
 
@@ -102,48 +105,58 @@ def define_model(trial):
 
 
 @torch.no_grad()
-def get_embeddings(model, data_loader):
+def eval_knn(model, memory_data_loader, test_data_loader, k=200, temperature=0.5, c=88):
+	"""
+	kNN accuracy - Copy-paste from https://github.com/yaohungt/Barlow-Twins-HSIC/blob/main/main.py
+	"""
 	model.eval()
-	embs, targets = [], []
-	for data, target in data_loader:
-		emb = model(data.cuda(non_blocking=True)).detach().cpu().numpy()
-		embs.extend(emb)
-		targets.extend(target.numpy())
-	
-	return np.array(embs), np.array(targets)
+	total_top1, total_top5, total_num, feature_bank, target_bank = 0.0, 0.0, 0, [], []
+	# generate feature bank and target bank
+	for data_tuple in tqdm(memory_data_loader, desc='Feature extracting'):
+		(data, _), target = data_tuple
+		target_bank.append(target)
+		feature = model(data.cuda(non_blocking=True))
+		feature_bank.append(feature)
+	# [D, N]
+	feature_bank = torch.cat(feature_bank, dim=0).t().contiguous()
+	# [N]
+	feature_labels = torch.cat(target_bank, dim=0).contiguous().to(feature_bank.device)
+	# loop test data to predict the label by weighted knn search
+	test_bar = tqdm(test_data_loader)
+	for data_tuple in test_bar:
+		(data, _), target = data_tuple
+		data, target = data.cuda(non_blocking=True), target.cuda(non_blocking=True)
+		feature = model(data)
 
+		total_num += data.size(0)
+		# compute cos similarity between each feature vector and feature bank ---> [B, N]
+		sim_matrix = torch.mm(feature, feature_bank)
+		# [B, K]
+		sim_weight, sim_indices = sim_matrix.topk(k=k, dim=-1)
+		# [B, K]
+		sim_labels = torch.gather(feature_labels.expand(data.size(0), -1), dim=-1, index=sim_indices)
+		sim_weight = (sim_weight / temperature).exp()
 
-def eval(model, train_loader, val_loader, test_loader):
-	
-	print('Extracting embeddings')
-	start = time.time()
-	X_train, y_train = get_embeddings(model, train_loader)
-	X_val, y_val = get_embeddings(model, val_loader)
-	X_test, y_test = get_embeddings(model, test_loader)
-	print(f'Done\tTime elapsed = {time.time() - start:.2f}s')
+		# counts for each class
+		one_hot_label = torch.zeros(data.size(0) * k, c, device=sim_labels.device)
+		# [B*K, C]
+		one_hot_label = one_hot_label.scatter(dim=-1, index=sim_labels.view(-1, 1), value=1.0)
+		# weighted score ---> [B, C]
+		pred_scores = torch.sum(one_hot_label.view(data.size(0), -1, c) * sim_weight.unsqueeze(dim=-1), dim=1)
 
-	print('Fitting linear classifier')
-	start = time.time()
-	clf = TorchMLPClassifier(
-		hidden_layer_sizes=(),
-		max_iter=200,
-		early_stopping=True,
-		n_iter_no_change=10,
-		debug=False,
-	)
-	clf.fit(X_train, y_train, X_val=X_val, y_val=y_val)
-	
-	score = clf.score(X_test, y_test)
-	print(f'Done\tTime elapsed = {time.time() - start:.2f}s')
+		pred_labels = pred_scores.argsort(dim=-1, descending=True)
+		total_top1 += torch.sum((pred_labels[:, :1] == target.unsqueeze(dim=-1)).any(dim=-1).float()).item()
+		total_top5 += torch.sum((pred_labels[:, :5] == target.unsqueeze(dim=-1)).any(dim=-1).float()).item()
+		test_bar.set_description('Acc@1:{:.2f}% Acc@5:{:.2f}%'
+									.format(total_top1 / total_num * 100, total_top5 / total_num * 100))
 
-	return score
+	return total_top1 / total_num, total_top5 / total_num
 
 
 def train_one_epoch(epoch, model, data_loader, optimizer):
 	model.train()
-	total_loss, total_num = 0, 0
-	start = time.time()
-	for data_tuple in data_loader:
+	total_loss, total_num, train_bar = 0, 0, tqdm(data_loader)
+	for data_tuple in train_bar:
 		(pos_1, pos_2), _ = data_tuple
 		pos_1, pos_2 = pos_1.cuda(non_blocking=True), pos_2.cuda(non_blocking=True)
 
@@ -155,22 +168,23 @@ def train_one_epoch(epoch, model, data_loader, optimizer):
 
 		total_num += args.batch_size
 		total_loss += loss.item() * args.batch_size
-		
-	print(f'Done\tTime elapsed = {time.time() - start:.2f}s')
 
+		train_bar.set_description('Train Epoch: [{}/{}] Loss: {:.4f}'.format(\
+								epoch, args.train_epochs, total_loss / total_num))
+		
 	return total_loss / total_num
 
 
-def get_fsd50k(trial):
+def get_nsynth_50h(trial):
 
 	if 'mixup_ratio' in args.tune:
 		args.mixup_ratio = trial.suggest_float("mixup_ratio", 0, 1)
 	if 'virtual_crop_scale' in args.tune:
-		args.virtual_crop_scale = (trial.suggest_float("virtual_crop_scale_F", 1, 2), trial.suggest_float("virtual_crop_scale_T", 1, 2))
+		args.virtual_crop_scale = [trial.suggest_float("virtual_crop_scale_F", 1, 2), trial.suggest_float("virtual_crop_scale_T", 1, 2)]
 
-	norm_stats = [-4.950, 5.855]
+	norm_stats = [-8.82, 7.03]
 	train_loader = DataLoader(
-		datasets.FSD50K(args, split='train_val', 
+		datasets.NSynth_HEAR(args, split='train', 
 						transform=transforms.AudioPairTransform(
 							train_transform=True,
 							mixup_ratio=args.mixup_ratio,
@@ -180,18 +194,19 @@ def get_fsd50k(trial):
 		batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=True,
 	)
 	eval_train_loader = DataLoader(
-		datasets.FSD50K(args, split='train', transform=None, norm_stats=norm_stats), 
-		batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=False,
-	)
-	eval_val_loader = DataLoader(
-		datasets.FSD50K(args, split='train', transform=None, norm_stats=norm_stats),
+		datasets.NSynth_HEAR(args, split='train', transform=None, norm_stats=norm_stats), 
 		batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=False,
 	)
 	eval_test_loader = DataLoader(
-		datasets.FSD50K(args, split='test', transform=None, norm_stats=norm_stats),
+		datasets.NSynth_HEAR(args, split='test', transform=None, norm_stats=norm_stats),
 		batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=False,
 	)
-	return train_loader, eval_train_loader, eval_val_loader, eval_test_loader
+	return train_loader, eval_train_loader, eval_test_loader
+
+
+def log_print(msg):
+	logger.info(msg)
+	print(msg)
 
 
 if __name__ == '__main__':
@@ -199,26 +214,60 @@ if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='Hyperparameter tuning', parents=[get_std_parser()])
 	parser.add_argument('--tune', nargs='+', type=str, default=['lr'], choices=HYPERPARAMETERS)
 	parser.add_argument('--n_trials', type=int, default=10)
+	parser.add_argument('--train_epochs', type=int, default=10)
 	parser.add_argument('--model_type', type=str, default='resnet50', choices=MODELS)
 	parser.add_argument('--optimizer', type=str, default='Adam', choices=['Adam', 'AdamW'])
 	args = parser.parse_args()
 
-	optuna.logging.get_logger("optuna").addHandler(logging.StreamHandler(sys.stdout))
-	study = optuna.create_study(direction='maximize')
-	study.optimize(objective, n_trials=args.n_trials)
+	wandb_kwargs = dict(
+		project=f'Hyperparameter sweep {args.model_type} [{args.dataset}]',
+		config=args,
+		name=f'{args.tune} - {args.n_trials} trials',
+	)
+	wandbc = WeightsAndBiasesCallback(
+		metric_name='top1',
+		wandb_kwargs=wandb_kwargs,
+	)
+
+	log_dir = f"logs/hparams/{args.dataset}/"
+	os.makedirs(log_dir, exist_ok=True)
+	log_path = os.path.join(log_dir, f"{'_'.join(args.tune)}.log")
+	logger = logging.getLogger()
+	logger.setLevel(logging.INFO)  # Setup the root logger
+	logger.addHandler(logging.FileHandler(log_path, mode="w"))
+	optuna.logging.set_verbosity(optuna.logging.INFO)
+	optuna.logging.enable_propagation()  # Propagate logs to the root logger
+
+	study = optuna.create_study(
+		direction='maximize',
+		sampler=optuna.samplers.TPESampler(),
+		pruner=optuna.pruners.HyperbandPruner(),
+	)
+	study.optimize(objective, n_trials=args.n_trials, callbacks=[wandbc])
 
 	pruned_trials = study.get_trials(deepcopy=False, states=[TrialState.PRUNED])
 	complete_trials = study.get_trials(deepcopy=False, states=[TrialState.COMPLETE])
 
-	print("Study statistics: ")
-	print("\tNumber of finished trials: ", len(study.trials))
-	print("\tNumber of pruned trials: ", len(pruned_trials))
-	print("\tNumber of complete trials: ", len(complete_trials))
+	log_print("Study statistics: ")
+	log_print(f"\tNumber of finished trials: {len(study.trials)}")
+	log_print(f"\tNumber of pruned trials: {len(pruned_trials)}")
+	log_print(f"\tNumber of complete trials: {len(complete_trials)}")
 
-	print("Best trial:")
+	log_print("Best trial:")
 	trial = study.best_trial
-	print("\tValue: ", trial.value)
-	print("\tParams: ")
+	log_print(f"\tValue: {trial.value}")
+	wandb.run.summary["best top1"] = trial.value
+	log_print("\tParams: ")
 	for key, value in trial.params.items():
-		print("\t{}: {}".format(key, value))
-
+		log_print("\t{}: {}".format(key, value))
+		wandb.run.summary[key] = value
+	
+	wandb.log(
+			{
+				"optimization_history": optuna.visualization.plot_optimization_history(study),
+				"intermediate_values": optuna.visualization.plot_intermediate_values(study),
+				"param_importances": optuna.visualization.plot_param_importances(study),
+				"param_relationships": optuna.visualization.plot_parallel_coordinate(study),
+			}
+		)
+	wandb.finish()

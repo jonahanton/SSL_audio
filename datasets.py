@@ -206,7 +206,7 @@ class LibriSpeech(Dataset):
 		return lms, None
 
 
-class NSynth(Dataset):
+class NSynth_HEAR(Dataset):
 	
 	def __init__(self, cfg, split='train', transform=None, norm_stats=None):
 		super().__init__()
@@ -216,10 +216,13 @@ class NSynth(Dataset):
 		self.split = split
 		self.transform = transform
 		self.norm_stats = norm_stats
-		if self.cfg.load_lms:
-			self.base_path= "data/nsynth_lms/nsynth-{}/".format(split)
-		else:
-			self.base_path = "data/nsynth/nsynth-{}/".format(split) 
+		self.base_path = "hear/tasks/nsynth_pitch-v2.2.3-50h/16000/"
+		self.data_path = self.base_path + f"{split}/" 
+
+		self.jsonpath = self.base_path + f"{split}.json"
+		with open(self.jsonpath, 'r') as fp:
+			data_json = json.load(fp)
+		self.data = [(name, label[0]) for name, label in data_json.items()]
 
 		self.unit_length = int(cfg.unit_sec * cfg.sample_rate)
 		self.to_melspecgram = AT.MelSpectrogram(
@@ -232,12 +235,7 @@ class NSynth(Dataset):
 			f_max=cfg.f_max,
 			power=2,
 		)
-		# load in json file
-		self.datapath = self.base_path + "examples.json"
-		with open(self.datapath, 'r') as fp:
-			data_json = json.load(fp)
-		self.data = [(name, data.get("instrument_family")) for name, data in data_json.items()]
-		
+
 		
 	def __len__(self):
 		return len(self.data)
@@ -245,10 +243,11 @@ class NSynth(Dataset):
 		
 	def __getitem__(self, idx):
 		fname, label = self.data[idx]
+		label = int(label - 21)  # convert pitch to index
 
 		if self.cfg.load_lms:
 			# load lms
-			audio_path = self.base_path + "audio/" + fname + ".npy"
+			audio_path = f"data/nsynth_lms/nsynth-{self.split}/audio/{fname[:-len('.wav')]}.npy"
 			lms = torch.tensor(np.load(audio_path)).unsqueeze(0)
 			# Trim or pad
 			l = lms.shape[-1]
@@ -263,7 +262,7 @@ class NSynth(Dataset):
 			lms = lms.to(torch.float)
 		else:
 			# load raw audio
-			audio_path = self.base_path + "audio/" + fname + ".wav"
+			audio_path = self.data_path + fname
 			wav, org_sr = librosa.load(audio_path, sr=self.cfg.sample_rate)
 			wav = torch.tensor(wav)  # (length,)
 			# zero padding to both ends
