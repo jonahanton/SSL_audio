@@ -9,6 +9,7 @@ import argparse
 import logging 
 import sys
 import os
+from turtle import forward
 import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
@@ -116,11 +117,12 @@ def evaluate(model, train_loader, val_loader, test_loader):
 
 
 @torch.no_grad()
-def eval_knn(model, memory_data_loader, test_data_loader, k=200, temperature=0.5, c=CLASSES[args.dataset]):
+def eval_knn(model, memory_data_loader, test_data_loader, k=200, temperature=0.5):
 	"""
 	kNN accuracy - Copy-paste from https://github.com/yaohungt/Barlow-Twins-HSIC/blob/main/main.py
 	"""
 	model.eval()
+	c = CLASSES[args.dataset]
 	total_top1, total_top5, total_num, feature_bank, target_bank = 0.0, 0.0, 0, [], []
 	# generate feature bank and target bank
 	for data_tuple in tqdm(memory_data_loader, desc='Feature extracting'):
@@ -189,7 +191,7 @@ def eval_linear(model, train_loader, val_loader, test_loader):
 	start = time.time()
 	clf = TorchMLPClassifier(
 		hidden_layer_sizes=(),
-		max_iter=200,
+		max_iter=100,
 		early_stopping=True,
 		n_iter_no_change=10,
 		debug=False,
@@ -205,21 +207,38 @@ def eval_linear(model, train_loader, val_loader, test_loader):
 def train_one_epoch(epoch, model, data_loader, optimizer):
 	model.train()
 	total_loss, total_num, train_bar = 0, 0, tqdm(data_loader)
+	
+	total_data_time, total_forward_time, total_backward_time = 0, 0, 0
+	tflag = time.time()
 	for data_tuple in train_bar:
+		data_time = time.time() - tflag
+
 		(pos_1, pos_2), _ = data_tuple
 		pos_1, pos_2 = pos_1.cuda(non_blocking=True), pos_2.cuda(non_blocking=True)
 
 		loss = model(pos_1, pos_2)
+		forward_time = time.time() - tflag 
+		tflag = time.time()
 
 		optimizer.zero_grad()
 		loss.backward()
 		optimizer.step()
+		backward_time = time.time() - tflag 
 
 		total_num += args.batch_size
 		total_loss += loss.item() * args.batch_size
 
-		train_bar.set_description('Train Epoch: [{}/{}] Loss: {:.4f}'.format(\
-								epoch, args.train_epochs, total_loss / total_num))
+		total_data_time += data_time
+		total_forward_time += forward_time 
+		total_backward_time += backward_time
+
+		train_bar.set_description('Train Epoch: [{}/{}] Loss: {:.4f} Data time {:.2f}({:.2f}) Forward time {:.2f}({:.2f}) Backward time {:.2f}({:.2f}))'.format(
+								  epoch, args.train_epochs, total_loss / total_num, 
+								  data_time, total_data_time,
+								  forward_time, total_forward_time,
+								  backward_time, total_backward_time))
+		
+		tflag = time.time()
 		
 	return total_loss / total_num
 
@@ -305,7 +324,8 @@ def log_print(msg):
 if __name__ == '__main__':
 
 	parser = argparse.ArgumentParser(description='Hyperparameter tuning', parents=[get_std_parser()])
-	paser.add_argument('--dataset', type=str, default='fsd50k', choices=['fsd50k', 'nsynth'])
+	parser.add_argument('--dataset', type=str, default='fsd50k', choices=['fsd50k', 'nsynth'])
+	parser.add_argument('--eval', type=str, default='linear')
 	parser.add_argument('--tune', nargs='+', type=str, default=['lr'], choices=HYPERPARAMETERS)
 	parser.add_argument('--n_trials', type=int, default=10)
 	parser.add_argument('--train_epochs', type=int, default=10)

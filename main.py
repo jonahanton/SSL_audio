@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+import time
 import wandb 
 
 from utils import utils, transforms
@@ -29,30 +30,46 @@ if torch.cuda.is_available():
 	torch.backends.cudnn.benchmark = True
 
 
-def train_one_epoch(args, epoch, net, data_loader, train_optimizer, wandb_run):
-	net.train()
-	total_loss, total_num, train_bar = 0.0, 0, tqdm(data_loader)
+def train_one_epoch(args, epoch, model, data_loader, optimizer, wandb_run):
+	model.train()
+	total_loss, total_num, train_bar = 0, 0, tqdm(data_loader)
+	
+	total_data_time, total_forward_time, total_backward_time = 0, 0, 0
+	tflag = time.time()
 	for data_tuple in train_bar:
+		data_time = time.time() - tflag
+
 		(pos_1, pos_2), _ = data_tuple
 		pos_1, pos_2 = pos_1.cuda(non_blocking=True), pos_2.cuda(non_blocking=True)
 
-		loss = net(pos_1, pos_2)
+		loss = model(pos_1, pos_2)
+		forward_time = time.time() - tflag 
+		tflag = time.time()
 
-		train_optimizer.zero_grad()
+		optimizer.zero_grad()
 		loss.backward()
-		train_optimizer.step()
+		optimizer.step()
+		backward_time = time.time() - tflag 
 
 		total_num += args.batch_size
 		total_loss += loss.item() * args.batch_size
 
-		train_bar.set_description('Train Epoch: [{}/{}] Loss: {:.4f} lmbda:{:.4f} bsz:{} dataset: {}'.format(\
-								epoch, args.epochs, total_loss / total_num, args.lmbda, args.batch_size, args.dataset))
+		total_data_time += data_time
+		total_forward_time += forward_time 
+		total_backward_time += backward_time
 
+		train_bar.set_description('Train Epoch: [{}/{}] Loss: {:.4f} Data time {:.2f}({:.2f}) Forward time {:.2f}({:.2f}) Backward time {:.2f}({:.2f}))'.format(
+								  epoch, args.train_epochs, total_loss / total_num, 
+								  data_time, total_data_time,
+								  forward_time, total_forward_time,
+								  backward_time, total_backward_time))
+		
 		if wandb_run is not None:
 			wandb_run.log({'Loss': total_loss / total_num})
 
+		tflag = time.time()
+		
 	return total_loss / total_num
-
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='Train barlow twins')
@@ -151,9 +168,7 @@ if __name__ == '__main__':
 
 	# model checkpoint path
 	ckpt_path = f'results/{args.dataset}/{args.model_type}'
-	if not os.path.exists(ckpt_path):
-		os.mkdir(ckpt_path)
-
+	os.makedirs(ckpt_path, exist_ok=True)
 
 	for epoch in range(1, args.epochs+1):
 		train_loss = train_one_epoch(args, epoch, model, train_loader, optimizer, wandb_run)
