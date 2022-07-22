@@ -51,8 +51,8 @@ def train_one_epoch(args, epoch, model, data_loader, optimizer, wandb_run):
 		optimizer.step()
 		backward_time = time.time() - tflag 
 
-		total_num += args.batch_size
-		total_loss += loss.item() * args.batch_size
+		total_num += args.batch_size_per_gpu
+		total_loss += loss.item() * args.batch_size_per_gpu
 
 		total_data_time += data_time
 		total_forward_time += forward_time 
@@ -80,7 +80,7 @@ if __name__ == '__main__':
 	parser.add_argument('--optimizer', default='Adam', type=str, choices = ['Adam', 'AdamW'])
 	parser.add_argument('--lr', type=float, default=1e-4)
 	# model type 
-	parser.add_argument('--model_type', default='resnet50', type=str, choices=MODELS)
+	parser.add_argument('--model_type', default='audiontt', type=str, choices=MODELS)
 	# for barlow twins
 	parser.add_argument('--lmbda', default=0.005, type=float, help='Lambda that controls the on- and off-diagonal terms')
 	parser.add_argument('--projector_out_dim', default=256, type=int)
@@ -96,18 +96,27 @@ if __name__ == '__main__':
 	parser.add_argument('--n_mels', type=int, default=64)
 	parser.add_argument('--f_min', type=int, default=60)
 	parser.add_argument('--f_max', type=int, default=7800)
+	# data augmentations
+	parser.add_argument('--mixup', action='store_true', default=True)
+	parser.add_argument('--no_mixup', action='store_false', dest='mixup')
+	parser.add_argument('--RRC', action='store_true', default=True)
+	parser.add_argument('--no_RRC', action='store_false', dest='RRC')
+	parser.add_argument('--RLF', action='store_true', default=True)
+	parser.add_argument('--no_RLF', action='store_false', dest='RLF')
 	# load pre-computed lms 
 	parser.add_argument('--load_lms', action='store_true', default=True)
+	parser.add_argument('--load_wav', action='store_false', dest='load_lms')
 	# distributed training 
 	parser.add_argument('--distributed', action='store_true', default=False)
 	# data loader
-	parser.add_argument('--num_workers', type=int, default=4)
+	parser.add_argument('--num_workers', type=int, default=20)
 	
 	# args parse
 	args = parser.parse_args()
 
 	# distributed training 
 	utils.init_distributed_mode(args)
+	args.batch_size_per_gpu = int(args.batch_size / args.world_size)
 
 	# wandb init
 	if utils.is_main_process():
@@ -115,7 +124,7 @@ if __name__ == '__main__':
 				project='Barlow Twins {}'.format(args.dataset),
 				config=args,
 				settings=wandb.Settings(start_method="fork"),
-				name='{}_{}_epochs_bs_{}'.format(args.model_type, args.epochs, args.batch_size),
+				name='{}_{}_epochs_bs_{}'.format(args.model_type, args.epochs, args.batch_size_per_gpu),
 			)
 	else:
 		wandb_run = None
@@ -124,28 +133,28 @@ if __name__ == '__main__':
 	if args.dataset == 'fsd50k':
 		# fsd50k [mean, std] (lms)
 		norm_stats = [-4.950, 5.855]
-		train_data = datasets.FSD50K(args, split='train_val', transform=transforms.AudioPairTransform(train_transform = True), norm_stats=norm_stats)
+		train_data = datasets.FSD50K(args, split='train_val', transform=transforms.AudioPairTransform(args, train_transform=True), norm_stats=norm_stats)
 	elif args.dataset == 'librispeech':
 		# librispeech960 [mean, std] (lms)
 		norm_stats = [-3.332, 4.205]
-		train_data = datasets.LibriSpeech(args, train=True, transform=transforms.AudioPairTransform(train_transform = True), norm_stats=norm_stats)
+		train_data = datasets.LibriSpeech(args, train=True, transform=transforms.AudioPairTransform(args, train_transform=True), norm_stats=norm_stats)
 	elif args.dataset == 'fsd50k+librispeech':
 		norm_stats_fsd50k = [-4.950, 5.855]
 		norm_stats_librispeech = [-3.332, 4.205]
 		train_data = torch.utils.data.dataset.ConcatDataset([
-			datasets.FSD50K(args, split='train_val', transform=transforms.AudioPairTransform(train_transform = True), norm_stats=norm_stats_fsd50k),
-			datasets.LibriSpeech(args, train=True, transform=transforms.AudioPairTransform(train_transform = True), norm_stats=norm_stats_librispeech),
+			datasets.FSD50K(args, split='train_val', transform=transforms.AudioPairTransform(args, train_transform=True), norm_stats=norm_stats_fsd50k),
+			datasets.LibriSpeech(args, train=True, transform=transforms.AudioPairTransform(args, train_transform=True), norm_stats=norm_stats_librispeech),
 		])
 	elif args.dataset == 'audioset':
 		norm_stats = [-0.8294, 4.6230]
-		train_data = datasets.AudioSet(args, transform=transforms.AudioPairTransform(train_transform = True), norm_stats=norm_stats)
+		train_data = datasets.AudioSet(args, transform=transforms.AudioPairTransform(args, train_transform=True), norm_stats=norm_stats)
 	
 	if args.distributed:
 		train_sampler = torch.utils.data.distributed.DistributedSampler(train_data)
 	else:
 		train_sampler = None
 		
-	train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=(True if train_sampler is None else False),
+	train_loader = DataLoader(train_data, batch_size=args.batch_size_per_gpu, shuffle=(True if train_sampler is None else False),
 							  num_workers=args.num_workers, pin_memory=True, sampler=train_sampler, drop_last=True)
 
 	# model setup 
