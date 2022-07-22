@@ -113,6 +113,7 @@ if __name__ == '__main__':
 	parser.add_argument('--distributed', action='store_true', default=False)
 	# data loader
 	parser.add_argument('--num_workers', type=int, default=20)
+	parser.add_argument('--name', type=str, default=None)
 	
 	# args parse
 	args = parser.parse_args()
@@ -123,12 +124,14 @@ if __name__ == '__main__':
 
 	# wandb init
 	timestamp = datetime.datetime.now().strftime('%H:%M_%m%h')
+	wandb_name = '{}_{}_epochs'.format(args.model_type, args.epochs) if args.name is None else args.name
+	wandb_name += timestamp
 	if utils.is_main_process():
 		wandb_run = wandb.init(
 				project='Pre-training {}'.format(args.dataset),
 				config=args,
 				settings=wandb.Settings(start_method="fork"),
-				name='{}_{}_epochs_{}'.format(args.model_type, args.epochs, timestamp),
+				name=wandb_name,
 			)
 	else:
 		wandb_run = None
