@@ -76,7 +76,7 @@ class BarlowTwins(nn.Module):
 class ViT(nn.Module):
 	def __init__(self, size):
 		super().__init__()
-		if size == 'tiny':
+		if size == 'base':
 			self.encoder = mae.mae_vit_base_patch16x16()
 		elif size == 'small':
 			self.encoder = mae.mae_vit_small_patch16x16()

@@ -44,7 +44,7 @@ MODELS = [
 
 def get_std_parser():
 	parser = argparse.ArgumentParser(add_help=False)
-	parser.add_argument('--epochs', type=int, default=5)
+	parser.add_argument('--epochs', type=int, default=20)
 	parser.add_argument('--batch_size', type=int, default=64)
 	parser.add_argument('--lr', type=float, default=1e-4)
 	parser.add_argument('--lmbda', type=str, default=0.005)
@@ -81,20 +81,15 @@ def objective(trial):
 	train_loader, eval_train_loader, eval_val_loader, eval_test_loader = get_fsd50k(trial)
 
 	# Train the model 
+	print(f'Training model with BT objective\n Epoch [{epoch}/{args.epochs}]')
 	for epoch in range(1, args.epochs+1):
 		model.train()
-		print(f'Training model with BT objective\n Epoch [{epoch}/{args.epochs}]')
 		loss = train_one_epoch(epoch, model, train_loader, optimizer)
-		print(f'Training epoch {epoch}/{args.epochs} finished')
-		# Fit a linear classifier on frozen embeddings from encoder
-		score = eval(model.encoder, eval_train_loader, eval_val_loader, eval_test_loader)
-		trial.report(score, epoch)
-		print(f'After epoch [{epoch}/{args.epochs}]\tTest score: {score:.4f}')
 
-		# Handle pruning based on the intermediate value
-		if trial.should_prune():
-			raise optuna.exceptions.TrialPruned()
-	
+	# Fit a linear classifier on frozen embeddings from encoder
+	score = eval(model.encoder, eval_train_loader, eval_val_loader, eval_test_loader)
+	trial.report(score, epoch)
+
 	return score 
 
 
@@ -120,7 +115,7 @@ def get_embeddings(model, data_loader):
 
 def eval(model, train_loader, val_loader, test_loader):
 	
-	print('Extracting embeddings from frozen backbone')
+	print('Extracting embeddings')
 	start = time.time()
 	X_train, y_train = get_embeddings(model, train_loader)
 	X_val, y_val = get_embeddings(model, val_loader)
@@ -131,7 +126,7 @@ def eval(model, train_loader, val_loader, test_loader):
 	start = time.time()
 	clf = TorchMLPClassifier(
 		hidden_layer_sizes=(),
-		max_iter=50,
+		max_iter=200,
 		early_stopping=True,
 		n_iter_no_change=10,
 		debug=False,
@@ -203,7 +198,7 @@ if __name__ == '__main__':
 
 	parser = argparse.ArgumentParser(description='Hyperparameter tuning', parents=[get_std_parser()])
 	parser.add_argument('--tune', nargs='+', type=str, default=['lr'], choices=HYPERPARAMETERS)
-	parser.add_argument('--n_trials', type=int, default=5)
+	parser.add_argument('--n_trials', type=int, default=10)
 	parser.add_argument('--model_type', type=str, default='resnet50', choices=MODELS)
 	parser.add_argument('--optimizer', type=str, default='Adam', choices=['Adam', 'AdamW'])
 	args = parser.parse_args()
