@@ -262,6 +262,7 @@ def get_nsynth_50h(trial):
 	train_loader = DataLoader(
 		datasets.NSynth_HEAR(args, split='train', 
 						transform=transforms.AudioPairTransform(
+							args,
 							train_transform=True,
 							mixup_ratio=args.mixup_ratio,
 							virtual_crop_scale=args.virtual_crop_scale,
@@ -295,6 +296,7 @@ def get_fsd50k(trial):
 	train_loader = DataLoader(
 		datasets.FSD50K(args, split='train_val', 
 						transform=transforms.AudioPairTransform(
+							args,
 							train_transform=True,
 							mixup_ratio=args.mixup_ratio,
 							virtual_crop_scale=args.virtual_crop_scale,
@@ -334,6 +336,13 @@ if __name__ == '__main__':
 	parser.add_argument('--optimizer', type=str, default='Adam', choices=['Adam', 'AdamW'])
 	parser.add_argument('--load_lms', action='store_true', default=True)
 	parser.add_argument('--load_wav', dest='load_lms', action='store_false')
+	parser.add_argument('--mixup', action='store_true', default=True)
+	parser.add_argument('--no_mixup', action='store_false', dest='mixup')
+	parser.add_argument('--RRC', action='store_true', default=True)
+	parser.add_argument('--no_RRC', action='store_false', dest='RRC')
+	parser.add_argument('--RLF', action='store_true', default=True)
+	parser.add_argument('--no_RLF', action='store_false', dest='RLF')
+	parser.add_argument('--Gnoise', action='store_true', default=False)
 	args = parser.parse_args()
 
 	wandb_kwargs = dict(
@@ -349,7 +358,7 @@ if __name__ == '__main__':
 	log_dir = f"logs/hparams/{args.dataset}/{args.model_type}/"
 	os.makedirs(log_dir, exist_ok=True)
 	timestamp = datetime.datetime.now().strftime('%H:%M_%m%h')
-	log_path = os.path.join(log_dir, f"{'_'.join(args.tune)}_.log")
+	log_path = os.path.join(log_dir, f"{'_'.join(args.tune)}_{timestamp}.log")
 	logger = logging.getLogger()
 	logger.setLevel(logging.INFO)  # Setup the root logger
 	logger.addHandler(logging.FileHandler(log_path, mode="w"))
