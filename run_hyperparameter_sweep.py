@@ -100,7 +100,7 @@ def define_model(trial):
 	if 'projector_n_hidden_layers' in args.tune:
 		args.projector_n_hidden_layers = trial.suggest_int("projector_n_hidden_layers", 1, 2)
 	if 'projector_out_dim' in args.tune:	
-		args.projector_out_dim = trial.suggest_categorical("projector_out_dim", [128, 256, 1024, 4096, 16384])
+		args.projector_out_dim = trial.suggest_categorical("projector_out_dim", [64, 128, 256, 1024, 4096])
 	return BarlowTwins(args)
 
 
@@ -222,14 +222,14 @@ if __name__ == '__main__':
 	wandb_kwargs = dict(
 		project=f'Hyperparameter sweep {args.model_type} [{args.dataset}]',
 		config=args,
-		name=f'{args.tune} - {args.n_trials} trials',
+		name=f"{'_'.join(args.tune)} - {args.n_trials} trials",
 	)
 	wandbc = WeightsAndBiasesCallback(
 		metric_name='top1',
 		wandb_kwargs=wandb_kwargs,
 	)
 
-	log_dir = f"logs/hparams/{args.dataset}/"
+	log_dir = f"logs/hparams/{args.dataset}/{args.model_type}/"
 	os.makedirs(log_dir, exist_ok=True)
 	log_path = os.path.join(log_dir, f"{'_'.join(args.tune)}.log")
 	logger = logging.getLogger()

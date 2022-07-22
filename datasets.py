@@ -216,8 +216,8 @@ class NSynth_HEAR(Dataset):
 		self.split = split
 		self.transform = transform
 		self.norm_stats = norm_stats
-		self.base_path = "hear/tasks/nsynth_pitch-v2.2.3-50h/16000/"
-		self.data_path = self.base_path + f"{split}/" 
+		self.base_path = "hear/tasks/nsynth_pitch-v2.2.3-50h/"
+		self.data_path = self.base_path + f"16000/{split}/" 
 
 		self.jsonpath = self.base_path + f"{split}.json"
 		with open(self.jsonpath, 'r') as fp:
