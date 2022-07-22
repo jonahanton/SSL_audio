@@ -42,10 +42,14 @@ MODELS = [
 	'vit_base', 'vit_small', 'vit_tiny',
 ]
 
+CLASSES = dict(
+	fsd50k=200,
+	nsynth=88,
+)
+
 
 def get_std_parser():
 	parser = argparse.ArgumentParser(add_help=False)
-	parser.add_argument('--dataset', type=str, default='nsynth_pitch-50h')
 	parser.add_argument('--batch_size', type=int, default=64)
 	parser.add_argument('--lr', type=float, default=1e-4)
 	parser.add_argument('--lmbda', type=str, default=0.005)
@@ -79,7 +83,7 @@ def objective(trial):
 	optimizer = getattr(optim, args.optimizer)(model.parameters(), lr=args.lr)
 
 	# Get data
-	train_loader, eval_train_loader, eval_test_loader = get_nsynth_50h(trial)
+	train_loader, eval_train_loader, eval_val_loader, eval_test_loader = get_data(trial)
 
 	# Train the model 
 	print('Running training...')
@@ -87,7 +91,7 @@ def objective(trial):
 		model.train()
 		loss = train_one_epoch(epoch, model, train_loader, optimizer)
 		# Report intermediate objective value
-		score, _ = eval_knn(model.encoder, eval_train_loader, eval_test_loader)
+		score, _ = evaluate(model.encoder, eval_train_loader, eval_val_loader, eval_test_loader)
 		trial.report(score, epoch)
 
 		# Handle pruning based on the intermediate value.
@@ -104,8 +108,15 @@ def define_model(trial):
 	return BarlowTwins(args)
 
 
+def evaluate(model, train_loader, val_loader, test_loader):
+	if args.eval == 'linear':
+		return eval_linear(model, train_loader, val_loader, test_loader)
+	elif args.eval == 'knn':
+		return eval_knn(model, train_loader, test_loader)
+
+
 @torch.no_grad()
-def eval_knn(model, memory_data_loader, test_data_loader, k=200, temperature=0.5, c=88):
+def eval_knn(model, memory_data_loader, test_data_loader, k=200, temperature=0.5, c=CLASSES[args.dataset]):
 	"""
 	kNN accuracy - Copy-paste from https://github.com/yaohungt/Barlow-Twins-HSIC/blob/main/main.py
 	"""
@@ -153,6 +164,44 @@ def eval_knn(model, memory_data_loader, test_data_loader, k=200, temperature=0.5
 	return total_top1 / total_num, total_top5 / total_num
 
 
+@torch.no_grad()
+def get_embeddings(model, data_loader):
+	model.eval()
+	embs, targets = [], []
+	for data, target in data_loader:
+		emb = model(data.cuda(non_blocking=True)).detach().cpu().numpy()
+		embs.extend(emb)
+		targets.extend(target.numpy())
+	
+	return np.array(embs), np.array(targets)
+
+
+def eval_linear(model, train_loader, val_loader, test_loader):
+	
+	print('Extracting embeddings')
+	start = time.time()
+	X_train, y_train = get_embeddings(model, train_loader)
+	X_val, y_val = get_embeddings(model, val_loader)
+	X_test, y_test = get_embeddings(model, test_loader)
+	print(f'Done\tTime elapsed = {time.time() - start:.2f}s')
+
+	print('Fitting linear classifier')
+	start = time.time()
+	clf = TorchMLPClassifier(
+		hidden_layer_sizes=(),
+		max_iter=200,
+		early_stopping=True,
+		n_iter_no_change=10,
+		debug=False,
+	)
+	clf.fit(X_train, y_train, X_val=X_val, y_val=y_val)
+	
+	score = clf.score(X_test, y_test)
+	print(f'Done\tTime elapsed = {time.time() - start:.2f}s')
+
+	return score
+
+
 def train_one_epoch(epoch, model, data_loader, optimizer):
 	model.train()
 	total_loss, total_num, train_bar = 0, 0, tqdm(data_loader)
@@ -173,6 +222,13 @@ def train_one_epoch(epoch, model, data_loader, optimizer):
 								epoch, args.train_epochs, total_loss / total_num))
 		
 	return total_loss / total_num
+
+
+def get_data(trial):
+	if args.dataset == 'fsd50k':
+		return get_fsd50k(trial)
+	elif args.dataset == 'nsynth':
+		return get_nsynth_50h(trial)
 
 
 def get_nsynth_50h(trial):
@@ -197,11 +253,48 @@ def get_nsynth_50h(trial):
 		datasets.NSynth_HEAR(args, split='train', transform=None, norm_stats=norm_stats), 
 		batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=False,
 	)
+	eval_val_loader = DataLoader(
+		datasets.NSynth_HEAR(args, split='valid', transform=None, norm_stats=norm_stats), 
+		batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=False,
+	)
 	eval_test_loader = DataLoader(
 		datasets.NSynth_HEAR(args, split='test', transform=None, norm_stats=norm_stats),
 		batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=False,
 	)
-	return train_loader, eval_train_loader, eval_test_loader
+	return train_loader, eval_train_loader, eval_val_loader, eval_test_loader
+
+
+def get_fsd50k(trial):
+
+	if 'mixup_ratio' in args.tune:
+		args.mixup_ratio = trial.suggest_float("mixup_ratio", 0, 1)
+	if 'virtual_crop_scale' in args.tune:
+		args.virtual_crop_scale = (trial.suggest_float("virtual_crop_scale_F", 1, 2), trial.suggest_float("virtual_crop_scale_T", 1, 2))
+
+	norm_stats = [-4.950, 5.855]
+	train_loader = DataLoader(
+		datasets.FSD50K(args, split='train_val', 
+						transform=transforms.AudioPairTransform(
+							train_transform=True,
+							mixup_ratio=args.mixup_ratio,
+							virtual_crop_scale=args.virtual_crop_scale,
+						), 
+						norm_stats=norm_stats), 
+		batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=True,
+	)
+	eval_train_loader = DataLoader(
+		datasets.FSD50K(args, split='train', transform=None, norm_stats=norm_stats), 
+		batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=False,
+	)
+	eval_val_loader = DataLoader(
+		datasets.FSD50K(args, split='val', transform=None, norm_stats=norm_stats),
+		batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=False,
+	)
+	eval_test_loader = DataLoader(
+		datasets.FSD50K(args, split='test', transform=None, norm_stats=norm_stats),
+		batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=False,
+	)
+	return train_loader, eval_train_loader, eval_val_loader, eval_test_loader
 
 
 def log_print(msg):
@@ -212,6 +305,7 @@ def log_print(msg):
 if __name__ == '__main__':
 
 	parser = argparse.ArgumentParser(description='Hyperparameter tuning', parents=[get_std_parser()])
+	paser.add_argument('--dataset', type=str, default='fsd50k', choices=['fsd50k', 'nsynth'])
 	parser.add_argument('--tune', nargs='+', type=str, default=['lr'], choices=HYPERPARAMETERS)
 	parser.add_argument('--n_trials', type=int, default=10)
 	parser.add_argument('--train_epochs', type=int, default=10)
@@ -225,7 +319,7 @@ if __name__ == '__main__':
 		name=f"{'_'.join(args.tune)} - {args.n_trials} trials",
 	)
 	wandbc = WeightsAndBiasesCallback(
-		metric_name='top1',
+		metric_name='score',
 		wandb_kwargs=wandb_kwargs,
 	)
 
