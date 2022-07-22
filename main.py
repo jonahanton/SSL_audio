@@ -61,7 +61,7 @@ def train_one_epoch(args, epoch, model, data_loader, optimizer, wandb_run):
 		total_backward_time += backward_time
 
 		train_bar.set_description('Train Epoch: [{}/{}] Loss: {:.4f} Data time {:.2f}({:.2f}) Forward time {:.2f}({:.2f}) Backward time {:.2f}({:.2f}))'.format(
-								  epoch, args.train_epochs, total_loss / total_num, 
+								  epoch, args.epochs, total_loss / total_num, 
 								  data_time, total_data_time,
 								  forward_time, total_forward_time,
 								  backward_time, total_backward_time))
