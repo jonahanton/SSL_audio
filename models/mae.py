@@ -1,9 +1,6 @@
 """
-A PyTorch implementation of Vision Transformers [Dosovitskiy et al., 2020],
-adapted for our purposes (appropriate for spectrogram input, w/ masking).
-Code adapted from: https://github.com/nttcslab/msm-mae
-
-Other references:
+Adaptation of Vision Transformers [Dosovitskiy et al., 2020].
+References:
 	https://github.com/nttcslab/msm-mae
 	https://github.com/facebookresearch/mae/blob/main/models_mae.py
 	https://github.com/facebookresearch/msn/blob/main/src/deit.py
