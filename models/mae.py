@@ -40,7 +40,7 @@ class ConvStem(nn.Module):
 
 		# build stem, similar to the design in https://arxiv.org/abs/2106.14881
 		stem = []
-		input_dim, output_dim = 3, embed_dim // 8
+		input_dim, output_dim = 1, embed_dim // 8
 		for l in range(4):
 			stem.append(nn.Conv2d(input_dim, output_dim, kernel_size=3, stride=2, padding=1, bias=False))
 			stem.append(nn.BatchNorm2d(output_dim))
