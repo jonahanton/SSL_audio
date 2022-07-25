@@ -27,7 +27,7 @@ class ModelWrapper(nn.Module):
 		super().__init__()
 		# needed for HEAR API
 		self.sample_rate = cfg.sample_rate
-		self.model, embed_size = self._get_model(model_type)
+		embed_size = self._get_model(model_type)
 		self._load_weights(model_file_path)
 		self.scene_embedding_size = embed_size
 		self.timestamp_embedding_size = embed_size
@@ -50,6 +50,7 @@ class ModelWrapper(nn.Module):
 			self.model = ViT(size=model_type.split('_')[-1])
 		else:
 			raise NotImplementedError(f'Model type {model_type} is not supported')
+		return self.model.embed_dim
 
 	def _load_weights(self, model_file_path):
 		self.model.load_state_dict(torch.load(model_file_path, map_location='cpu'), strict=False)
