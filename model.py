@@ -34,7 +34,10 @@ class BarlowTwins(nn.Module):
 		elif self.cfg.model_type == 'audiontt':
 			self.encoder = AudioNTT2022()
 		elif 'vit' in self.cfg.model_type:
-			self.encoder = ViT(size=self.cfg.model_type.split('_')[-1])
+			if self.cfg.model_type.split('_')[0] == 'vitc':
+				self.encoder = ViT(c=True, size=self.cfg.model_type.split('_')[-1])
+			else:
+				self.encoder = ViT(c=False, size=self.cfg.model_type.split('_')[-1])
 		else:
 			raise NotImplementedError(f'Model type {self.cfg.model_type} is not supported')
 		feature_dim = self.encoder.embed_dim
@@ -74,16 +77,26 @@ class BarlowTwins(nn.Module):
 
 
 class ViT(nn.Module):
-	def __init__(self, size):
+	def __init__(self, c=True, size='base'):
 		super().__init__()
-		if size == 'base':
-			self.encoder = mae.mae_vit_base_patch16x16()
-		elif size == 'small':
-			self.encoder = mae.mae_vit_small_patch16x16()
-		elif size == 'tiny':
-			self.encoder = mae.mae_vit_tiny_patch16x16()
+		if c:
+			if size == 'base':
+				self.encoder = mae.mae_vitc_base_patch16x16()
+			elif size == 'small':
+				self.encoder = mae.mae_vitc_small_patch16x16()
+			elif size == 'tiny':
+				self.encoder = mae.mae_vitc_tiny_patch16x16()
+			else:
+				raise NotImplementedError(f'ViTc size {size} is not supported')
 		else:
-			raise NotImplementedError(f'ViT size {size} is not supported')
+			if size == 'base':
+				self.encoder = mae.mae_vit_base_patch16x16()
+			elif size == 'small':
+				self.encoder = mae.mae_vit_small_patch16x16()
+			elif size == 'tiny':
+				self.encoder = mae.mae_vit_tiny_patch16x16()
+			else:
+				raise NotImplementedError(f'ViT size {size} is not supported')
 		self.embed_dim = self.encoder.embed_dim
 
 	def forward(self, x):

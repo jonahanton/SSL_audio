@@ -18,6 +18,7 @@ MODELS = [
 	'resnet50', 'resnet50_ReGP_NRF',
 	'audiontt',
 	'vit_base', 'vit_small', 'vit_tiny',
+	'vitc_base', 'vitc_small', 'vitc_tiny'
 ]
 
 DATASETS = [

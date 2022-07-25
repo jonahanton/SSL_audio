@@ -14,36 +14,52 @@ import torch
 import torch.nn as nn
 import numpy as np
 from timm.models.vision_transformer import PatchEmbed, DropPath, Mlp
+from timm.models.layers.helpers import to_2tuple
 from models.pos_embed import get_2d_sincos_pos_embed, get_sinusoid_encoding_table
 
 
-class ConvEmbed(nn.Module):
+class ConvStem(nn.Module):
+    """ 
+    ConvStem, from Early Convolutions Help Transformers See Better, Tete et al. https://arxiv.org/abs/2106.14881
+	Copy-paste from https://github.com/facebookresearch/moco-v3/blob/main/vits.py
     """
-	Copy-paste from https://github.com/facebookresearch/msn/blob/main/src/deit.py
-    3x3 Convolution stems for ViT following ViTC models
-    """
-
-    def __init__(self, channels, strides, img_size=224, in_chans=3, batch_norm=True):
+    def __init__(self, img_size=224, patch_size=16, in_chans=3, embed_dim=768, norm_layer=None, flatten=True):
         super().__init__()
-        # Build the stems
-        stem = []
-        channels = [in_chans] + channels
-        for i in range(len(channels) - 2):
-            stem += [nn.Conv2d(channels[i], channels[i+1], kernel_size=3,
-                               stride=strides[i], padding=1, bias=(not batch_norm))]
-            if batch_norm:
-                stem += [nn.BatchNorm2d(channels[i+1])]
-            stem += [nn.ReLU(inplace=True)]
-        stem += [nn.Conv2d(channels[-2], channels[-1], kernel_size=1, stride=strides[-1])]
-        self.stem = nn.Sequential(*stem)
 
-        # Comptute the number of patches
-        stride_prod = int(np.prod(strides))
-        self.num_patches = (img_size[0] // stride_prod)**2
+        assert patch_size == 16, 'ConvStem only supports patch size of 16'
+        assert embed_dim % 8 == 0, 'Embed dimension must be divisible by 8 for ConvStem'
+
+        img_size = to_2tuple(img_size)
+        patch_size = to_2tuple(patch_size)
+        self.img_size = img_size
+        self.patch_size = patch_size
+        self.grid_size = (img_size[0] // patch_size[0], img_size[1] // patch_size[1])
+        self.num_patches = self.grid_size[0] * self.grid_size[1]
+        self.flatten = flatten
+
+        # build stem, similar to the design in https://arxiv.org/abs/2106.14881
+        stem = []
+        input_dim, output_dim = 3, embed_dim // 8
+        for l in range(4):
+            stem.append(nn.Conv2d(input_dim, output_dim, kernel_size=3, stride=2, padding=1, bias=False))
+            stem.append(nn.BatchNorm2d(output_dim))
+            stem.append(nn.ReLU(inplace=True))
+            input_dim = output_dim
+            output_dim *= 2
+        stem.append(nn.Conv2d(input_dim, embed_dim, kernel_size=1))
+        self.proj = nn.Sequential(*stem)
+
+        self.norm = norm_layer(embed_dim) if norm_layer else nn.Identity()
 
     def forward(self, x):
-        p = self.stem(x)
-        return p.flatten(2).transpose(1, 2)
+        B, C, H, W = x.shape
+        assert H == self.img_size[0] and W == self.img_size[1], \
+            f"Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]})."
+        x = self.proj(x)
+        if self.flatten:
+            x = x.flatten(2).transpose(1, 2)  # BCHW -> BNC
+        x = self.norm(x)
+        return x
 
 
 class AttentionKBiasZero(nn.Module):
@@ -115,8 +131,7 @@ class MaskedAutoencoderViT(nn.Module):
 	""" Masked Autoencoder with VisionTransformer backbone
 	"""
 	def __init__(self, img_size=(64, 96), patch_size=(16, 16), in_chans=1,
-				 embed_dim=768, depth=12, num_heads=12, 
-				 conv_stem=False, conv_stem_channels=None, conv_stem_strides=None,
+				 embed_dim=768, depth=12, num_heads=12, conv_stem=False,
 				 use_decoder=False,
 				 decoder_embed_dim=384, decoder_depth=8, decoder_num_heads=12,
 				 mlp_ratio=4., norm_layer=nn.LayerNorm, norm_pix_loss=False,
@@ -131,7 +146,7 @@ class MaskedAutoencoderViT(nn.Module):
 		# --------------------------------------------------------------------------
 		# MAE encoder specifics
 		if conv_stem:
-			self.patch_embed = ConvEmbed(conv_stem_channels, conv_stem_strides, in_chans=in_chans, img_size=img_size)
+			self.patch_embed = ConvStem(img_size, patch_size, in_chans, embed_dim)
 		else:
 			self.patch_embed = PatchEmbed(img_size, patch_size, in_chans, embed_dim)
 		num_patches = self.patch_embed.num_patches
@@ -422,7 +437,6 @@ def mae_vitc_base_patchX(patch_size, **kwargs):
 		patch_size=patch_size, embed_dim=768, depth=11, num_heads=12,
 		mlp_ratio=4, norm_layer=partial(nn.LayerNorm, eps=1e-6), 
 		conv_stem=True, 
-		conv_stem_channels=[64, 128, 128, 256, 256, 512], conv_stem_strides=[2, 2, 1, 2, 1, 2],
 		**kwargs)
 	return model
 
@@ -432,7 +446,6 @@ def mae_vitc_small_patchX(patch_size, **kwargs):
 		patch_size=patch_size, embed_dim=384, depth=11, num_heads=6,
 		mlp_ratio=4, norm_layer=partial(nn.LayerNorm, eps=1e-6), 
 		conv_stem=True, 
-		conv_stem_channels=[48, 96, 192, 384], conv_stem_strides=[2, 2, 2, 2],
 		**kwargs)
 	return model
 
@@ -442,7 +455,6 @@ def mae_vitc_tiny_patchX(patch_size, **kwargs):
 		patch_size=patch_size, embed_dim=192, depth=11, num_heads=3,
 		mlp_ratio=4, norm_layer=partial(nn.LayerNorm, eps=1e-6), 
 		conv_stem=True, 
-		conv_stem_channels=[24, 48, 96, 192], conv_stem_strides=[2, 2, 2, 2],
 		**kwargs)
 	return model
 
