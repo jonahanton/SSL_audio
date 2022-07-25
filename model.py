@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from functools import wraps
 import copy
 
 from models import resnet, mae
@@ -173,22 +172,10 @@ def mean_max_pooling(frame_embeddings):
 
 
 
-"""----------------------------------For BYOL-like symmetry breaking-----------------------------"""
-
-def singleton(cache_key):
-	def inner_fn(fn):
-		@wraps(fn)
-		def wrapper(self, *args, **kwargs):
-			instance = getattr(self, cache_key)
-			if instance is not None:
-				return instance
-
-			instance = fn(self, *args, **kwargs)
-			setattr(self, cache_key, instance)
-			return instance
-		return wrapper
-	return inner_fn
-
+"""
+BYOL-like asymmetric learning updates (with Barlow Twins loss)
+Ref: https://github.com/lucidrains/byol-pytorch/
+"""
 
 class EMA():
 	def __init__(self, beta):
