@@ -7,7 +7,8 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 import time
 import datetime
-import wandb 
+import wandb
+from augmentations import RunningNorm, NormalizeBatch
 
 from utils import utils, transforms
 import datasets
@@ -43,6 +44,15 @@ def train_one_epoch(args, epoch, model, data_loader, optimizer, wandb_run):
 		tflag = time.time()
 
 		(pos_1, pos_2), _ = data_tuple
+
+		if args.post_norm:
+			# Post-normalization block from BYOL-A [Niizumi et al., 2021]
+			bs = pos_1.shape[0]
+			paired_inputs = torch.cat([pos_1, pos_2])  # [(B,1,F,T), (B,1,F,T)] -> (2*B,1,F,T)
+			paired_inputs = NormalizeBatch()(paired_inputs)
+			pos_1 = paired_inputs[:bs]
+			pos_2 = paired_inputs[bs:]
+
 		pos_1, pos_2 = pos_1.cuda(non_blocking=True), pos_2.cuda(non_blocking=True)
 
 		loss = model(pos_1, pos_2)
@@ -74,6 +84,7 @@ def train_one_epoch(args, epoch, model, data_loader, optimizer, wandb_run):
 		
 	return total_loss / total_num
 
+
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='Train barlow twins')
 	parser.add_argument('--dataset', default='fsd50k', type=str, choices=DATASETS)
@@ -89,6 +100,7 @@ if __name__ == '__main__':
 	parser.add_argument('--projector_out_dim', default=256, type=int)
 	parser.add_argument('--projector_n_hidden_layers', default=1, type=int)
 	parser.add_argument('--projector_hidden_dim', default=4096, type=int)
+	parser.add_argument('--HSIC', action='store_true', default=False)
 	# for audio processing
 	parser.add_argument('--unit_sec', type=float, default=0.95)
 	parser.add_argument('--crop_frames', type=int, default=96)
@@ -107,6 +119,8 @@ if __name__ == '__main__':
 	parser.add_argument('--RLF', action='store_true', default=True)
 	parser.add_argument('--no_RLF', action='store_false', dest='RLF')
 	parser.add_argument('--Gnoise', action='store_true', default=False)
+	parser.add_argument('--pre_norm', action='store_true', default=False)
+	parser.add_argument('--post_norm', action='store_true', default=False)
 	# load pre-computed lms 
 	parser.add_argument('--load_lms', action='store_true', default=True)
 	parser.add_argument('--load_wav', action='store_false', dest='load_lms')
@@ -141,7 +155,16 @@ if __name__ == '__main__':
 	if args.dataset == 'fsd50k':
 		# fsd50k [mean, std] (lms)
 		norm_stats = [-4.950, 5.855]
-		train_data = datasets.FSD50K(args, split='train_val', transform=transforms.AudioPairTransform(args, train_transform=True), norm_stats=norm_stats)
+		len_files = 40966 
+		if args.pre_norm:
+			transform = nn.Sequential(
+				RunningNorm(epoch_samples=len_files),
+				transforms.AudioPairTransform(args, train_transform=True),
+			)
+			train_data = datasets.FSD50K(args, split='train_val', transform=transform, norm_stats=None)
+		else:
+			transform = transforms.AudioPairTransform(args, train_transform=True)
+			train_data = datasets.FSD50K(args, split='train_val', transform=transform, norm_stats=norm_stats)
 	elif args.dataset == 'librispeech':
 		# librispeech960 [mean, std] (lms)
 		norm_stats = [-3.332, 4.205]

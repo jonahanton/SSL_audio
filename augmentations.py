@@ -136,3 +136,99 @@ class MixGaussianNoise(nn.Module):
 		mixed = (1 - lambd) * x + z + torch.finfo(x.dtype).eps
 
 		return mixed.log()
+
+
+class RunningMean:
+	"""Running mean calculator for arbitrary axis configuration."""
+
+	def __init__(self, axis):
+		self.n = 0
+		self.axis = axis
+
+	def put(self, x):
+		# https://math.stackexchange.com/questions/106700/incremental-averageing
+		if self.n == 0:
+			self.mu = x.mean(self.axis, keepdims=True)
+		else:
+			self.mu += (x.mean(self.axis, keepdims=True) - self.mu) / self.n
+		self.n += 1
+
+	def __call__(self):
+		return self.mu
+
+	def __len__(self):
+		return self.n
+
+
+class RunningVariance:
+	"""Calculate mean/variance of tensors online.
+	Thanks to https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance
+	"""
+
+	def __init__(self, axis, mean):
+		self.update_mean(mean)
+		self.s2 = RunningMean(axis)
+
+	def update_mean(self, mean):
+		self.mean = mean
+
+	def put(self, x):
+		self.s2.put((x - self.mean) **2)
+
+	def __call__(self):
+		return self.s2()
+
+	def std(self):
+		return np.sqrt(self())
+
+
+class RunningNorm(nn.Module):
+	"""Online Normalization using Running Mean/Std.
+	This module will only update the statistics up to the specified number of epochs.
+	After the `max_update_epochs`, this will normalize with the last updated statistics.
+	Args:
+		epoch_samples: Number of samples in one epoch
+		max_update_epochs: Number of epochs to allow update of running mean/variance.
+		axis: Axis setting used to calculate mean/variance.
+	"""
+
+	def __init__(self, epoch_samples, max_update_epochs=10, axis=[1, 2]):
+		super().__init__()
+		self.max_update = epoch_samples * max_update_epochs
+		self.ema_mean = RunningMean(axis)
+		self.ema_var = RunningVariance(axis, 0)
+
+	def forward(self, image):
+		if len(self.ema_mean) < self.max_update:
+			self.ema_mean.put(image)
+			self.ema_var.update_mean(self.ema_mean())
+			self.ema_var.put(image)
+			self.mean = self.ema_mean()
+			self.std = torch.clamp(self.ema_var.std(), torch.finfo().eps, torch.finfo().max)
+		return ((image - self.mean) / self.std)
+
+	def __repr__(self):
+		format_string = self.__class__.__name__ + f'(max_update={self.max_update},axis={self.ema_mean.axis})'
+		return format_string
+
+
+class NormalizeBatch(nn.Module):
+    """Normalization of Input Batch.
+    Note:
+        Unlike other blocks, use this with *batch inputs*.
+    Args:
+        axis: Axis setting used to calculate mean/variance.
+    """
+
+    def __init__(self, axis=[0, 2, 3]):
+        super().__init__()
+        self.axis = axis
+
+    def forward(self, X: torch.Tensor) -> torch.Tensor:
+        _mean = X.mean(dim=self.axis, keepdims=True)
+        _std = torch.clamp(X.std(dim=self.axis, keepdims=True), torch.finfo().eps, torch.finfo().max)
+        return ((X - _mean) / _std)
+
+    def __repr__(self):
+        format_string = self.__class__.__name__ + f'(axis={self.axis})'
+        return 
