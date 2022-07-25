@@ -102,8 +102,6 @@ if __name__ == '__main__':
 	parser.add_argument('--projector_n_hidden_layers', default=1, type=int)
 	parser.add_argument('--projector_hidden_dim', default=4096, type=int)
 	parser.add_argument('--HSIC', action='store_true', default=False)
-	parser.add_argument('--stop_gradient', action='store_true', default=False)
-	parser.add_argument('--predictor', action='store_true', default=False)
 	# for audio processing
 	parser.add_argument('--unit_sec', type=float, default=0.95)
 	parser.add_argument('--crop_frames', type=int, default=96)
