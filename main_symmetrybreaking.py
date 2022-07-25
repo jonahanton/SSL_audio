@@ -13,7 +13,7 @@ import copy
 from augmentations import RunningNorm, NormalizeBatch
 from utils import utils, transforms
 import datasets
-from model import BarlowTwins
+from model import BarlowTwinsBYOL
 
 
 MODELS = [
@@ -60,6 +60,9 @@ def train_one_epoch(args, epoch, model, data_loader, optimizer, wandb_run):
 		forward_time = time.time() - tflag 
 		tflag = time.time()
 
+		# update target encoder moving average
+		model.update_moving_average()
+
 		optimizer.zero_grad()
 		loss.backward()
 		optimizer.step()
@@ -102,8 +105,11 @@ if __name__ == '__main__':
 	parser.add_argument('--projector_n_hidden_layers', default=1, type=int)
 	parser.add_argument('--projector_hidden_dim', default=4096, type=int)
 	parser.add_argument('--HSIC', action='store_true', default=False)
-	parser.add_argument('--stop_gradient', action='store_true', default=False)
-	parser.add_argument('--predictor', action='store_true', default=False)
+	parser.add_argument('--stop_gradient', action='store_true', default=True)
+	parser.add_argument('--no_stop_gradient', action='store_false', dest='stop_gradient')
+	parser.add_argument('--predictor', action='store_true', default=True)
+	parser.add_argument('--no_predictor', action='store_false', dest='predictor')
+	parser.add_argument('--moving_average_decay', type=float, default=0.99)
 	# for audio processing
 	parser.add_argument('--unit_sec', type=float, default=0.95)
 	parser.add_argument('--crop_frames', type=int, default=96)
@@ -142,7 +148,7 @@ if __name__ == '__main__':
 
 	# wandb init
 	timestamp = datetime.datetime.now().strftime('%H:%M_%h%d')
-	save_name = '{}_{}_epochs'.format(args.model_type, args.epochs) if args.name is None else args.name
+	save_name = '(asymm)_{}_{}_epochs'.format(args.model_type, args.epochs) if args.name is None else args.name
 	save_name += timestamp
 	if utils.is_main_process():
 		wandb_run = wandb.init(
@@ -192,7 +198,7 @@ if __name__ == '__main__':
 							  num_workers=args.num_workers, pin_memory=True, sampler=train_sampler, drop_last=True)
 
 	# model setup 
-	model = BarlowTwins(args).cuda()
+	model = BarlowTwinsBYOL(args).cuda()
 
 	if args.distributed:
 		# sync batch norms
