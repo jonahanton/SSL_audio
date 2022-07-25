@@ -290,7 +290,7 @@ class BarlowTwinsBYOL(nn.Module):
 			torch.distributed.all_reduce(c2)
 		
 		on_diag_1 = torch.diagonal(c1).add_(-1).pow_(2).sum()
-		on_diag_2 = torch.diagonal(c2).add(-1).pow_(2).sum()
+		on_diag_2 = torch.diagonal(c2).add_(-1).pow_(2).sum()
 		if self.cfg.HSIC:
 			# encouraging off_diag to be negative ones
 			off_diag_1 = off_diagonal(c1).add_(1).pow_(2).sum()
