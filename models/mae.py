@@ -141,6 +141,7 @@ class MaskedAutoencoderViT(nn.Module):
 		super().__init__()
 		self.in_chans = in_chans
 		self.embed_dim = embed_dim
+		self.conv_stem = conv_stem
 		self.use_cls_token = use_cls_token
 		self.use_decoder = use_decoder
 
@@ -213,8 +214,9 @@ class MaskedAutoencoderViT(nn.Module):
 			self.decoder_pos_embed.data.copy_(torch.from_numpy(decoder_pos_embed).float().unsqueeze(0))
 
 		# initialize patch_embed like nn.Linear (instead of nn.Conv2d)
-		w = self.patch_embed.proj.weight.data # shape=torch.Size([768, 1, 16, 16])
-		torch.nn.init.xavier_uniform_(w.view([w.shape[0], -1]))
+		if not self.conv_stem:
+			w = self.patch_embed.proj.weight.data # shape=torch.Size([768, 1, 16, 16])
+			torch.nn.init.xavier_uniform_(w.view([w.shape[0], -1]))
 
 		# timm's trunc_normal_(std=.02) is effectively normal_(std=0.02) as cutoff is too big (2.)
 		if self.use_cls_token:
