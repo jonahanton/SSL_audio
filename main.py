@@ -123,7 +123,7 @@ if __name__ == '__main__':
 	args.batch_size_per_gpu = int(args.batch_size / args.world_size)
 
 	# wandb init
-	timestamp = datetime.datetime.now().strftime('%H:%M_%m%h')
+	timestamp = datetime.datetime.now().strftime('%H:%M_%h%d')
 	save_name = '{}_{}_epochs'.format(args.model_type, args.epochs) if args.name is None else args.name
 	save_name += timestamp
 	if utils.is_main_process():

@@ -254,9 +254,12 @@ def get_data(trial):
 def get_nsynth_50h(trial):
 
 	if 'mixup_ratio' in args.tune:
-		args.mixup_ratio = trial.suggest_float("mixup_ratio", 0, 1)
+		args.mixup_ratio = trial.suggest_categorical("mixup_ratio", [0, 0.2, 0.4, 0.6, 0.8])
 	if 'virtual_crop_scale' in args.tune:
-		args.virtual_crop_scale = [trial.suggest_float("virtual_crop_scale_F", 1, 2), trial.suggest_float("virtual_crop_scale_T", 1, 2)]
+		args.virtual_crop_scale = args.virtual_crop_scale = (
+			trial.suggest_categorical("virtual_crop_scale_F", [1, 1.2, 1.4, 1.6, 1.8]), 
+			trial.suggest_categorical("virtual_crop_scale_T", [1, 1.2, 1.4, 1.6, 1.8]),
+		)
 
 	norm_stats = [-8.82, 7.03]
 	train_loader = DataLoader(
@@ -288,9 +291,12 @@ def get_nsynth_50h(trial):
 def get_fsd50k(trial):
 
 	if 'mixup_ratio' in args.tune:
-		args.mixup_ratio = trial.suggest_float("mixup_ratio", 0, 1)
+		args.mixup_ratio = trial.suggest_categorical("mixup_ratio", [0, 0.2, 0.4, 0.6, 0.8])
 	if 'virtual_crop_scale' in args.tune:
-		args.virtual_crop_scale = (trial.suggest_float("virtual_crop_scale_F", 1, 2), trial.suggest_float("virtual_crop_scale_T", 1, 2))
+		args.virtual_crop_scale = (
+			trial.suggest_categorical("virtual_crop_scale_F", [1, 1.2, 1.4, 1.6, 1.8]), 
+			trial.suggest_categorical("virtual_crop_scale_T", [1, 1.2, 1.4, 1.6, 1.8]),
+		)
 
 	norm_stats = [-4.950, 5.855]
 	train_loader = DataLoader(
@@ -357,7 +363,7 @@ if __name__ == '__main__':
 
 	log_dir = f"logs/hparams/{args.dataset}/{args.model_type}/"
 	os.makedirs(log_dir, exist_ok=True)
-	timestamp = datetime.datetime.now().strftime('%H:%M_%m%h')
+	timestamp = datetime.datetime.now().strftime('%H:%M_%h%d')
 	log_path = os.path.join(log_dir, f"{'_'.join(args.tune)}_{timestamp}.log")
 	logger = logging.getLogger()
 	logger.setLevel(logging.INFO)  # Setup the root logger

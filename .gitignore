@@ -17,6 +17,8 @@ byol-a
 *_linear.csv
 tasks
 embeddings 
+results
+logs
 
 
 # Byte-compiled / optimized / DLL files
