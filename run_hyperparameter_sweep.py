@@ -9,7 +9,6 @@ import argparse
 import logging 
 import sys
 import os
-from turtle import forward
 import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
@@ -18,6 +17,10 @@ import numpy as np
 import time
 import datetime
 import logging
+import matplotlib.pyplot as plt
+import seaborn as sns
+sns.set()
+
 
 import optuna 
 from optuna.integration.wandb import WeightsAndBiasesCallback
@@ -25,7 +28,7 @@ from optuna.trial import TrialState
 import wandb
 
 from utils.torch_mlp_clf import TorchMLPClassifier
-from utils import transforms
+from utils import transforms, utils
 import datasets
 from model import BarlowTwins
 
@@ -82,7 +85,11 @@ def objective(trial):
 	# Generate the optimizers 
 	if 'lr' in args.tune:
 		args.lr = trial.suggest_float("lr", 1e-5, 1e-2, log=True)
-	optimizer = getattr(optim, args.optimizer)(model.parameters(), lr=args.lr)
+
+	if args.optimizer == 'Adam':
+		optimizer = optim.Adam(model.parameters(), lr=args.lr)
+	elif args.optimizer == 'AdamW':
+		optimizer = optim.AdamW(utils.get_param_groups(model), lr=args.lr)
 
 	# Get data
 	train_loader, eval_train_loader, eval_val_loader, eval_test_loader = get_data(trial)
@@ -331,6 +338,24 @@ def log_print(msg):
 	print(msg)
 
 
+def plot_intermediate_values(study, save_path):
+	target_state = [TrialState.PRUNED, TrialState.COMPLETE, TrialState.RUNNING]
+	trials = [trial for trial in study.trials if trial.state in target_state]
+	for trial in trials:
+		if trial.intermediate_values:
+			sorted_intermediate_values = sorted(trial.intermediate_values.items()) 
+			x=tuple((x for x, _ in sorted_intermediate_values))
+			y=tuple((y for _, y in sorted_intermediate_values))
+			params = trial.params.items()
+			plt.plot(x, y, marker='o', label=f'{params}')
+	plt.xlabel('Epoch')
+	plt.ylabel('Score')
+	plt.title('Intermediate scores')
+	plt.legend()
+	plt.show()
+	plt.savefig(os.path.join(save_path, 'intermediate_values.png'), bbox_inches = "tight")
+
+
 if __name__ == '__main__':
 
 	parser = argparse.ArgumentParser(description='Hyperparameter tuning', parents=[get_std_parser()])
@@ -395,13 +420,21 @@ if __name__ == '__main__':
 	for key, value in trial.params.items():
 		log_print("\t{}: {}".format(key, value))
 		wandb.run.summary[key] = value
-	
+
+	optimization_history = optuna.visualization.plot_optimization_history(study)
+	intermediate_values = optuna.visualization.plot_intermediate_values(study)
+	param_importances = optuna.visualization.plot_param_importances(study)
+	param_relationships = optuna.visualization.plot_parallel_coordinate(study)
+	param_slices = optuna.visualization.plot_slice(study)
 	wandb.log(
 			{
-				"optimization_history": optuna.visualization.plot_optimization_history(study),
-				"intermediate_values": optuna.visualization.plot_intermediate_values(study),
-				"param_importances": optuna.visualization.plot_param_importances(study),
-				"param_relationships": optuna.visualization.plot_parallel_coordinate(study),
+				"optimization_history": optimization_history,
+				"intermediate_values": intermediate_values,
+				"param_importances": param_importances,
+				"param_relationships": param_relationships,
+				"param_slices": param_slices,
 			}
 		)
 	wandb.finish()
+
+	plot_intermediate_values(study, save_path=log_dir)

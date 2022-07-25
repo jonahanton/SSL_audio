@@ -180,8 +180,11 @@ if __name__ == '__main__':
 		model_without_ddp = model.module
 	else:
 		model_without_ddp = model
-
-	optimizer = getattr(optim, args.optimizer)(model.parameters(), lr=args.lr)
+	
+	if args.optimizer == 'Adam':
+		optimizer = optim.Adam(model.parameters(), lr=args.lr)
+	elif args.optimizer == 'AdamW':
+		optimizer = optim.AdamW(utils.get_param_groups(model), lr=args.lr)
 
 	# model checkpoint path
 	ckpt_path = f'results/{args.dataset}/{args.model_type}_{save_name}'
