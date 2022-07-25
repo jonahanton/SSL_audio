@@ -417,6 +417,48 @@ def mae_vit_tiny_patch16x16(**kwargs):
 	return mae_vit_tiny_patchX([16, 16], **kwargs)
 
 
+def mae_vitc_base_patchX(patch_size, **kwargs):
+	model = MaskedAutoencoderViT(
+		patch_size=patch_size, embed_dim=768, depth=11, num_heads=12,
+		mlp_ratio=4, norm_layer=partial(nn.LayerNorm, eps=1e-6), 
+		conv_stem=True, 
+		conv_stem_channels=[64, 128, 128, 256, 256, 512], conv_stem_strides=[2, 2, 1, 2, 1, 2],
+		**kwargs)
+	return model
+
+
+def mae_vitc_small_patchX(patch_size, **kwargs):
+	model = MaskedAutoencoderViT(
+		patch_size=patch_size, embed_dim=384, depth=11, num_heads=6,
+		mlp_ratio=4, norm_layer=partial(nn.LayerNorm, eps=1e-6), 
+		conv_stem=True, 
+		conv_stem_channels=[48, 96, 192, 384], conv_stem_strides=[2, 2, 2, 2],
+		**kwargs)
+	return model
+
+
+def mae_vitc_tiny_patchX(patch_size, **kwargs):
+	model = MaskedAutoencoderViT(
+		patch_size=patch_size, embed_dim=192, depth=11, num_heads=3,
+		mlp_ratio=4, norm_layer=partial(nn.LayerNorm, eps=1e-6), 
+		conv_stem=True, 
+		conv_stem_channels=[24, 48, 96, 192], conv_stem_strides=[2, 2, 2, 2],
+		**kwargs)
+	return model
+
+
+def mae_vitc_base_patch16x16(**kwargs):
+	return mae_vit_base_patchX([16, 16], **kwargs)
+
+
+def mae_vitc_small_patch16x16(**kwargs):
+	return mae_vitc_small_patchX([16, 16], **kwargs)
+
+
+def mae_vitc_tiny_patch16x16(**kwargs):
+	return mae_vitc_tiny_patchX([16, 16], **kwargs)
+
+
 
 if __name__ == "__main__":
 

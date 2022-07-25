@@ -5,17 +5,17 @@ following the common API as detailed at: https://hearbenchmark.com/hear-api.html
 
 from typing import List, Tuple
 from tqdm import tqdm
-from easydict import EasyDict
 import torch
 import torch.nn as nn
 from torch import Tensor
 from torchaudio.transforms import MelSpectrogram
 
-from model import BYOLAv2encoder, ResNet, ViT
+from models import mae, resnet
+from model import AudioNTT2022, ViT
 import hear.utils as utils
 
 # Default frame duration in milliseconds
-TIMESTAMP_FRAME_DUR = 1000
+TIMESTAMP_FRAME_DUR = 950
 # Default hop_size in milliseconds
 TIMESTAMP_HOP_SIZE = 50
 # Number of frames to batch process for timestamp embeddings
@@ -23,11 +23,11 @@ BATCH_SIZE = 512
 
 
 class ModelWrapper(nn.Module):
-	def __init__(self, cfg, model_name, model_file_path):
+	def __init__(self, cfg, model_type, model_file_path):
 		super().__init__()
 		# needed for HEAR API
 		self.sample_rate = cfg.sample_rate
-		self.model, embed_size = self._get_model(model_name)
+		self.model, embed_size = self._get_model(model_type)
 		self._load_weights(model_file_path)
 		self.scene_embedding_size = embed_size
 		self.timestamp_embedding_size = embed_size
@@ -35,19 +35,27 @@ class ModelWrapper(nn.Module):
 	def forward(self, x):
 		return self.model(x)
 
-	def _get_model(self, model_name):
-		if model_name == 'resnet':
-			return ResNet().f, 2048
-		elif model_name == 'byola':
-			return BYOLAv2encoder().f, 3072
+	def _get_model(self, model_type):
+		if model_type == 'resnet50':
+			self.model = resnet.resnet50()
+			self.model.fc = nn.Identity()
+			self.model.embed_dim = 2048
+		elif model_type == 'resnet50_ReGP_NRF':
+			self.model = resnet.resnet50_ReGP_NRF()
+			self.model.fc = nn.Identity()
+			self.model.embed_dim = 16384
+		elif model_type == 'audiontt':
+			self.model = AudioNTT2022()
+		elif 'vit' in model_type:
+			self.model = ViT(size=model_type.split('_')[-1])
 		else:
-			raise ValueError(f'Model {model_name} not supported!')
+			raise NotImplementedError(f'Model type {model_type} is not supported')
 
 	def _load_weights(self, model_file_path):
 		self.model.load_state_dict(torch.load(model_file_path, map_location='cpu'), strict=False)
 
 
-def load_model(model_file_path: str = "", model_name: str = "resnet", cfg_path: str = "hear/config.yaml") -> torch.nn.Module:
+def load_model(model_file_path: str = "", model_type: str = "audiontt", cfg_path: str = "hear/config.yaml") -> torch.nn.Module:
 	"""Load pre-trained model
 	Parameters
 	----------
@@ -62,7 +70,7 @@ def load_model(model_file_path: str = "", model_name: str = "resnet", cfg_path: 
 	# Load config file
 	cfg = utils.load_yaml_config(cfg_path)
 	# Load pretrained weights
-	model = ModelWrapper(cfg, model_name, model_file_path)
+	model = ModelWrapper(cfg, model_type, model_file_path)
 	return model
 
 
