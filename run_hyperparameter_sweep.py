@@ -391,7 +391,7 @@ if __name__ == '__main__':
 	parser.add_argument('--name', type=str, default='')
 	args = parser.parse_args()
 
-	if args.optimizer == 'Adam' or 'SGD':
+	if args.optimizer in ['Adam', 'SGD']:
 		args.wd = 0
 	elif args.optimizer == 'AdamW':
 		args.wd = 1e-2
