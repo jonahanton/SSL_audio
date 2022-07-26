@@ -390,7 +390,9 @@ if __name__ == '__main__':
 	parser.add_argument('--RLF', action='store_true', default=True)
 	parser.add_argument('--no_RLF', action='store_false', dest='RLF')
 	parser.add_argument('--Gnoise', action='store_true', default=False)
+	parser.add_argument('--name', type=str, default='')
 	args = parser.parse_args()
+
 	if args.optimizer == 'Adam' or 'SGD':
 		args.wd = 0
 	elif args.optimizer == 'AdamW':
@@ -399,14 +401,14 @@ if __name__ == '__main__':
 	wandb_kwargs = dict(
 		project=f'Hyperparameter sweep {args.model_type} [{args.dataset}]',
 		config=args,
-		name=f"{'_'.join(args.tune)} - {args.n_trials} trials",
+		name=f"{'_'.join(args.tune)} {args.name} - {args.n_trials} trials",
 	)
 	wandbc = WeightsAndBiasesCallback(
 		metric_name='score',
 		wandb_kwargs=wandb_kwargs,
 	)
 
-	log_dir = f"logs/hparams/{args.dataset}/{args.model_type}/"
+	log_dir = f"logs/hparams/{args.dataset}/{args.model_type}{args.name}/" 
 	os.makedirs(log_dir, exist_ok=True)
 	timestamp = datetime.datetime.now().strftime('%H:%M_%h%d')
 	log_path = os.path.join(log_dir, f"{'_'.join(args.tune)}_{timestamp}.log")
