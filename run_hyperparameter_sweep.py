@@ -35,7 +35,7 @@ from model import BarlowTwins
 
 
 HYPERPARAMETERS = [
-	'lr', 'wd'
+	'lr', 'wd',
 	'projector_n_hidden_layers',
 	'projector_out_dim',
 	'mixup_ratio',
