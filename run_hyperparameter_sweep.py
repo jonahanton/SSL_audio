@@ -380,7 +380,7 @@ if __name__ == '__main__':
 	parser.add_argument('--n_trials', type=int, default=10)
 	parser.add_argument('--train_epochs', type=int, default=20)
 	parser.add_argument('--model_type', type=str, default='audiontt', choices=MODELS)
-	parser.add_argument('--optimizer', type=str, default='Adam', choices=['Adam', 'AdamW'])
+	parser.add_argument('--optimizer', type=str, default='Adam', choices=['Adam', 'AdamW', 'SGD'])
 	parser.add_argument('--load_lms', action='store_true', default=True)
 	parser.add_argument('--load_wav', dest='load_lms', action='store_false')
 	parser.add_argument('--mixup', action='store_true', default=True)
