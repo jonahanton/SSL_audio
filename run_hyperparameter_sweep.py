@@ -348,13 +348,15 @@ def plot_intermediate_values(study, save_path):
 			x=tuple((x for x, _ in sorted_intermediate_values))
 			y=tuple((y for _, y in sorted_intermediate_values))
 			params = trial.params.items()
-			plt.plot(x, y, marker='o', label=f'{params}')
+			label_str = f'{params}'
+			plt.plot(x, y, marker='o', label=label_str)
 	plt.xlabel('Epoch')
 	plt.ylabel('Score')
 	plt.title('Intermediate scores')
-	plt.legend()
+	plt.legend(bbox_to_anchor=(1.05, 1.0), loc='upper left')
+	plt.tight_layout()
 	plt.show()
-	plt.savefig(os.path.join(save_path, 'intermediate_values.png'), bbox_inches = "tight")
+	plt.savefig(os.path.join(save_path, 'intermediate_values.png'), bbox_inches = 'tight')
 
 
 if __name__ == '__main__':
