@@ -355,7 +355,9 @@ def plot_and_save_intermediate_values(study, save_path):
 			y=tuple((y for _, y in sorted_intermediate_values))
 			params = [(k,v) for k,v in trial.params.items()]
 			label_str = ','.join([f'{p[0]}={p[1]}' for p in params])
-			intermediate_values.append([trial.number, params['lr'], params['wd']] + list(x))
+			assert 'lr' in trial.params
+			assert 'wd' in trial.params
+			intermediate_values.append([trial.number, trial.params['lr'], trial.params['wd']] + list(x))
 			plt.plot(x, y, marker='o', label=label_str)
 	plt.xlabel('Epoch')
 	plt.ylabel('Score')
@@ -389,6 +391,10 @@ if __name__ == '__main__':
 	parser.add_argument('--no_RLF', action='store_false', dest='RLF')
 	parser.add_argument('--Gnoise', action='store_true', default=False)
 	args = parser.parse_args()
+	if args.optimizer == 'Adam' or 'SGD':
+		args.wd = 0
+	elif args.optimizer == 'AdamW':
+		args.wd = 1e-2
 
 	wandb_kwargs = dict(
 		project=f'Hyperparameter sweep {args.model_type} [{args.dataset}]',
