@@ -34,7 +34,7 @@ if torch.cuda.is_available():
 	torch.backends.cudnn.benchmark = True
 
 
-def train_one_epoch(args, epoch, model, data_loader, optimizer, wandb_run):
+def train_one_epoch(args, epoch, model, data_loader, optimizer, fp16_scaler, wandb_run):
 	model.train()
 	total_loss, total_num, train_bar = 0, 0, tqdm(data_loader)
 	
@@ -56,13 +56,19 @@ def train_one_epoch(args, epoch, model, data_loader, optimizer, wandb_run):
 
 		pos_1, pos_2 = pos_1.cuda(non_blocking=True), pos_2.cuda(non_blocking=True)
 
-		loss = model(pos_1, pos_2)
+		with torch.cuda.amp.autocast(enabled=(fp16_scaler is not None)):
+			loss = model(pos_1, pos_2)
 		forward_time = time.time() - tflag 
 		tflag = time.time()
 
 		optimizer.zero_grad()
-		loss.backward()
-		optimizer.step()
+		if fp16_scaler is None:
+			loss.backward()
+			optimizer.step()
+		else:
+			fp16_scaler.scale(loss).backward()
+			fp16_scaler.step(optimizer)
+			fp16_scaler.update()
 		backward_time = time.time() - tflag 
 
 		total_num += args.batch_size_per_gpu
@@ -92,7 +98,7 @@ if __name__ == '__main__':
 	parser.add_argument('--batch_size', default=128, type=int, help='Number of images in each mini-batch')
 	parser.add_argument('--epochs', default=100, type=int, help='Number of iterations over the dataset to train for')
 	parser.add_argument('--epoch_save_f', default=20, type=int)
-	parser.add_argument('--optimizer', default='Adam', type=str, choices = ['Adam', 'AdamW'])
+	parser.add_argument('--optimizer', default='Adam', type=str, choices = ['Adam', 'AdamW', 'SGD'])
 	parser.add_argument('--lr', type=float, default=1e-4)
 	# model type 
 	parser.add_argument('--model_type', default='audiontt', type=str, choices=MODELS)
@@ -130,6 +136,8 @@ if __name__ == '__main__':
 	# data loader
 	parser.add_argument('--num_workers', type=int, default=20)
 	parser.add_argument('--name', type=str, default=None)
+	# mixed precision training
+	parser.add_argument('--use_fp16', action='store_true', default=False)
 	
 	# args parse
 	args = parser.parse_args()
@@ -205,16 +213,25 @@ if __name__ == '__main__':
 	else:
 		model_without_ddp = model
 	
+	# optimizer
 	if args.optimizer == 'Adam':
-		optimizer = optim.Adam(model.parameters(), lr=args.lr)
+		optimizer = optim.Adam(utils.get_param_groups(model), lr=args.lr)
 	elif args.optimizer == 'AdamW':
 		optimizer = optim.AdamW(utils.get_param_groups(model), lr=args.lr)
+	elif args.optimizer == 'SGD':
+		optimizer = optim.SGD(utils.get_param_groups(model), lr=args.lr)
+
+	# mixed precision
+	fp16_scaler = None 
+	if args.use_fp16:
+		fp16_scaler = torch.cuda.amp.GradScaler()
+	
 
 	# model checkpoint path
 	ckpt_path = f'results/{args.dataset}/{args.model_type}_{save_name}'
 	os.makedirs(ckpt_path, exist_ok=True)
 
 	for epoch in range(1, args.epochs+1):
-		train_loss = train_one_epoch(args, epoch, model, train_loader, optimizer, wandb_run)
+		train_loss = train_one_epoch(args, epoch, model, train_loader, optimizer, fp16_scaler, wandb_run)
 		if epoch % args.epoch_save_f == 0 or epoch == args.epochs:
 			utils.save_on_master(model_without_ddp.encoder.state_dict(), ckpt_path + f'/model_{epoch}.pth')
