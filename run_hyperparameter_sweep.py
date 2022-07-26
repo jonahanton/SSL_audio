@@ -16,6 +16,7 @@ from tqdm import tqdm
 import numpy as np
 import time
 import datetime
+import csv
 import logging
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -34,7 +35,7 @@ from model import BarlowTwins
 
 
 HYPERPARAMETERS = [
-	'lr',
+	'lr', 'wd'
 	'projector_n_hidden_layers',
 	'projector_out_dim',
 	'mixup_ratio',
@@ -85,12 +86,16 @@ def objective(trial):
 
 	# Generate the optimizers 
 	if 'lr' in args.tune:
-		args.lr = trial.suggest_float("lr", 1e-5, 1e-2, log=True)
+		args.lr = trial.suggest_float("lr", 1e-6, 1e-2, log=True)
+	if 'wd' in args.tune:
+		args.wd = trial.suggest_float("wd", 1e-3, 1e0, log=True)
 
 	if args.optimizer == 'Adam':
-		optimizer = optim.Adam(model.parameters(), lr=args.lr)
+		optimizer = optim.Adam(utils.get_param_groups(model), lr=args.lr, weight_decay=args.wd)
 	elif args.optimizer == 'AdamW':
-		optimizer = optim.AdamW(utils.get_param_groups(model), lr=args.lr)
+		optimizer = optim.AdamW(utils.get_param_groups(model), lr=args.lr, weight_decay=args.wd)
+	elif args.optimizer == 'SGD':
+		optimizer = optim.SGD(utils.get_param_groups(model), lr=args.lr, weight_decay=args.wd)
 
 	# Get data
 	train_loader, eval_train_loader, eval_val_loader, eval_test_loader = get_data(trial)
@@ -339,16 +344,18 @@ def log_print(msg):
 	print(msg)
 
 
-def plot_intermediate_values(study, save_path):
+def plot_and_save_intermediate_values(study, save_path):
 	target_state = [TrialState.PRUNED, TrialState.COMPLETE, TrialState.RUNNING]
 	trials = [trial for trial in study.trials if trial.state in target_state]
+	intermediate_values = []
 	for trial in trials:
 		if trial.intermediate_values:
 			sorted_intermediate_values = sorted(trial.intermediate_values.items()) 
 			x=tuple((x for x, _ in sorted_intermediate_values))
 			y=tuple((y for _, y in sorted_intermediate_values))
-			params = trial.params.items()
-			label_str = f'{params}'
+			params = [(k,v) for k,v in trial.params.items()]
+			label_str = ','.join([f'{p[0]}={p[1]}' for p in params])
+			intermediate_values.append([trial.number, params['lr'], params['wd']] + list(x))
 			plt.plot(x, y, marker='o', label=label_str)
 	plt.xlabel('Epoch')
 	plt.ylabel('Score')
@@ -357,6 +364,9 @@ def plot_intermediate_values(study, save_path):
 	plt.tight_layout()
 	plt.show()
 	plt.savefig(os.path.join(save_path, 'intermediate_values.png'), bbox_inches = 'tight')
+	with open(os.path.join(save_path, 'intermediate_values.csv'), 'w') as f:
+		writer = csv.writer(f)
+		writer.writerows(intermediate_values)
 
 
 if __name__ == '__main__':
@@ -364,7 +374,7 @@ if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='Hyperparameter tuning', parents=[get_std_parser()])
 	parser.add_argument('--dataset', type=str, default='fsd50k', choices=['fsd50k', 'nsynth'])
 	parser.add_argument('--eval', type=str, default='linear', choices=['linear', 'knn'])
-	parser.add_argument('--tune', nargs='+', type=str, default=['lr'], choices=HYPERPARAMETERS)
+	parser.add_argument('--tune', nargs='+', type=str, default=['lr', 'wd'], choices=HYPERPARAMETERS)
 	parser.add_argument('--n_trials', type=int, default=10)
 	parser.add_argument('--train_epochs', type=int, default=20)
 	parser.add_argument('--model_type', type=str, default='audiontt', choices=MODELS)
@@ -440,4 +450,4 @@ if __name__ == '__main__':
 		)
 	wandb.finish()
 
-	plot_intermediate_values(study, save_path=log_dir)
+	plot_and_save_intermediate_values(study, save_path=log_dir)
