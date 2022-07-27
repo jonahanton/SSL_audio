@@ -34,7 +34,7 @@ class BarlowTwins(nn.Module):
 			self.encoder.fc = nn.Identity()
 			self.encoder.embed_dim = 16384
 		elif self.cfg.model_type == 'audiontt':
-			self.encoder = AudioNTT2022()
+			self.encoder = AudioNTT2022(squeeze_excitation=self.cfg.squeeze_excitation)
 		elif 'vit' in self.cfg.model_type:
 			if self.cfg.model_type.split('_')[0] == 'vitc':
 				self.encoder = ViT(c=True, size=self.cfg.model_type.split('_')[-1])
@@ -116,7 +116,7 @@ class AudioNTT2022Encoder(nn.Module):
 	Encoder network from BYOLA-v2
 	Copy-paste from https://github.com/nttcslab/byol-a/blob/master/v2/byol_a2/models.py
 	"""
-	def __init__(self, n_mels=64, d=3072, base_d=64, mlp_hidden_d=2048, conv_layers=2, stack=True):
+	def __init__(self, n_mels=64, d=3072, base_d=64, mlp_hidden_d=2048, conv_layers=2, stack=True, squeeze_excitation=False):
 		super().__init__()
 		convs = [
 			nn.Conv2d(1, base_d, 3, stride=1, padding=1),
@@ -124,6 +124,8 @@ class AudioNTT2022Encoder(nn.Module):
 			nn.ReLU(),
 			nn.MaxPool2d(2, stride=2),
 		]
+		if squeeze_excitation:
+			convs.append(SE_Block)
 		for c in range(1, conv_layers):
 			convs.extend([
 				nn.Conv2d(base_d, base_d, 3, stride=1, padding=1),
@@ -131,6 +133,8 @@ class AudioNTT2022Encoder(nn.Module):
 				nn.ReLU(),
 				nn.MaxPool2d(2, stride=2),
 			])
+			if squeeze_excitation:
+				convs.append(SE_Block)
 		self.features = nn.Sequential(*convs)
 		self.conv_d = base_d * (n_mels//(2**conv_layers))
 		self.fc = nn.Sequential(
@@ -153,8 +157,8 @@ class AudioNTT2022Encoder(nn.Module):
 
 
 class AudioNTT2022(AudioNTT2022Encoder):
-	def __init__(self, n_mels=64, d=3072, mlp_hidden_d=2048):
-		super().__init__(n_mels=n_mels, d=d, mlp_hidden_d=mlp_hidden_d)
+	def __init__(self, n_mels=64, d=3072, mlp_hidden_d=2048, squeeze_excitation=False):
+		super().__init__(n_mels=n_mels, d=d, mlp_hidden_d=mlp_hidden_d, squeeze_excitation=squeeze_excitation)
 		self.embed_dim = d
 
 	def forward(self, x):
@@ -169,6 +173,25 @@ def mean_max_pooling(frame_embeddings):
 	x2 = torch.mean(frame_embeddings, dim=1)
 	x = x1 + x2
 	return x
+
+
+class SE_Block(nn.Module):
+    """Copy-paste from https://github.com/moskomule/senet.pytorch/blob/master/senet/se_module.py#L4 """
+    def __init__(self, c, r=16):
+        super().__init__()
+        self.squeeze = nn.AdaptiveAvgPool2d(1)
+        self.excitation = nn.Sequential(
+            nn.Linear(c, c // r, bias=False),
+            nn.ReLU(inplace=True),
+            nn.Linear(c // r, c, bias=False),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x):
+        bs, c, _, _ = x.shape
+        y = self.squeeze(x).view(bs, c)
+        y = self.excitation(y).view(bs, c, 1, 1)
+        return x * y.expand_as(x)
 
 
 
