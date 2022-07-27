@@ -100,11 +100,16 @@ def objective(trial):
 	# Get data
 	train_loader, eval_train_loader, eval_val_loader, eval_test_loader = get_data(trial)
 
+	# mixed precision
+	fp16_scaler = None 
+	if args.use_fp16:
+		fp16_scaler = torch.cuda.amp.GradScaler()
+
 	# Train the model 
 	print('Running training...')
 	for epoch in range(1, args.train_epochs+1):
 		model.train()
-		loss = train_one_epoch(epoch, model, train_loader, optimizer)
+		loss = train_one_epoch(epoch, model, train_loader, optimizer, fp16_scaler)
 		# Report intermediate objective value
 		score = evaluate(model.encoder, eval_train_loader, eval_val_loader, eval_test_loader)
 		trial.report(score, epoch)
@@ -218,7 +223,7 @@ def eval_linear(model, train_loader, val_loader, test_loader):
 	return score
 
 
-def train_one_epoch(epoch, model, data_loader, optimizer):
+def train_one_epoch(epoch, model, data_loader, optimizer, fp16_scaler):
 	model.train()
 	total_loss, total_num, train_bar = 0, 0, tqdm(data_loader)
 	
@@ -231,13 +236,19 @@ def train_one_epoch(epoch, model, data_loader, optimizer):
 		(pos_1, pos_2), _ = data_tuple
 		pos_1, pos_2 = pos_1.cuda(non_blocking=True), pos_2.cuda(non_blocking=True)
 
-		loss = model(pos_1, pos_2)
+		with torch.cuda.amp.autocast(enabled=(fp16_scaler is not None)):
+			loss = model(pos_1, pos_2)
 		forward_time = time.time() - tflag 
 		tflag = time.time()
 
 		optimizer.zero_grad()
-		loss.backward()
-		optimizer.step()
+		if fp16_scaler is None:
+			loss.backward()
+			optimizer.step()
+		else:
+			fp16_scaler.scale(loss).backward()
+			fp16_scaler.step(optimizer)
+			fp16_scaler.update()
 		backward_time = time.time() - tflag 
 
 		total_num += args.batch_size
@@ -389,6 +400,7 @@ if __name__ == '__main__':
 	parser.add_argument('--no_RLF', action='store_false', dest='RLF')
 	parser.add_argument('--Gnoise', action='store_true', default=False)
 	parser.add_argument('--name', type=str, default='')
+	parser.add_argument('--use_fp16', action='store_true', default=False)
 	args = parser.parse_args()
 
 	if args.optimizer in ['Adam', 'SGD']:
