@@ -8,7 +8,8 @@ from tqdm import tqdm
 import time
 import datetime
 import wandb
-import copy
+import math
+import sys
 
 from augmentations import RunningNorm, NormalizeBatch
 from utils import utils, transforms
@@ -60,6 +61,10 @@ def train_one_epoch(args, epoch, model, data_loader, optimizer, fp16_scaler, wan
 			loss = model(pos_1, pos_2)
 		forward_time = time.time() - tflag 
 		tflag = time.time()
+
+		if not math.isfinite(loss.item()):
+			print(f'Loss is {loss.item()}. Stopping training')
+			sys.exit(1)
 
 		optimizer.zero_grad()
 		if fp16_scaler is None:
