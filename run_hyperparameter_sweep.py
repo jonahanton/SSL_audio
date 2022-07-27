@@ -76,6 +76,7 @@ def get_std_parser():
 	parser.add_argument('--mixup_ratio', type=float, default=0.2)
 	parser.add_argument('--virtual_crop_scale', nargs='+', type=float, default=[1, 1.5])
 	parser.add_argument('--HSIC', action='store_true', default=False)
+	parser.add_argument('--squeeze_excitation', action='store_true', default=False)
 	return parser
 
 
