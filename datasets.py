@@ -163,6 +163,7 @@ class LibriSpeech(Dataset):
 	def __getitem__(self, idx):
 		datum = self.data[idx]
 		fname = datum.get('wav')
+		dummy_label = torch.zeros(200)
 
 		if self.cfg.load_lms:
 			# load lms
@@ -203,7 +204,7 @@ class LibriSpeech(Dataset):
 		if self.transform is not None:
 			lms = self.transform(lms)
 
-		return lms, None
+		return lms, dummy_label
 
 
 class NSynth_HEAR(Dataset):
