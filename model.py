@@ -125,7 +125,7 @@ class AudioNTT2022Encoder(nn.Module):
 			nn.MaxPool2d(2, stride=2),
 		]
 		if squeeze_excitation:
-			convs.append(SE_Block)
+			convs.append(SE_Block(c=base_d))
 		for c in range(1, conv_layers):
 			convs.extend([
 				nn.Conv2d(base_d, base_d, 3, stride=1, padding=1),
@@ -134,7 +134,7 @@ class AudioNTT2022Encoder(nn.Module):
 				nn.MaxPool2d(2, stride=2),
 			])
 			if squeeze_excitation:
-				convs.append(SE_Block)
+				convs.append(SE_Block(c=base_d))
 		self.features = nn.Sequential(*convs)
 		self.conv_d = base_d * (n_mels//(2**conv_layers))
 		self.fc = nn.Sequential(
