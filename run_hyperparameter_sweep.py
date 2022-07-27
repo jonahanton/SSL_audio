@@ -355,7 +355,7 @@ def plot_and_save_intermediate_values(study, save_path):
 			y=tuple((y for _, y in sorted_intermediate_values))
 			params = [(k,v) for k,v in trial.params.items()]
 			label_str = ','.join([f'{p[0]}={p[1]}' for p in params])
-			intermediate_values.append([trial.number] + [q for p in params for q in p] + list(x))
+			intermediate_values.append([trial.number] + [q for p in params for q in p] + list(y))
 			plt.plot(x, y, marker='o', label=label_str)
 	plt.xlabel('Epoch')
 	plt.ylabel('Score')
