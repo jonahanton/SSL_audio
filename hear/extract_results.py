@@ -6,7 +6,7 @@ from tqdm import tqdm
 import pprint 
 
 
-BASE_DIR = "${EPHEMERAL}/hear/embeddings"
+BASE_DIR = "/rds/general/user/jla21/ephemeral/hear/embeddings"
 TASKS = [
 	"beehive_states_fold0-v2-full",
 	"beehive_states_fold1-v2-full",
@@ -34,7 +34,8 @@ TASKS = [
 def extract_task_score(model_dir, task):
 
 	results_json = os.path.join(*[model_dir, "hear.sample", task, "test.predicted-scores.json"])
-	with open(results_json, "w") as jsonfile:
+	with open(results_json, "r") as jsonfile:
+        print(results_json)
 		results = json.load(jsonfile)
 
 	if "test" in results:
