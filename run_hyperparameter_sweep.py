@@ -85,20 +85,41 @@ def objective(trial):
 	# Generate the model
 	model = define_model(trial).cuda()
 
-	# Generate the optimizers 
-	if 'lr' in args.tune:
-		args.lr = trial.suggest_float("lr", 1e-6, 1e-2, log=True)
-	if 'wd' in args.tune:
-		args.wd = trial.suggest_float("wd", 1e-3, 1e0, log=True)
-
+	# Generate the optimizers
+	if args.optimizer in ['Adam', 'AdamW', 'SGD']: 
+		if 'lr' in args.tune:
+			args.lr = trial.suggest_float("lr", 1e-6, 1e-2, log=True)
+		if 'wd' in args.tune:
+			args.wd = trial.suggest_float("wd", 1e-3, 1e0, log=True)
 	if args.optimizer == 'Adam':
 		optimizer = optim.Adam(utils.get_param_groups(model), lr=args.lr, weight_decay=args.wd)
 	elif args.optimizer == 'AdamW':
 		optimizer = optim.AdamW(utils.get_param_groups(model), lr=args.lr, weight_decay=args.wd)
 	elif args.optimizer == 'SGD':
 		optimizer = optim.SGD(utils.get_param_groups(model), lr=args.lr, weight_decay=args.wd)
+
 	elif args.optimizer == 'LARS':
-		optimizer = utils.LARS(utils.get_param_groups(model), lr=args.lr, weight_decay=args.wd)
+		# separate lr for weights and biases using LARS optimizer
+		if 'lr' in args.tune:
+			lr_weights = trial.suggest_float("lr_weights", 1e-3, 1e0, log=True)
+			lr_biases = trial.suggest_float("lr_biases", 1e-6, 1e-2, log=True)
+		else:
+			lr_weights = lr_biases = args.lr
+		if 'wd' in args.tune:
+			args.wd = trial.suggest_float("wd", 1e-8, 1e-4, log=True)
+		param_weights = []
+		param_biases = []
+		for param in model.parameters():
+			if param.ndim == 1:
+				param_biases.append(param)
+			else:
+				param_weights.append(param)
+		parameters = [
+			{'params': param_weights, 'lr': lr_weights},
+			{'params': param_biases, 'lr': lr_biases},
+		]
+		optimizer = utils.LARS(parameters, lr=0, weight_decay=args.wd,
+			weight_decay_filter=True, lars_adaptation_filter=True)
 
 	# Get data
 	train_loader, eval_train_loader, eval_val_loader, eval_test_loader = get_data(trial)
