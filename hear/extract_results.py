@@ -63,9 +63,9 @@ def extract_model_scores(model_dir):
 	scores = {}
 	for task_type, tasks in TASKS.items():
 		for task in tasks:
+			scores.setdefault(task_type, {})
 			score = extract_task_score(model_dir, task)
 			if score is not None:
-				scores.setdefault(task_type, {})
 				scores[task_type][task] = score
 		avg = np.mean(list(scores[task_type].values()))
 		if math.isfinite(avg):
