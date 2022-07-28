@@ -2,6 +2,7 @@ import json
 import os 
 import fire
 import glob 
+from tqdm import tqdm
 import pprint 
 
 
@@ -56,7 +57,7 @@ def extract_all():
 	
 	model_dirs = glob.glob(BASE_DIR + "/*/")
 	all_scores = {}
-	for model_dir in model_dirs:
+	for model_dir in tqdm(model_dirs):
 		all_scores[model_dir.split("/")[-1]] = extract_model_scores(model_dir)
 
 	pprint.prrint(all_scores)
