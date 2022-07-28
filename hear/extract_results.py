@@ -60,7 +60,7 @@ def extract_all():
 	for model_dir in tqdm(model_dirs):
 		all_scores[model_dir.split("/")[-1]] = extract_model_scores(model_dir)
 
-	pprint.prrint(all_scores)
+	pprint.pprint(all_scores)
 		 
 
 if __name__ == "__main__":
