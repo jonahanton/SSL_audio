@@ -1,234 +1,366 @@
 {
     "audiontt_input_frames=32011:52_07Jul_model_100": {
-        "beehive_states_fold0-v2-full": 0.5524811921296295,
-        "beehive_states_fold1-v2-full": 0.5524811921296295,
-        "beijing_opera-v1.0-hear2021-full": 0.9320035576820374,
-        "dcase2016_task2-hear2021-full": 0.8367347121238708,
-        "esc50-v2.0.0-full": 0.7554999947547912,
-        "fsd50k-v1.0-full": 0.4493627057084634,
-        "gunshot_triangulation-v1.0-full": 0.8898809552192688,
-        "libricount-v1.0.0-hear2021-full": 0.7800699353218079,
-        "maestro-v3.0.0-5h": 0.054857832938432695,
-        "mridangam_stroke-v1.5-full": 0.9760647535324096,
-        "mridangam_tonic-v1.5-full": 0.9653141140937805,
-        "nsynth_pitch-v2.2.3-50h": 0.7955664992332458,
-        "nsynth_pitch-v2.2.3-5h": 0.656000018119812,
-        "speech_commands-v0.0.2-5h": 0.8899795413017273,
-        "speech_commands-v0.0.2-full": 0.9083844423294067,
-        "tfds_crema_d-1.0.0-full": 0.6220746517181397,
-        "tfds_gtzan-1.0.0-full": 0.8029999911785126,
-        "tfds_gtzan_music_speech-1.0.0-full": 0.9762820541858673,
-        "vocal_imitation-v1.1.3-full": 0.11923257470586618,
-        "vox_lingua_top10-hear2021-full": 0.3694369554519653,
-        "AVERAGE": 0.6942353836929333
+        "environmental": {
+            "beehive_states_fold0-v2-full": 0.5524811921296295,
+            "beehive_states_fold1-v2-full": 0.5524811921296295,
+            "esc50-v2.0.0-full": 0.7554999947547912,
+            "fsd50k-v1.0-full": 0.4493627057084634,
+            "gunshot_triangulation-v1.0-full": 0.8898809552192688,
+            "AVERAGE": 0.6399412079883565
+        },
+        "speech": {
+            "speech_commands-v0.0.2-5h": 0.8899795413017273,
+            "speech_commands-v0.0.2-full": 0.9083844423294067,
+            "tfds_crema_d-1.0.0-full": 0.6220746517181397,
+            "vocal_imitation-v1.1.3-full": 0.11923257470586618,
+            "vox_lingua_top10-hear2021-full": 0.3694369554519653,
+            "libricount-v1.0.0-hear2021-full": 0.7800699353218079,
+            "AVERAGE": 0.6148630168048189
+        },
+        "music": {
+            "beijing_opera-v1.0-hear2021-full": 0.9320035576820374,
+            "mridangam_stroke-v1.5-full": 0.9760647535324096,
+            "mridangam_tonic-v1.5-full": 0.9653141140937805,
+            "nsynth_pitch-v2.2.3-50h": 0.7955664992332458,
+            "nsynth_pitch-v2.2.3-5h": 0.656000018119812,
+            "tfds_gtzan-1.0.0-full": 0.8029999911785126,
+            "tfds_gtzan_music_speech-1.0.0-full": 0.9762820541858673,
+            "AVERAGE": 0.8720329982893807
+        },
+        "other": {
+            "dcase2016_task2-hear2021-full": 0.8367347121238708,
+            "maestro-v3.0.0-5h": 0.054857832938432695,
+            "AVERAGE": 0.4457962725311518
+        }
     },
-    "audiontt_mixup21:23_07Jul_model_100": {},
+    "audiontt_mixup+RRC13:40_07Jul_model_100": {
+        "environmental": {},
+        "speech": {},
+        "music": {},
+        "other": {}
+    },
+    "audiontt_mixup21:23_07Jul_model_100": {
+        "environmental": {},
+        "speech": {},
+        "music": {},
+        "other": {}
+    },
     "audiontt_out_dim=409615:00_07Jul_model_100": {
-        "beehive_states_fold0-v2-full": 0.5800419560185185,
-        "beehive_states_fold1-v2-full": 0.6183931327160493,
-        "beijing_opera-v1.0-hear2021-full": 0.9576241135597229,
-        "dcase2016_task2-hear2021-full": 0.8352402448654175,
-        "esc50-v2.0.0-full": 0.7579999923706054,
-        "fsd50k-v1.0-full": 0.4480399185585918,
-        "gunshot_triangulation-v1.0-full": 0.913690481867109,
-        "libricount-v1.0.0-hear2021-full": 0.7569930195808411,
-        "maestro-v3.0.0-5h": 0.05901892706751823,
-        "mridangam_stroke-v1.5-full": 0.976781702041626,
-        "mridangam_tonic-v1.5-full": 0.9680370926856995,
-        "nsynth_pitch-v2.2.3-50h": 0.7948275804519653,
-        "nsynth_pitch-v2.2.3-5h": 0.6359999775886536,
-        "speech_commands-v0.0.2-5h": 0.8773006200790405,
-        "speech_commands-v0.0.2-full": 0.9071574807167053,
-        "tfds_crema_d-1.0.0-full": 0.6187130808830261,
-        "tfds_gtzan-1.0.0-full": 0.8090000092983246,
-        "tfds_gtzan_music_speech-1.0.0-full": 0.9615384638309479,
-        "vocal_imitation-v1.1.3-full": 0.09814561613672741,
-        "vox_lingua_top10-hear2021-full": 0.352931535243988,
-        "AVERAGE": 0.6963737472780539
+        "environmental": {
+            "beehive_states_fold0-v2-full": 0.5800419560185185,
+            "beehive_states_fold1-v2-full": 0.6183931327160493,
+            "esc50-v2.0.0-full": 0.7579999923706054,
+            "fsd50k-v1.0-full": 0.4480399185585918,
+            "gunshot_triangulation-v1.0-full": 0.913690481867109,
+            "AVERAGE": 0.6636330963061748
+        },
+        "speech": {
+            "speech_commands-v0.0.2-5h": 0.8773006200790405,
+            "speech_commands-v0.0.2-full": 0.9071574807167053,
+            "tfds_crema_d-1.0.0-full": 0.6187130808830261,
+            "vocal_imitation-v1.1.3-full": 0.09814561613672741,
+            "vox_lingua_top10-hear2021-full": 0.352931535243988,
+            "libricount-v1.0.0-hear2021-full": 0.7569930195808411,
+            "AVERAGE": 0.6018735587733881
+        },
+        "music": {
+            "beijing_opera-v1.0-hear2021-full": 0.9576241135597229,
+            "mridangam_stroke-v1.5-full": 0.976781702041626,
+            "mridangam_tonic-v1.5-full": 0.9680370926856995,
+            "nsynth_pitch-v2.2.3-50h": 0.7948275804519653,
+            "nsynth_pitch-v2.2.3-5h": 0.6359999775886536,
+            "tfds_gtzan-1.0.0-full": 0.8090000092983246,
+            "tfds_gtzan_music_speech-1.0.0-full": 0.9615384638309479,
+            "AVERAGE": 0.8719727056367057
+        },
+        "other": {
+            "dcase2016_task2-hear2021-full": 0.8352402448654175,
+            "maestro-v3.0.0-5h": 0.05901892706751823,
+            "AVERAGE": 0.44712958596646785
+        }
     },
     "audiontt_out_dim=6413:56_07Jul_model_100": {
-        "beehive_states_fold0-v2-full": 0.46049141589506176,
-        "beehive_states_fold1-v2-full": 0.5108506944444444,
-        "beijing_opera-v1.0-hear2021-full": 0.9532801508903503,
-        "dcase2016_task2-hear2021-full": 0.800000011920929,
-        "esc50-v2.0.0-full": 0.7575000047683715,
-        "fsd50k-v1.0-full": 0.44933493441475525,
-        "gunshot_triangulation-v1.0-full": 0.9166666609900338,
-        "libricount-v1.0.0-hear2021-full": 0.777622377872467,
-        "maestro-v3.0.0-5h": 0.05352214500308037,
-        "mridangam_stroke-v1.5-full": 0.9776412963867187,
-        "mridangam_tonic-v1.5-full": 0.9704728364944458,
-        "nsynth_pitch-v2.2.3-50h": 0.80147784948349,
-        "nsynth_pitch-v2.2.3-5h": 0.6259999871253967,
-        "speech_commands-v0.0.2-5h": 0.8858895897865295,
-        "speech_commands-v0.0.2-full": 0.9208589196205139,
-        "tfds_crema_d-1.0.0-full": 0.6133360981941223,
-        "tfds_gtzan-1.0.0-full": 0.7899999916553497,
-        "tfds_gtzan_music_speech-1.0.0-full": 0.9538461565971375,
-        "vocal_imitation-v1.1.3-full": 0.1154168657928668,
-        "vox_lingua_top10-hear2021-full": 0.34466296434402466,
-        "AVERAGE": 0.6839435475840044
+        "environmental": {
+            "beehive_states_fold0-v2-full": 0.46049141589506176,
+            "beehive_states_fold1-v2-full": 0.5108506944444444,
+            "esc50-v2.0.0-full": 0.7575000047683715,
+            "fsd50k-v1.0-full": 0.44933493441475525,
+            "gunshot_triangulation-v1.0-full": 0.9166666609900338,
+            "AVERAGE": 0.6189687421025333
+        },
+        "speech": {
+            "speech_commands-v0.0.2-5h": 0.8858895897865295,
+            "speech_commands-v0.0.2-full": 0.9208589196205139,
+            "tfds_crema_d-1.0.0-full": 0.6133360981941223,
+            "vocal_imitation-v1.1.3-full": 0.1154168657928668,
+            "vox_lingua_top10-hear2021-full": 0.34466296434402466,
+            "libricount-v1.0.0-hear2021-full": 0.777622377872467,
+            "AVERAGE": 0.6096311359350874
+        },
+        "music": {
+            "beijing_opera-v1.0-hear2021-full": 0.9532801508903503,
+            "mridangam_stroke-v1.5-full": 0.9776412963867187,
+            "mridangam_tonic-v1.5-full": 0.9704728364944458,
+            "nsynth_pitch-v2.2.3-50h": 0.80147784948349,
+            "nsynth_pitch-v2.2.3-5h": 0.6259999871253967,
+            "tfds_gtzan-1.0.0-full": 0.7899999916553497,
+            "tfds_gtzan_music_speech-1.0.0-full": 0.9538461565971375,
+            "AVERAGE": 0.8675311812332698
+        },
+        "other": {
+            "dcase2016_task2-hear2021-full": 0.800000011920929,
+            "maestro-v3.0.0-5h": 0.05352214500308037,
+            "AVERAGE": 0.4267610784620047
+        }
     },
     "audiontt_out_dim=104815:03_07Jul_model_100": {
-        "beehive_states_fold0-v2-full": 0.37723042052469136,
-        "beehive_states_fold1-v2-full": 0.6519820601851851,
-        "beijing_opera-v1.0-hear2021-full": 0.9619680881500244,
-        "dcase2016_task2-hear2021-full": 0.8390804529190063,
-        "esc50-v2.0.0-full": 0.7729999899864197,
-        "fsd50k-v1.0-full": 0.4377553537659759,
-        "gunshot_triangulation-v1.0-full": 0.8898809552192688,
-        "libricount-v1.0.0-hear2021-full": 0.7562937021255494,
-        "maestro-v3.0.0-5h": 0.05489109084010124,
-        "mridangam_stroke-v1.5-full": 0.9766379117965698,
-        "mridangam_tonic-v1.5-full": 0.9648831844329834,
-        "nsynth_pitch-v2.2.3-50h": 0.7980295419692993,
-        "nsynth_pitch-v2.2.3-5h": 0.6299999952316284,
-        "speech_commands-v0.0.2-5h": 0.8670756816864014,
-        "speech_commands-v0.0.2-full": 0.9118609428405762,
-        "tfds_crema_d-1.0.0-full": 0.622348177433014,
-        "tfds_gtzan-1.0.0-full": 0.7959999918937684,
-        "tfds_gtzan_music_speech-1.0.0-full": 0.9378205180168152,
-        "vocal_imitation-v1.1.3-full": 0.11325589615769305,
-        "vox_lingua_top10-hear2021-full": 0.33850383162498476,
-        "AVERAGE": 0.6849248893399978
+        "environmental": {
+            "beehive_states_fold0-v2-full": 0.37723042052469136,
+            "beehive_states_fold1-v2-full": 0.6519820601851851,
+            "esc50-v2.0.0-full": 0.7729999899864197,
+            "fsd50k-v1.0-full": 0.4377553537659759,
+            "gunshot_triangulation-v1.0-full": 0.8898809552192688,
+            "AVERAGE": 0.6259697559363082
+        },
+        "speech": {
+            "speech_commands-v0.0.2-5h": 0.8670756816864014,
+            "speech_commands-v0.0.2-full": 0.9118609428405762,
+            "tfds_crema_d-1.0.0-full": 0.622348177433014,
+            "vocal_imitation-v1.1.3-full": 0.11325589615769305,
+            "vox_lingua_top10-hear2021-full": 0.33850383162498476,
+            "libricount-v1.0.0-hear2021-full": 0.7562937021255494,
+            "AVERAGE": 0.6015563719780364
+        },
+        "music": {
+            "beijing_opera-v1.0-hear2021-full": 0.9619680881500244,
+            "mridangam_stroke-v1.5-full": 0.9766379117965698,
+            "mridangam_tonic-v1.5-full": 0.9648831844329834,
+            "nsynth_pitch-v2.2.3-50h": 0.7980295419692993,
+            "nsynth_pitch-v2.2.3-5h": 0.6299999952316284,
+            "tfds_gtzan-1.0.0-full": 0.7959999918937684,
+            "tfds_gtzan_music_speech-1.0.0-full": 0.9378205180168152,
+            "AVERAGE": 0.8664770330701556
+        },
+        "other": {
+            "dcase2016_task2-hear2021-full": 0.8390804529190063,
+            "maestro-v3.0.0-5h": 0.05489109084010124,
+            "AVERAGE": 0.4469857718795538
+        }
     },
     "audiontt_input_frames=16011:52_07Jul_model_100": {
-        "beehive_states_fold0-v2-full": 0.4494598765432099,
-        "beehive_states_fold1-v2-full": 0.46454234182098764,
-        "beijing_opera-v1.0-hear2021-full": 0.9703900694847107,
-        "dcase2016_task2-hear2021-full": 0.7875288724899292,
-        "esc50-v2.0.0-full": 0.7679999947547913,
-        "fsd50k-v1.0-full": 0.44276882744230794,
-        "gunshot_triangulation-v1.0-full": 0.8482142857142857,
-        "libricount-v1.0.0-hear2021-full": 0.7769230842590332,
-        "maestro-v3.0.0-5h": 0.05382560342550278,
-        "mridangam_stroke-v1.5-full": 0.9777845501899719,
-        "mridangam_tonic-v1.5-full": 0.9666026711463929,
-        "nsynth_pitch-v2.2.3-50h": 0.8007389307022095,
-        "nsynth_pitch-v2.2.3-5h": 0.628000020980835,
-        "speech_commands-v0.0.2-5h": 0.8805726170539856,
-        "speech_commands-v0.0.2-full": 0.9184049367904663,
-        "tfds_crema_d-1.0.0-full": 0.5992186903953552,
-        "tfds_gtzan-1.0.0-full": 0.7949999928474426,
-        "tfds_gtzan_music_speech-1.0.0-full": 0.9692307710647583,
-        "vocal_imitation-v1.1.3-full": 0.11966766693286156,
-        "vox_lingua_top10-hear2021-full": 0.36421358585357666,
-        "AVERAGE": 0.6790543694946306
+        "environmental": {
+            "beehive_states_fold0-v2-full": 0.4494598765432099,
+            "beehive_states_fold1-v2-full": 0.46454234182098764,
+            "esc50-v2.0.0-full": 0.7679999947547913,
+            "fsd50k-v1.0-full": 0.44276882744230794,
+            "gunshot_triangulation-v1.0-full": 0.8482142857142857,
+            "AVERAGE": 0.5945970652551165
+        },
+        "speech": {
+            "speech_commands-v0.0.2-5h": 0.8805726170539856,
+            "speech_commands-v0.0.2-full": 0.9184049367904663,
+            "tfds_crema_d-1.0.0-full": 0.5992186903953552,
+            "vocal_imitation-v1.1.3-full": 0.11966766693286156,
+            "vox_lingua_top10-hear2021-full": 0.36421358585357666,
+            "libricount-v1.0.0-hear2021-full": 0.7769230842590332,
+            "AVERAGE": 0.6098334302142131
+        },
+        "music": {
+            "beijing_opera-v1.0-hear2021-full": 0.9703900694847107,
+            "mridangam_stroke-v1.5-full": 0.9777845501899719,
+            "mridangam_tonic-v1.5-full": 0.9666026711463929,
+            "nsynth_pitch-v2.2.3-50h": 0.8007389307022095,
+            "nsynth_pitch-v2.2.3-5h": 0.628000020980835,
+            "tfds_gtzan-1.0.0-full": 0.7949999928474426,
+            "tfds_gtzan_music_speech-1.0.0-full": 0.9692307710647583,
+            "AVERAGE": 0.872535286630903
+        },
+        "other": {
+            "dcase2016_task2-hear2021-full": 0.7875288724899292,
+            "maestro-v3.0.0-5h": 0.05382560342550278,
+            "AVERAGE": 0.420677237957716
+        }
     },
     "audiontt_input_frames=3211:51_07Jul_model_100": {
-        "beehive_states_fold0-v2-full": 0.589891975308642,
-        "beehive_states_fold1-v2-full": 0.642578125,
-        "beijing_opera-v1.0-hear2021-full": 0.9617907881736756,
-        "dcase2016_task2-hear2021-full": 0.8009259104728699,
-        "esc50-v2.0.0-full": 0.7404999971389771,
-        "fsd50k-v1.0-full": 0.4322879405912575,
-        "gunshot_triangulation-v1.0-full": 0.8779761876378741,
-        "libricount-v1.0.0-hear2021-full": 0.7877622365951538,
-        "maestro-v3.0.0-5h": 0.052609700709581375,
-        "mridangam_stroke-v1.5-full": 0.9754913806915283,
-        "mridangam_tonic-v1.5-full": 0.9641658186912536,
-        "nsynth_pitch-v2.2.3-50h": 0.7992610931396484,
-        "nsynth_pitch-v2.2.3-5h": 0.6420000195503235,
-        "speech_commands-v0.0.2-5h": 0.847034752368927,
-        "speech_commands-v0.0.2-full": 0.8985685110092163,
-        "tfds_crema_d-1.0.0-full": 0.6029837608337403,
-        "tfds_gtzan-1.0.0-full": 0.7799999952316284,
-        "tfds_gtzan_music_speech-1.0.0-full": 0.9455128252506256,
-        "vocal_imitation-v1.1.3-full": 0.09349515308889374,
-        "vox_lingua_top10-hear2021-full": 0.3127676427364349,
-        "AVERAGE": 0.6873801907110126
+        "environmental": {
+            "beehive_states_fold0-v2-full": 0.589891975308642,
+            "beehive_states_fold1-v2-full": 0.642578125,
+            "esc50-v2.0.0-full": 0.7404999971389771,
+            "fsd50k-v1.0-full": 0.4322879405912575,
+            "gunshot_triangulation-v1.0-full": 0.8779761876378741,
+            "AVERAGE": 0.6566468451353501
+        },
+        "speech": {
+            "speech_commands-v0.0.2-5h": 0.847034752368927,
+            "speech_commands-v0.0.2-full": 0.8985685110092163,
+            "tfds_crema_d-1.0.0-full": 0.6029837608337403,
+            "vocal_imitation-v1.1.3-full": 0.09349515308889374,
+            "vox_lingua_top10-hear2021-full": 0.3127676427364349,
+            "libricount-v1.0.0-hear2021-full": 0.7877622365951538,
+            "AVERAGE": 0.5904353427720609
+        },
+        "music": {
+            "beijing_opera-v1.0-hear2021-full": 0.9617907881736756,
+            "mridangam_stroke-v1.5-full": 0.9754913806915283,
+            "mridangam_tonic-v1.5-full": 0.9641658186912536,
+            "nsynth_pitch-v2.2.3-50h": 0.7992610931396484,
+            "nsynth_pitch-v2.2.3-5h": 0.6420000195503235,
+            "tfds_gtzan-1.0.0-full": 0.7799999952316284,
+            "tfds_gtzan_music_speech-1.0.0-full": 0.9455128252506256,
+            "AVERAGE": 0.8668888458183834
+        },
+        "other": {
+            "dcase2016_task2-hear2021-full": 0.8009259104728699,
+            "maestro-v3.0.0-5h": 0.052609700709581375,
+            "AVERAGE": 0.4267678055912256
+        }
     },
     "audiontt_asymm_sg+predictor21:00_Jul25_model_100": {
-        "beehive_states_fold0-v2-full": 0.5065586419753086,
-        "beehive_states_fold1-v2-full": 0.5339023919753085,
-        "beijing_opera-v1.0-hear2021-full": 0.9578014254570008,
-        "dcase2016_task2-hear2021-full": 0.8251428604125977,
-        "esc50-v2.0.0-full": 0.7434999942779541,
-        "fsd50k-v1.0-full": 0.43986271903219726,
-        "gunshot_triangulation-v1.0-full": 0.9553571428571429,
-        "libricount-v1.0.0-hear2021-full": 0.7618881106376648,
-        "maestro-v3.0.0-5h": 0.05259887874126434,
-        "mridangam_stroke-v1.5-full": 0.9757779002189636,
-        "mridangam_tonic-v1.5-full": 0.9637362360954285,
-        "nsynth_pitch-v2.2.3-50h": 0.7985221743583679,
-        "nsynth_pitch-v2.2.3-5h": 0.628000020980835,
-        "speech_commands-v0.0.2-5h": 0.8805726170539856,
-        "speech_commands-v0.0.2-full": 0.907566487789154,
-        "tfds_crema_d-1.0.0-full": 0.6191189289093018,
-        "tfds_gtzan-1.0.0-full": 0.7939999997615814,
-        "tfds_gtzan_music_speech-1.0.0-full": 0.9378205180168152,
-        "vocal_imitation-v1.1.3-full": 0.11122900653436078,
-        "vox_lingua_top10-hear2021-full": 0.33022997379302976,
-        "AVERAGE": 0.6861593014439131
+        "environmental": {
+            "beehive_states_fold0-v2-full": 0.5065586419753086,
+            "beehive_states_fold1-v2-full": 0.5339023919753085,
+            "esc50-v2.0.0-full": 0.7434999942779541,
+            "fsd50k-v1.0-full": 0.43986271903219726,
+            "gunshot_triangulation-v1.0-full": 0.9553571428571429,
+            "AVERAGE": 0.6358361780235822
+        },
+        "speech": {
+            "speech_commands-v0.0.2-5h": 0.8805726170539856,
+            "speech_commands-v0.0.2-full": 0.907566487789154,
+            "tfds_crema_d-1.0.0-full": 0.6191189289093018,
+            "vocal_imitation-v1.1.3-full": 0.11122900653436078,
+            "vox_lingua_top10-hear2021-full": 0.33022997379302976,
+            "libricount-v1.0.0-hear2021-full": 0.7618881106376648,
+            "AVERAGE": 0.6017675207862495
+        },
+        "music": {
+            "beijing_opera-v1.0-hear2021-full": 0.9578014254570008,
+            "mridangam_stroke-v1.5-full": 0.9757779002189636,
+            "mridangam_tonic-v1.5-full": 0.9637362360954285,
+            "nsynth_pitch-v2.2.3-50h": 0.7985221743583679,
+            "nsynth_pitch-v2.2.3-5h": 0.628000020980835,
+            "tfds_gtzan-1.0.0-full": 0.7939999997615814,
+            "tfds_gtzan_music_speech-1.0.0-full": 0.9378205180168152,
+            "AVERAGE": 0.8650940392698561
+        },
+        "other": {
+            "dcase2016_task2-hear2021-full": 0.8251428604125977,
+            "maestro-v3.0.0-5h": 0.05259887874126434,
+            "AVERAGE": 0.438870869576931
+        }
+    },
+    "audiontt_RRC20:39_07Jul_model_100": {
+        "environmental": {},
+        "speech": {},
+        "music": {},
+        "other": {}
     },
     "audiontt_HSIC15:43_Jul25_model_100": {
-        "beehive_states_fold0-v2-full": 0.4613715277777778,
-        "beehive_states_fold1-v2-full": 0.42711950231481477,
-        "beijing_opera-v1.0-hear2021-full": 0.9449468135833741,
-        "dcase2016_task2-hear2021-full": 0.8198614120483398,
-        "esc50-v2.0.0-full": 0.7625,
-        "fsd50k-v1.0-full": 0.4503163185340553,
-        "gunshot_triangulation-v1.0-full": 0.8571428571428571,
-        "libricount-v1.0.0-hear2021-full": 0.7671328663825989,
-        "maestro-v3.0.0-5h": 0.0385287843644619,
-        "mridangam_stroke-v1.5-full": 0.976781678199768,
-        "mridangam_tonic-v1.5-full": 0.9631629467010498,
-        "nsynth_pitch-v2.2.3-50h": 0.7960591316223145,
-        "nsynth_pitch-v2.2.3-5h": 0.6060000061988831,
-        "speech_commands-v0.0.2-5h": 0.8875255584716797,
-        "speech_commands-v0.0.2-full": 0.9186093807220459,
-        "tfds_crema_d-1.0.0-full": 0.6211368680000305,
-        "tfds_gtzan-1.0.0-full": 0.803000009059906,
-        "tfds_gtzan_music_speech-1.0.0-full": 0.9384615421295166,
-        "vocal_imitation-v1.1.3-full": 0.11794329812236759,
-        "vox_lingua_top10-hear2021-full": 0.36830557584762574,
-        "AVERAGE": 0.6762953038611734
+        "environmental": {
+            "beehive_states_fold0-v2-full": 0.4613715277777778,
+            "beehive_states_fold1-v2-full": 0.42711950231481477,
+            "esc50-v2.0.0-full": 0.7625,
+            "fsd50k-v1.0-full": 0.4503163185340553,
+            "gunshot_triangulation-v1.0-full": 0.8571428571428571,
+            "AVERAGE": 0.591690041153901
+        },
+        "speech": {
+            "speech_commands-v0.0.2-5h": 0.8875255584716797,
+            "speech_commands-v0.0.2-full": 0.9186093807220459,
+            "tfds_crema_d-1.0.0-full": 0.6211368680000305,
+            "vocal_imitation-v1.1.3-full": 0.11794329812236759,
+            "vox_lingua_top10-hear2021-full": 0.36830557584762574,
+            "libricount-v1.0.0-hear2021-full": 0.7671328663825989,
+            "AVERAGE": 0.6134422579243913
+        },
+        "music": {
+            "beijing_opera-v1.0-hear2021-full": 0.9449468135833741,
+            "mridangam_stroke-v1.5-full": 0.976781678199768,
+            "mridangam_tonic-v1.5-full": 0.9631629467010498,
+            "nsynth_pitch-v2.2.3-50h": 0.7960591316223145,
+            "nsynth_pitch-v2.2.3-5h": 0.6060000061988831,
+            "tfds_gtzan-1.0.0-full": 0.803000009059906,
+            "tfds_gtzan_music_speech-1.0.0-full": 0.9384615421295166,
+            "AVERAGE": 0.8612017324992588
+        },
+        "other": {
+            "dcase2016_task2-hear2021-full": 0.8198614120483398,
+            "maestro-v3.0.0-5h": 0.0385287843644619,
+            "AVERAGE": 0.4291950982064009
+        }
     },
-    "audiontt_RLF20:32_07Jul_model_100": {},
+    "audiontt_RLF20:32_07Jul_model_100": {
+        "environmental": {},
+        "speech": {},
+        "music": {},
+        "other": {}
+    },
     "audiontt_lambda=016:17_07Jul_model_100": {
-        "beehive_states_fold0-v2-full": 0.47000385802469136,
-        "beehive_states_fold1-v2-full": 0.6614221643518519,
-        "beijing_opera-v1.0-hear2021-full": 0.957535469532013,
-        "dcase2016_task2-hear2021-full": 0.7948417067527771,
-        "esc50-v2.0.0-full": 0.6989999890327454,
-        "fsd50k-v1.0-full": 0.3922006342688566,
-        "gunshot_triangulation-v1.0-full": 0.8690476162093026,
-        "libricount-v1.0.0-hear2021-full": 0.7110139846801757,
-        "maestro-v3.0.0-5h": 0.04965528845787048,
-        "mridangam_stroke-v1.5-full": 0.9773547649383545,
-        "mridangam_tonic-v1.5-full": 0.9709031343460083,
-        "nsynth_pitch-v2.2.3-50h": 0.7871921062469482,
-        "nsynth_pitch-v2.2.3-5h": 0.671999990940094,
-        "speech_commands-v0.0.2-5h": 0.8408998250961304,
-        "speech_commands-v0.0.2-full": 0.8815950751304626,
-        "tfds_crema_d-1.0.0-full": 0.5711200356483459,
-        "tfds_gtzan-1.0.0-full": 0.7810000002384185,
-        "tfds_gtzan_music_speech-1.0.0-full": 0.9615384638309479,
-        "vocal_imitation-v1.1.3-full": 0.08457773519374412,
-        "vox_lingua_top10-hear2021-full": 0.27981495559215547,
-        "AVERAGE": 0.6706358399255945
+        "environmental": {
+            "beehive_states_fold0-v2-full": 0.47000385802469136,
+            "beehive_states_fold1-v2-full": 0.6614221643518519,
+            "esc50-v2.0.0-full": 0.6989999890327454,
+            "fsd50k-v1.0-full": 0.3922006342688566,
+            "gunshot_triangulation-v1.0-full": 0.8690476162093026,
+            "AVERAGE": 0.6183348523774896
+        },
+        "speech": {
+            "speech_commands-v0.0.2-5h": 0.8408998250961304,
+            "speech_commands-v0.0.2-full": 0.8815950751304626,
+            "tfds_crema_d-1.0.0-full": 0.5711200356483459,
+            "vocal_imitation-v1.1.3-full": 0.08457773519374412,
+            "vox_lingua_top10-hear2021-full": 0.27981495559215547,
+            "libricount-v1.0.0-hear2021-full": 0.7110139846801757,
+            "AVERAGE": 0.561503601890169
+        },
+        "music": {
+            "beijing_opera-v1.0-hear2021-full": 0.957535469532013,
+            "mridangam_stroke-v1.5-full": 0.9773547649383545,
+            "mridangam_tonic-v1.5-full": 0.9709031343460083,
+            "nsynth_pitch-v2.2.3-50h": 0.7871921062469482,
+            "nsynth_pitch-v2.2.3-5h": 0.671999990940094,
+            "tfds_gtzan-1.0.0-full": 0.7810000002384185,
+            "tfds_gtzan_music_speech-1.0.0-full": 0.9615384638309479,
+            "AVERAGE": 0.8725034185818263
+        },
+        "other": {
+            "dcase2016_task2-hear2021-full": 0.7948417067527771,
+            "maestro-v3.0.0-5h": 0.04965528845787048,
+            "AVERAGE": 0.4222484976053238
+        }
     },
     "audiontt_pre_post_norm23:01_Jul25_model_100": {
-        "beehive_states_fold0-v2-full": 0.4562234760802469,
-        "beehive_states_fold1-v2-full": 0.45876736111111105,
-        "beijing_opera-v1.0-hear2021-full": 0.9618794322013855,
-        "dcase2016_task2-hear2021-full": 0.8023121356964111,
-        "esc50-v2.0.0-full": 0.7674999952316284,
-        "fsd50k-v1.0-full": 0.44762541264303723,
-        "gunshot_triangulation-v1.0-full": 0.8690476162093026,
-        "libricount-v1.0.0-hear2021-full": 0.7900349736213684,
-        "maestro-v3.0.0-5h": 0.053585495054721835,
-        "mridangam_stroke-v1.5-full": 0.9766380190849304,
-        "mridangam_tonic-v1.5-full": 0.9655999183654785,
-        "nsynth_pitch-v2.2.3-50h": 0.8027093410491943,
-        "nsynth_pitch-v2.2.3-5h": 0.6499999761581421,
-        "speech_commands-v0.0.2-5h": 0.8895705342292786,
-        "speech_commands-v0.0.2-full": 0.925153374671936,
-        "tfds_crema_d-1.0.0-full": 0.6123947978019715,
-        "tfds_gtzan-1.0.0-full": 0.7849999964237213,
-        "tfds_gtzan_music_speech-1.0.0-full": 0.9378205180168152,
-        "vocal_imitation-v1.1.3-full": 0.11140426364822582,
-        "vox_lingua_top10-hear2021-full": 0.35488236546516416,
-        "AVERAGE": 0.6809074501382035
+        "environmental": {
+            "beehive_states_fold0-v2-full": 0.4562234760802469,
+            "beehive_states_fold1-v2-full": 0.45876736111111105,
+            "esc50-v2.0.0-full": 0.7674999952316284,
+            "fsd50k-v1.0-full": 0.44762541264303723,
+            "gunshot_triangulation-v1.0-full": 0.8690476162093026,
+            "AVERAGE": 0.5998327722550651
+        },
+        "speech": {
+            "speech_commands-v0.0.2-5h": 0.8895705342292786,
+            "speech_commands-v0.0.2-full": 0.925153374671936,
+            "tfds_crema_d-1.0.0-full": 0.6123947978019715,
+            "vocal_imitation-v1.1.3-full": 0.11140426364822582,
+            "vox_lingua_top10-hear2021-full": 0.35488236546516416,
+            "libricount-v1.0.0-hear2021-full": 0.7900349736213684,
+            "AVERAGE": 0.6139067182396574
+        },
+        "music": {
+            "beijing_opera-v1.0-hear2021-full": 0.9618794322013855,
+            "mridangam_stroke-v1.5-full": 0.9766380190849304,
+            "mridangam_tonic-v1.5-full": 0.9655999183654785,
+            "nsynth_pitch-v2.2.3-50h": 0.8027093410491943,
+            "nsynth_pitch-v2.2.3-5h": 0.6499999761581421,
+            "tfds_gtzan-1.0.0-full": 0.7849999964237213,
+            "tfds_gtzan_music_speech-1.0.0-full": 0.9378205180168152,
+            "AVERAGE": 0.8685210287570955
+        },
+        "other": {
+            "dcase2016_task2-hear2021-full": 0.8023121356964111,
+            "maestro-v3.0.0-5h": 0.053585495054721835,
+            "AVERAGE": 0.4279488153755665
+        }
     }
 }
