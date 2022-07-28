@@ -78,7 +78,7 @@ class BarlowTwins(nn.Module):
 			off_diag = off_diagonal(c).add_(1).pow_(2).sum()
 		else:
 			off_diag = off_diagonal(c).pow_(2).sum()
-		loss = on_diag + self.cfg.lmbda * off_diag
+		loss = self.cfg.alpha * on_diag + self.cfg.lmbda * off_diag
 		return loss
 
 

@@ -109,6 +109,7 @@ if __name__ == '__main__':
 	parser.add_argument('--model_type', default='audiontt', type=str, choices=MODELS)
 	parser.add_argument('--squeeze_excitation', action='store_true', default=False)
 	# for barlow twins
+	parser.add_argument('--alpha', default=1, type=float)
 	parser.add_argument('--lmbda', default=0.005, type=float, help='Lambda that controls the on- and off-diagonal terms')
 	parser.add_argument('--projector_out_dim', default=256, type=int)
 	parser.add_argument('--projector_n_hidden_layers', default=1, type=int)
