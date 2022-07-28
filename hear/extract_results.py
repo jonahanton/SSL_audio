@@ -35,7 +35,7 @@ def extract_task_score(model_dir, task):
 
 	results_json = os.path.join(*[model_dir, "hear.sample", task, "test.predicted-scores.json"])
 	with open(results_json, "r") as jsonfile:
-        print(results_json)
+		print(results_json)
 		results = json.load(jsonfile)
 
 	if "test" in results:
