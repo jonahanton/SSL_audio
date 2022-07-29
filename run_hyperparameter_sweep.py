@@ -151,7 +151,7 @@ def objective(trial):
 
 def define_model(trial):
 	if 'projector_n_hidden_layers' in args.tune:
-		args.projector_n_hidden_layers = trial.suggest_int("projector_n_hidden_layers", 1, 2, 3)
+		args.projector_n_hidden_layers = trial.suggest_categorical("projector_n_hidden_layers", [1, 2, 3])
 	if 'projector_out_dim' in args.tune:
 		args.projector_out_dim = trial.suggest_categorical("projector_out_dim", [64, 128, 256, 1024, 4096, 8192, 16384])
 	return BarlowTwins(args)
