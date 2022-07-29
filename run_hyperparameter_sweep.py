@@ -410,7 +410,7 @@ def plot_and_save_intermediate_values(study, save_path):
 if __name__ == '__main__':
 
 	parser = argparse.ArgumentParser(description='Hyperparameter tuning', parents=[get_std_parser()])
-	parser.add_argument('--batch_size', type=int, default=128)
+	parser.add_argument('--batch_size', type=int, default=64)
 	parser.add_argument('--dataset', type=str, default='fsd50k', choices=['fsd50k', 'nsynth'])
 	parser.add_argument('--eval', type=str, default='linear', choices=['linear', 'knn'])
 	parser.add_argument('--tune', nargs='+', type=str, default=['lr', 'wd'], choices=HYPERPARAMETERS)
