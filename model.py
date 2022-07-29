@@ -58,7 +58,11 @@ class BarlowTwins(nn.Module):
 
 	def forward(self, y1, y2):
 		
-		feature1 = self.encoder(y1)
+		if self.cfg.mask:
+			assert 'vit' in self.cfg.model_type, f'Model type {self.cfg.model_type} is not supported with view masking'
+			feature1 = self.encoder(y1, mask_ratio=self.cfg.mask_ratio)
+		else:
+			feature1 = self.encoder(y1)
 		feature2 = self.encoder(y2)
 
 		z1 = self.projector(feature1)
@@ -105,8 +109,8 @@ class ViT(nn.Module):
 				raise NotImplementedError(f'ViT size {size} is not supported')
 		self.embed_dim = self.encoder.embed_dim
 
-	def forward(self, x):
-		x = self.encoder(x)
+	def forward(self, x, mask_ratio=0.):
+		x = self.encoder(x, mask_ratio=mask_ratio)
 		feature = x[:, 0].contiguous()  # Take [CLS] token as clip representation
 		return feature
 

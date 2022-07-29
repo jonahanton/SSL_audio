@@ -149,6 +149,9 @@ if __name__ == '__main__':
 	parser.add_argument('--name', type=str, default=None)
 	# mixed precision training
 	parser.add_argument('--use_fp16', action='store_true', default=False)
+	# masking 
+	parser.add_argument('--mask', action='store_true', default=False)
+	parser.add_argument('--mask_ratio', type=float, default=0)
 	
 	# args parse
 	args = parser.parse_args()
