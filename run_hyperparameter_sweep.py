@@ -1,12 +1,12 @@
 """
-Hyperparameter tuning using Optuna 
+Hyperparameter tuning using Optuna
 References:
 	- https://github.com/optuna/optuna-examples/blob/main/pytorch/pytorch_simple.py
 	- https://github.com/nttcslab/byol-a/blob/master/evaluate.py
 """
 
 import argparse
-import logging 
+import logging
 import sys
 import os
 import torch
@@ -23,7 +23,7 @@ import seaborn as sns
 sns.set()
 
 
-import optuna 
+import optuna
 from optuna.integration.wandb import WeightsAndBiasesCallback
 from optuna.trial import TrialState
 import wandb
@@ -57,7 +57,6 @@ CLASSES = dict(
 
 def get_std_parser():
 	parser = argparse.ArgumentParser(add_help=False)
-	parser.add_argument('--batch_size', type=int, default=64)
 	parser.add_argument('--lr', type=float, default=1e-4)
 	parser.add_argument('--lmbda', type=float, default=0.005)
 	parser.add_argument('--alpha', type=float, default=1)
@@ -73,7 +72,7 @@ def get_std_parser():
 	parser.add_argument('--n_mels', type=int, default=64)
 	parser.add_argument('--f_min', type=int, default=60)
 	parser.add_argument('--f_max', type=int, default=7800)
-	parser.add_argument('--num_workers', type=int, default=4)
+	parser.add_argument('--num_workers', type=int, default=20)
 	parser.add_argument('--mixup_ratio', type=float, default=0.2)
 	parser.add_argument('--virtual_crop_scale', nargs='+', type=float, default=[1, 1.5])
 	parser.add_argument('--HSIC', action='store_true', default=False)
@@ -82,14 +81,14 @@ def get_std_parser():
 
 
 def objective(trial):
-	
+
 	# Generate the model
 	model = define_model(trial).cuda()
 
 	# Generate the optimizers
-	if args.optimizer in ['Adam', 'AdamW', 'SGD']: 
+	if args.optimizer in ['Adam', 'AdamW', 'SGD']:
 		if 'lr' in args.tune:
-			args.lr = trial.suggest_float("lr", 1e-6, 1e-2, log=True)
+			args.lr = trial.suggest_categorical("lr", [5e-6, 1e-5, 2e-5, 3e-5, 5e-5])
 		if 'wd' in args.tune:
 			args.wd = trial.suggest_float("wd", 1e-3, 1e0, log=True)
 	if args.optimizer == 'Adam':
@@ -126,11 +125,11 @@ def objective(trial):
 	train_loader, eval_train_loader, eval_val_loader, eval_test_loader = get_data(trial)
 
 	# mixed precision
-	fp16_scaler = None 
+	fp16_scaler = None
 	if args.use_fp16:
 		fp16_scaler = torch.cuda.amp.GradScaler()
 
-	# Train the model 
+	# Train the model
 	print('Running training...')
 	for epoch in range(1, args.train_epochs+1):
 		model.train()
@@ -142,13 +141,13 @@ def objective(trial):
 		# Handle pruning based on the intermediate value.
 		if trial.should_prune():
 			raise optuna.TrialPruned()
-	return score 
+	return score
 
 
 def define_model(trial):
 	if 'projector_n_hidden_layers' in args.tune:
 		args.projector_n_hidden_layers = trial.suggest_int("projector_n_hidden_layers", 1, 2)
-	if 'projector_out_dim' in args.tune:	
+	if 'projector_out_dim' in args.tune:
 		args.projector_out_dim = trial.suggest_categorical("projector_out_dim", [64, 128, 256, 1024, 4096])
 	return BarlowTwins(args)
 
@@ -218,12 +217,12 @@ def get_embeddings(model, data_loader):
 		emb = model(data.cuda(non_blocking=True)).detach().cpu().numpy()
 		embs.extend(emb)
 		targets.extend(target.numpy())
-	
+
 	return np.array(embs), np.array(targets)
 
 
 def eval_linear(model, train_loader, val_loader, test_loader):
-	
+
 	print('Extracting embeddings')
 	start = time.time()
 	X_train, y_train = get_embeddings(model, train_loader)
@@ -241,7 +240,7 @@ def eval_linear(model, train_loader, val_loader, test_loader):
 		debug=False,
 	)
 	clf.fit(X_train, y_train, X_val=X_val, y_val=y_val)
-	
+
 	score = clf.score(X_test, y_test)
 	print(f'Done\tTime elapsed = {time.time() - start:.2f}s')
 
@@ -251,7 +250,7 @@ def eval_linear(model, train_loader, val_loader, test_loader):
 def train_one_epoch(epoch, model, data_loader, optimizer, fp16_scaler):
 	model.train()
 	total_loss, total_num, train_bar = 0, 0, tqdm(data_loader)
-	
+
 	total_data_time, total_forward_time, total_backward_time = 0, 0, 0
 	tflag = time.time()
 	for data_tuple in train_bar:
@@ -263,7 +262,7 @@ def train_one_epoch(epoch, model, data_loader, optimizer, fp16_scaler):
 
 		with torch.cuda.amp.autocast(enabled=(fp16_scaler is not None)):
 			loss = model(pos_1, pos_2)
-		forward_time = time.time() - tflag 
+		forward_time = time.time() - tflag
 		tflag = time.time()
 
 		optimizer.zero_grad()
@@ -274,23 +273,23 @@ def train_one_epoch(epoch, model, data_loader, optimizer, fp16_scaler):
 			fp16_scaler.scale(loss).backward()
 			fp16_scaler.step(optimizer)
 			fp16_scaler.update()
-		backward_time = time.time() - tflag 
+		backward_time = time.time() - tflag
 
 		total_num += args.batch_size
 		total_loss += loss.item() * args.batch_size
 
 		total_data_time += data_time
-		total_forward_time += forward_time 
+		total_forward_time += forward_time
 		total_backward_time += backward_time
 
 		train_bar.set_description('Train Epoch: [{}/{}] Loss: {:.4f} Data time {:.2f}({:.2f}) Forward time {:.2f}({:.2f}) Backward time {:.2f}({:.2f}))'.format(
-								  epoch, args.train_epochs, total_loss / total_num, 
+								  epoch, args.train_epochs, total_loss / total_num,
 								  data_time, total_data_time,
 								  forward_time, total_forward_time,
 								  backward_time, total_backward_time))
-		
+
 		tflag = time.time()
-		
+
 	return total_loss / total_num
 
 
@@ -307,28 +306,28 @@ def get_nsynth_50h(trial):
 		args.mixup_ratio = trial.suggest_categorical("mixup_ratio", [0, 0.2, 0.4, 0.6, 0.8])
 	if 'virtual_crop_scale' in args.tune:
 		args.virtual_crop_scale = args.virtual_crop_scale = (
-			trial.suggest_categorical("virtual_crop_scale_F", [1, 1.2, 1.4, 1.6, 1.8]), 
+			trial.suggest_categorical("virtual_crop_scale_F", [1, 1.2, 1.4, 1.6, 1.8]),
 			trial.suggest_categorical("virtual_crop_scale_T", [1, 1.2, 1.4, 1.6, 1.8]),
 		)
 
 	norm_stats = [-8.82, 7.03]
 	train_loader = DataLoader(
-		datasets.NSynth_HEAR(args, split='train', 
+		datasets.NSynth_HEAR(args, split='train',
 						transform=transforms.AudioPairTransform(
 							args,
 							train_transform=True,
 							mixup_ratio=args.mixup_ratio,
 							virtual_crop_scale=args.virtual_crop_scale,
-						), 
-						norm_stats=norm_stats), 
+						),
+						norm_stats=norm_stats),
 		batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=True,
 	)
 	eval_train_loader = DataLoader(
-		datasets.NSynth_HEAR(args, split='train', transform=None, norm_stats=norm_stats), 
+		datasets.NSynth_HEAR(args, split='train', transform=None, norm_stats=norm_stats),
 		batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=False,
 	)
 	eval_val_loader = DataLoader(
-		datasets.NSynth_HEAR(args, split='valid', transform=None, norm_stats=norm_stats), 
+		datasets.NSynth_HEAR(args, split='valid', transform=None, norm_stats=norm_stats),
 		batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=False,
 	)
 	eval_test_loader = DataLoader(
@@ -344,24 +343,24 @@ def get_fsd50k(trial):
 		args.mixup_ratio = trial.suggest_categorical("mixup_ratio", [0, 0.2, 0.4, 0.6, 0.8])
 	if 'virtual_crop_scale' in args.tune:
 		args.virtual_crop_scale = (
-			trial.suggest_categorical("virtual_crop_scale_F", [1, 1.2, 1.4, 1.6, 1.8]), 
+			trial.suggest_categorical("virtual_crop_scale_F", [1, 1.2, 1.4, 1.6, 1.8]),
 			trial.suggest_categorical("virtual_crop_scale_T", [1, 1.2, 1.4, 1.6, 1.8]),
 		)
 
 	norm_stats = [-4.950, 5.855]
 	train_loader = DataLoader(
-		datasets.FSD50K(args, split='train_val', 
+		datasets.FSD50K(args, split='train_val',
 						transform=transforms.AudioPairTransform(
 							args,
 							train_transform=True,
 							mixup_ratio=args.mixup_ratio,
 							virtual_crop_scale=args.virtual_crop_scale,
-						), 
-						norm_stats=norm_stats), 
+						),
+						norm_stats=norm_stats),
 		batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=True,
 	)
 	eval_train_loader = DataLoader(
-		datasets.FSD50K(args, split='train', transform=None, norm_stats=norm_stats), 
+		datasets.FSD50K(args, split='train', transform=None, norm_stats=norm_stats),
 		batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=False,
 	)
 	eval_val_loader = DataLoader(
@@ -386,7 +385,7 @@ def plot_and_save_intermediate_values(study, save_path):
 	intermediate_values = []
 	for trial in trials:
 		if trial.intermediate_values:
-			sorted_intermediate_values = sorted(trial.intermediate_values.items()) 
+			sorted_intermediate_values = sorted(trial.intermediate_values.items())
 			x=tuple((x for x, _ in sorted_intermediate_values))
 			y=tuple((y for _, y in sorted_intermediate_values))
 			params = [(k,v) for k,v in trial.params.items()]
@@ -407,7 +406,8 @@ def plot_and_save_intermediate_values(study, save_path):
 
 if __name__ == '__main__':
 
-	parser = argparse.ArgumentParser(description='Hyperparameter tuning', parents=[get_std_parser()])
+	parser = argparse.ArgumentParser(description='Hyperparameter tuning', parents=[get_std_parser
+	parser.add_argument('--batch_size', type=int, default=64)
 	parser.add_argument('--dataset', type=str, default='fsd50k', choices=['fsd50k', 'nsynth'])
 	parser.add_argument('--eval', type=str, default='linear', choices=['linear', 'knn'])
 	parser.add_argument('--tune', nargs='+', type=str, default=['lr', 'wd'], choices=HYPERPARAMETERS)
@@ -431,7 +431,7 @@ if __name__ == '__main__':
 	if args.optimizer in ['Adam', 'SGD']:
 		args.wd = 0
 	elif args.optimizer == 'AdamW':
-		args.wd = 1e-2
+		args.wd = 0.24
 
 	wandb_kwargs = dict(
 		project=f'Hyperparameter sweep {args.model_type} [{args.dataset}]',
@@ -443,7 +443,7 @@ if __name__ == '__main__':
 		wandb_kwargs=wandb_kwargs,
 	)
 
-	log_dir = f"logs/hparams/{args.dataset}/{args.model_type}{args.name}/" 
+	log_dir = f"logs/hparams/{args.dataset}/{args.model_type}{args.name}/"
 	os.makedirs(log_dir, exist_ok=True)
 	timestamp = datetime.datetime.now().strftime('%H:%M_%h%d')
 	log_path = os.path.join(log_dir, f"{'_'.join(args.tune)}_{timestamp}.log")
