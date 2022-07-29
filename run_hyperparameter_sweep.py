@@ -442,6 +442,7 @@ if __name__ == '__main__':
 		project=f'Hyperparameter sweep {args.model_type} [{args.dataset}]',
 		config=args,
 		name=f"{'_'.join(args.tune)} {args.name} - {args.n_trials} trials",
+        settings=wandb.Settings(start_method="fork"),
 	)
 	wandbc = WeightsAndBiasesCallback(
 		metric_name='score',
