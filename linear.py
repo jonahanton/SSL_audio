@@ -68,10 +68,10 @@ def eval_linear(model, train_loader, val_loader, test_loader):
 	print('Fitting linear classifier')
 	start = time.time()
 	clf = TorchMLPClassifier(
-		hidden_layer_sizes=(),
-		max_iter=200,
+		hidden_layer_sizes=(1024,),
+		max_iter=500,
 		early_stopping=True,
-		n_iter_no_change=10,
+		n_iter_no_change=20,
 		debug=True,
 	)
 	clf.fit(X_train, y_train, X_val=X_val, y_val=y_val)
@@ -84,7 +84,7 @@ def eval_linear(model, train_loader, val_loader, test_loader):
 
 def get_data():
 	if args.dataset == 'fsd50k':
-		return get_fsd50k(args)
+		return get_fsd50k()
 
 
 def get_fsd50k():
@@ -123,9 +123,9 @@ if __name__ == '__main__':
 	log_dir = f"logs/linear_eval/{args.dataset}/{args.name}/"
 	os.makedirs(log_dir, exist_ok=True)
 	timestamp = datetime.datetime.now().strftime('%H:%M_%h%d')
-	log_path = os.path.join(log_dir, f"{'_'.join(args.tune)}_{timestamp}.log")
+	log_path = os.path.join(log_dir, f"{timestamp}.log")
 	logger = logging.getLogger()
-	logger.setLevel(logging.INFO)  # Setup the root logger
+	logger.setLevel(logging.DEBUG)  # Setup the root logger
 	logger.addHandler(logging.FileHandler(log_path, mode="w"))
 
 	# Get data
@@ -138,4 +138,5 @@ if __name__ == '__main__':
 	model.eval()
 
 	# Linear evaluation 
-	eval_linear(eval_train_loader, eval_val_loader, eval_test_loader)
+	score = eval_linear(model, eval_train_loader, eval_val_loader, eval_test_loader)
+	log_print(f'Score: {score}')
