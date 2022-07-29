@@ -82,12 +82,12 @@ def eval_linear(model, train_loader, val_loader, test_loader):
 	return score
 
 
-def get_data():
+def get_data(args):
 	if args.dataset == 'fsd50k':
-		return get_fsd50k()
+		return get_fsd50k(args)
 
 
-def get_fsd50k():
+def get_fsd50k(args):
 	norm_stats = [-4.950, 5.855]
 	eval_train_loader = DataLoader(
 		datasets.FSD50K(args, split='train', transform=None, norm_stats=norm_stats),
@@ -129,7 +129,7 @@ if __name__ == '__main__':
 	logger.addHandler(logging.FileHandler(log_path, mode="w"))
 
 	# Get data
-	eval_train_loader, eval_val_loader, eval_test_loader = get_data()
+	eval_train_loader, eval_val_loader, eval_test_loader = get_data(args)
 
 	# Load model
 	model = BarlowTwins(args).encoder

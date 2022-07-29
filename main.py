@@ -1,9 +1,5 @@
 import argparse
 import os
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import DataLoader
 from tqdm import tqdm
 import time
 import datetime
@@ -11,8 +7,15 @@ import wandb
 import math
 import sys
 
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import DataLoader
+import numpy as np
+
 from augmentations import RunningNorm, NormalizeBatch
 from utils import utils, transforms
+from utils.torch_mlp_clf import TorchMLPClassifier
 import datasets
 from model import BarlowTwins
 
@@ -95,6 +98,62 @@ def train_one_epoch(args, epoch, model, data_loader, optimizer, fp16_scaler, wan
 		tflag = time.time()
 		
 	return total_loss / total_num
+
+
+@torch.no_grad()
+def get_embeddings(model, data_loader):
+	model.eval()
+	embs, targets = [], []
+	for data, target in data_loader:
+		emb = model(data.cuda(non_blocking=True)).detach().cpu().numpy()
+		embs.extend(emb)
+		targets.extend(target.numpy())
+
+	return np.array(embs), np.array(targets)
+
+
+def eval_linear(model, train_loader, val_loader, test_loader):
+
+	print('Extracting embeddings')
+	start = time.time()
+	X_train, y_train = get_embeddings(model, train_loader)
+	X_val, y_val = get_embeddings(model, val_loader)
+	X_test, y_test = get_embeddings(model, test_loader)
+	print(f'Done\tTime elapsed = {time.time() - start:.2f}s')
+
+	print('Fitting linear classifier')
+	start = time.time()
+	clf = TorchMLPClassifier(
+		hidden_layer_sizes=(1024,),
+		max_iter=500,
+		early_stopping=True,
+		n_iter_no_change=20,
+		debug=True,
+	)
+	clf.fit(X_train, y_train, X_val=X_val, y_val=y_val)
+
+	score = clf.score(X_test, y_test)
+	print(f'Done\tTime elapsed = {time.time() - start:.2f}s')
+
+	return score
+
+
+def get_fsd50k(args):
+	norm_stats = [-4.950, 5.855]
+	eval_train_loader = DataLoader(
+		datasets.FSD50K(args, split='train', transform=None, norm_stats=norm_stats),
+		batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=False,
+	)
+	eval_val_loader = DataLoader(
+		datasets.FSD50K(args, split='val', transform=None, norm_stats=norm_stats),
+		batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=False,
+	)
+	eval_test_loader = DataLoader(
+		datasets.FSD50K(args, split='test', transform=None, norm_stats=norm_stats),
+		batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=False,
+	)
+	return eval_train_loader, eval_val_loader, eval_test_loader
+
 
 
 if __name__ == '__main__':
@@ -264,3 +323,11 @@ if __name__ == '__main__':
 		train_loss = train_one_epoch(args, epoch, model, train_loader, optimizer, fp16_scaler, wandb_run)
 		if epoch % args.epoch_save_f == 0 or epoch == args.epochs:
 			utils.save_on_master(model_without_ddp.encoder.state_dict(), ckpt_path + f'/model_{epoch}.pth')
+	
+	# linear evaluation on fsd50k
+	if utils.is_main_process():
+		eval_train_loader, eval_val_loader, eval_test_loader = get_fsd50k(args)
+		score = eval_linear(model_without_ddp.encoder, eval_train_loader, eval_val_loader, eval_test_loader)
+		print(f'Score: {score}')
+		wandb_run.log({'FSD50K score': score})
+
