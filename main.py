@@ -103,17 +103,21 @@ if __name__ == '__main__':
 	parser.add_argument('--batch_size', default=128, type=int, help='Number of images in each mini-batch')
 	parser.add_argument('--epochs', default=100, type=int, help='Number of iterations over the dataset to train for')
 	parser.add_argument('--epoch_save_f', default=20, type=int)
-	parser.add_argument('--optimizer', default='Adam', type=str, choices = ['Adam', 'AdamW', 'SGD'])
+	parser.add_argument('--optimizer', default='LARS', type=str, choices = ['Adam', 'AdamW', 'SGD', 'LARS'])
 	parser.add_argument('--lr', type=float, default=1e-4)
+	parser.add_argument('--wd', type=float, default=1e-5)
+	# for LARS optimizer 
+	parser.add_argument('--lr_weights', type=float, default=0.4)
+	parser.add_argument('--lr_biases', type=float, default=0.0048)
 	# model type 
 	parser.add_argument('--model_type', default='audiontt', type=str, choices=MODELS)
 	parser.add_argument('--squeeze_excitation', action='store_true', default=False)
 	# for barlow twins
 	parser.add_argument('--alpha', default=1, type=float)
 	parser.add_argument('--lmbda', default=0.005, type=float, help='Lambda that controls the on- and off-diagonal terms')
-	parser.add_argument('--projector_out_dim', default=256, type=int)
-	parser.add_argument('--projector_n_hidden_layers', default=1, type=int)
-	parser.add_argument('--projector_hidden_dim', default=4096, type=int)
+	parser.add_argument('--projector_out_dim', default=8192, type=int)
+	parser.add_argument('--projector_n_hidden_layers', default=2, type=int)
+	parser.add_argument('--projector_hidden_dim', default=8192, type=int)
 	parser.add_argument('--HSIC', action='store_true', default=False)
 	# for audio processing
 	parser.add_argument('--unit_sec', type=float, default=0.95)
@@ -222,11 +226,26 @@ if __name__ == '__main__':
 	
 	# optimizer
 	if args.optimizer == 'Adam':
-		optimizer = optim.Adam(utils.get_param_groups(model), lr=args.lr)
+		optimizer = optim.Adam(utils.get_param_groups(model), lr=args.lr, weight_decay=args.wd)
 	elif args.optimizer == 'AdamW':
-		optimizer = optim.AdamW(utils.get_param_groups(model), lr=args.lr)
+		optimizer = optim.AdamW(utils.get_param_groups(model), lr=args.lr, weight_decay=args.wd)
 	elif args.optimizer == 'SGD':
-		optimizer = optim.SGD(utils.get_param_groups(model), lr=args.lr)
+		optimizer = optim.SGD(utils.get_param_groups(model), lr=args.lr, weight_decay=args.wd)
+	elif args.optimizer == 'LARS':
+		# separate lr for weights and biases using LARS optimizer
+		param_weights = []
+		param_biases = []
+		for param in model.parameters():
+			if param.ndim == 1:
+				param_biases.append(param)
+			else:
+				param_weights.append(param)
+		parameters = [
+			{'params': param_weights, 'lr': args.lr_weights},
+			{'params': param_biases, 'lr': args.lr_biases},
+		]
+		optimizer = utils.LARS(parameters, lr=0, weight_decay=args.wd,
+			weight_decay_filter=True, lars_adaptation_filter=True)
 
 	# mixed precision
 	fp16_scaler = None 
