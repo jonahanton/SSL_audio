@@ -58,6 +58,8 @@ CLASSES = dict(
 def get_std_parser():
 	parser = argparse.ArgumentParser(add_help=False)
 	parser.add_argument('--lr', type=float, default=1e-4)
+	parser.add_argument('--lr_weights', type=float, default=0.4)
+	parser.add_argument('--lr_biases', type=float, default=0.0048)
 	parser.add_argument('--lmbda', type=float, default=0.005)
 	parser.add_argument('--alpha', type=float, default=1)
 	parser.add_argument('--projector_out_dim', default=8192, type=int)
@@ -104,7 +106,8 @@ def objective(trial):
 			lr_weights = trial.suggest_float("lr_weights", 1e-3, 1e0, log=True)
 			lr_biases = trial.suggest_float("lr_biases", 1e-6, 1e-2, log=True)
 		else:
-			lr_weights = lr_biases = args.lr
+			lr_weights = args.lr_weights
+			lr_biases = args.lr_biases
 		if 'wd' in args.tune:
 			args.wd = trial.suggest_float("wd", 1e-8, 1e-4, log=True)
 		param_weights = []
@@ -146,9 +149,9 @@ def objective(trial):
 
 def define_model(trial):
 	if 'projector_n_hidden_layers' in args.tune:
-		args.projector_n_hidden_layers = trial.suggest_int("projector_n_hidden_layers", 1, 2)
+		args.projector_n_hidden_layers = trial.suggest_int("projector_n_hidden_layers", 1, 2, 3)
 	if 'projector_out_dim' in args.tune:
-		args.projector_out_dim = trial.suggest_categorical("projector_out_dim", [64, 128, 256, 1024, 4096])
+		args.projector_out_dim = trial.suggest_categorical("projector_out_dim", [64, 128, 256, 1024, 4096, 8192, 16384])
 	return BarlowTwins(args)
 
 
@@ -407,14 +410,14 @@ def plot_and_save_intermediate_values(study, save_path):
 if __name__ == '__main__':
 
 	parser = argparse.ArgumentParser(description='Hyperparameter tuning', parents=[get_std_parser()])
-	parser.add_argument('--batch_size', type=int, default=64)
+	parser.add_argument('--batch_size', type=int, default=128)
 	parser.add_argument('--dataset', type=str, default='fsd50k', choices=['fsd50k', 'nsynth'])
 	parser.add_argument('--eval', type=str, default='linear', choices=['linear', 'knn'])
 	parser.add_argument('--tune', nargs='+', type=str, default=['lr', 'wd'], choices=HYPERPARAMETERS)
 	parser.add_argument('--n_trials', type=int, default=10)
 	parser.add_argument('--train_epochs', type=int, default=20)
 	parser.add_argument('--model_type', type=str, default='audiontt', choices=MODELS)
-	parser.add_argument('--optimizer', type=str, default='Adam', choices=['Adam', 'AdamW', 'SGD', 'LARS'])
+	parser.add_argument('--optimizer', type=str, default='LARS', choices=['Adam', 'AdamW', 'SGD', 'LARS'])
 	parser.add_argument('--load_lms', action='store_true', default=True)
 	parser.add_argument('--load_wav', dest='load_lms', action='store_false')
 	parser.add_argument('--mixup', action='store_true', default=True)
@@ -432,6 +435,8 @@ if __name__ == '__main__':
 		args.wd = 0
 	elif args.optimizer == 'AdamW':
 		args.wd = 0.24
+	elif args.optimizer == 'LARS':
+		args.wd = 1e-5
 
 	wandb_kwargs = dict(
 		project=f'Hyperparameter sweep {args.model_type} [{args.dataset}]',
