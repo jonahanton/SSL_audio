@@ -450,6 +450,7 @@ class MaskedAutoencoderViT(nn.Module):
 		for blk in self.blocks:
 			attn = blk(x, return_attention=True)
 			attns.append(attn)
+		attns = torch.stack(attns, dim=0)
 		return attns
 	
 
@@ -534,5 +535,4 @@ if __name__ == "__main__":
 	mae = mae_vitc_base_patch16x16()
 	x = torch.randn(128, 1, 64, 96)
 	attns = mae.forward_attn(x)
-	print(len(attns))
-	print(attns[0].shape)
+	print(attns.shape)
