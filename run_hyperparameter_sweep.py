@@ -82,6 +82,7 @@ def get_std_parser():
 	parser.add_argument('--mask', action='store_true', default=False)
 	parser.add_argument('--mask_ratio', type=float, default=0)
 	parser.add_argument('--int_layers', action='store_true', default=False)
+	parser.add_argument('--int_layer_step', type=int, default=3)
 	parser.add_argument('--use_learned_pos_embd', action='store_true', default=False)
 	return parser
 

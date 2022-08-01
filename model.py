@@ -136,11 +136,12 @@ class BarlowTwins(nn.Module):
 			feature2 = [feature2]
 
 		loss = None
-		for f1, f2 in zip(feature1, feature2):
-			if loss is None:
-				loss = self.forward_loss(f1, f2)
-			else:
-				loss += self.forward_loss(f1, f2)
+		for i, (f1, f2) in enumerate(zip(feature1, feature2)):
+			if ((i+1) % self.cfg.int_layer_step == 0) or (i == len(feature1)-1):
+				if loss is None:
+					loss = self.forward_loss(f1, f2)
+				else:
+					loss += self.forward_loss(f1, f2)
 
 		return loss
 

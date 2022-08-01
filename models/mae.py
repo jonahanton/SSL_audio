@@ -102,7 +102,8 @@ class AttentionKBiasZero(nn.Module):
 		x = (attn @ v).transpose(1, 2).reshape(B, N, C)
 		x = self.proj(x)
 		x = self.proj_drop(x)
-		return x
+		
+		return x, attn
 
 
 class BlockKBiasZero(nn.Module):
@@ -119,12 +120,10 @@ class BlockKBiasZero(nn.Module):
 		self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
 
 	def forward(self, x, return_attention=False):
+		x_att, attn = self.attn(self.norm1(x))
 		if return_attention:
-			x_att, attn = self.attn(self.norm1(x), return_attention=True)
-			x = x + self.drop_path(x_att)
-			x = x + self.drop_path(self.mlp(self.norm2(x)))
-			return x, attn
-		x = x + self.drop_path(self.attn(self.norm1(x)))
+			return attn
+		x = x + self.drop_path(x_att)
 		x = x + self.drop_path(self.mlp(self.norm2(x)))
 		return x
 
@@ -364,14 +363,13 @@ class MaskedAutoencoderViT(nn.Module):
 		x = self.norm(x)
 		return [x], mask, ids_restore
 
-	def forward_encoder_intermediate_layers(self, x, mask_ratio, step=3):
-		# we return the output tokens from the `n` last blocks
+	def forward_encoder_intermediate_layers(self, x, mask_ratio):
 		x, mask, ids_restore = self.prepare_tokens(x, mask_ratio)
 		output = []
 		for i, blk in enumerate(self.blocks):
 			x = blk(x)
-			if ((i+1)%step==0) or (i==len(self.blocks)-1):
-				output.append(self.norm(x))
+			output.append(self.norm(x))
+
 		return output, mask, ids_restore
 
 	def forward_decoder(self, x, ids_restore):
@@ -446,6 +444,14 @@ class MaskedAutoencoderViT(nn.Module):
 		errormap = ((recons - imgs) ** 2).sqrt()
 		return loss, recons, errormap, mask.reshape(mask.shape[0], *self.grid_size())
 
+	def forward_attn(self, imgs, mask_ratio=0):
+		x, mask, ids_restore = self.prepare_tokens(imgs, mask_ratio)
+		attns = []
+		for blk in self.blocks:
+			attn = blk(x, return_attention=True)
+			attns.append(attn)
+		return attns
+	
 
 def mae_vit_base_patchX(patch_size, **kwargs):
 	model = MaskedAutoencoderViT(

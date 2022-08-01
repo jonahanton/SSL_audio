@@ -213,6 +213,7 @@ if __name__ == '__main__':
 	parser.add_argument('--mask_ratio', type=float, default=0)
 	# auxiliary loss on intermediate layers
 	parser.add_argument('--int_layers', action='store_true', default=False)
+	parser.add_argument('--int_layer_step', type=int, default=3)
 	# learned positional embeddings (not sin-cos) for vit encoders
 	parser.add_argument('--use_learned_pos_embd', action='store_true', default=False)
 	
