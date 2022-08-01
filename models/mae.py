@@ -139,6 +139,7 @@ class MaskedAutoencoderViT(nn.Module):
 				 use_cls_token=True, block_cls=BlockKBiasZero, use_2d_dec_pos_embd=False,
 				 drop_path_rate=0.):
 		super().__init__()
+		self.img_size = img_size
 		self.in_chans = in_chans
 		self.embed_dim = embed_dim
 		self.conv_stem = conv_stem

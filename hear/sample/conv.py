@@ -1,5 +1,5 @@
 """
-HEAR Benchmark submission module,  
+HEAR Benchmark submission module for a convolutional encoder,  
 following the common API as detailed at: https://hearbenchmark.com/hear-api.htmlguidelines
 """
 
@@ -46,8 +46,6 @@ class ModelWrapper(nn.Module):
 			self.model.embed_dim = 16384
 		elif model_type == 'audiontt':
 			self.model = AudioNTT2022()
-		elif 'vit' in model_type:
-			self.model = ViT(size=model_type.split('_')[-1])
 		else:
 			raise NotImplementedError(f'Model type {model_type} is not supported')
 		return self.model.embed_dim

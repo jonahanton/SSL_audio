@@ -322,7 +322,7 @@ if __name__ == '__main__':
 	for epoch in range(1, args.epochs+1):
 		train_loss = train_one_epoch(args, epoch, model, train_loader, optimizer, fp16_scaler, wandb_run)
 		if epoch % args.epoch_save_f == 0 or epoch == args.epochs:
-			utils.save_on_master(model_without_ddp.encoder.state_dict(), ckpt_path + f'/model_{epoch}.pth')
+			utils.save_on_master(model_without_ddp.state_dict(), ckpt_path + f'/model_{epoch}.pth')
 	
 	# linear evaluation on fsd50k
 	if utils.is_main_process():
