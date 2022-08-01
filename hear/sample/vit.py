@@ -65,7 +65,7 @@ class ViTModelWrapper(nn.Module):
 	def _load_weights(self, model_file_path):
 		sd = torch.load(model_file_path, map_location='cpu')
 		sd = {k.replace("encoder.encoder.", ""): v for k, v in sd.items() if "encoder.encoder." in k}
-		self.model.load_state_dict(torch.load(model_file_path, map_location='cpu'), strict=True)
+		self.model.load_state_dict(sd, strict=True)
 
 	
 	def _get_timestamps(self, batch_audio, x):
@@ -225,4 +225,4 @@ def get_scene_embeddings(
 	model = model.to(device)
 	model.eval()
 	with torch.no_grad():
-		return model.get_timestamp_embeddings(audio_list)
+		return model.get_scene_embeddings(audio_list)
