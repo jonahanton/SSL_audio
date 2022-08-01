@@ -133,7 +133,7 @@ class MaskedAutoencoderViT(nn.Module):
 	"""
 	def __init__(self, img_size=(64, 96), patch_size=(16, 16), in_chans=1,
 				 embed_dim=768, depth=12, num_heads=12, conv_stem=False,
-				 use_decoder=False,
+				 use_decoder=False, use_learned_pos_embd=False,
 				 decoder_embed_dim=384, decoder_depth=8, decoder_num_heads=12,
 				 mlp_ratio=4., norm_layer=nn.LayerNorm, norm_pix_loss=False,
 				 use_cls_token=True, block_cls=BlockKBiasZero, use_2d_dec_pos_embd=False,
@@ -145,6 +145,7 @@ class MaskedAutoencoderViT(nn.Module):
 		self.conv_stem = conv_stem
 		self.use_cls_token = use_cls_token
 		self.use_decoder = use_decoder
+		self.use_learned_pos_embd = use_learned_pos_embd
 
 		# --------------------------------------------------------------------------
 		# MAE encoder specifics
@@ -159,7 +160,14 @@ class MaskedAutoencoderViT(nn.Module):
 			self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
 		else:
 			print('NO [CLS] TOKEN')
-		self.pos_embed = nn.Parameter(torch.zeros(1, total_patches, embed_dim), requires_grad=False)  # fixed sin-cos embedding
+		
+		if use_learned_pos_embd:
+			if use_cls_token:
+				self.cls_pos_embed = nn.Parameter(torch.zeros(1, 1, embed_dim))
+			self.freq_pos_embed = nn.Parameter(torch.zeros(1, embed_dim, self.patch_embed.grid_size[0], 1))  # (f, 1)
+			self.time_pos_embed = nn.Parameter(torch.zeros(1, embed_dim, 1, self.patch_embed.grid_size[1]))  # (1, t)
+		else:
+			self.pos_embed = nn.Parameter(torch.zeros(1, total_patches, embed_dim), requires_grad=False)  # fixed sin-cos embedding
 
 		dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
 		self.blocks = nn.ModuleList([
@@ -202,9 +210,13 @@ class MaskedAutoencoderViT(nn.Module):
 
 	def initialize_weights(self, use_2d_dec_pos_embd=False):
 		# initialization
-		# initialize (and freeze) pos_embed by sin-cos embedding
-		pos_embed = get_2d_sincos_pos_embed(self.pos_embed.shape[-1], self.grid_size(), cls_token=self.use_cls_token)
-		self.pos_embed.data.copy_(torch.from_numpy(pos_embed).float().unsqueeze(0))
+		if self.use_learned_pos_embd:
+			torch.nn.init.normal_(self.freq_pos_embed, std=.02)
+			torch.nn.init.normal_(self.time_pos_embed, std=.02)
+		else:
+			# initialize (and freeze) pos_embed by sin-cos embedding
+			pos_embed = get_2d_sincos_pos_embed(self.pos_embed.shape[-1], self.grid_size(), cls_token=self.use_cls_token)
+			self.pos_embed.data.copy_(torch.from_numpy(pos_embed).float().unsqueeze(0))
 
 		if self.use_decoder:
 			if use_2d_dec_pos_embd:
@@ -304,20 +316,37 @@ class MaskedAutoencoderViT(nn.Module):
 		mask = torch.gather(mask, dim=1, index=ids_restore)
 
 		return x_masked, mask, ids_restore
+
+	
+	def interpolate_time_pos_encoding(self, x, time_pos_embed):
+		return
+
 	
 	def prepare_tokens(self, x, mask_ratio):
 		# embed patches
-		x = self.patch_embed(x)
-		# add pos embed w/o cls token
-		if self.use_cls_token:
-			x = x + self.pos_embed[:, 1:, :]
+		x = self.patch_embed(x)  # [] ?
+		print(x.shape)
+
+		if self.use_learned_pos_embd:
+			# use learned time/freq pos embeddings
+			time_pos_embed = self.interpolate_time_pos_encoding(x, self.time_pos_embed)
+			x = x + time_pos_embed
+			x = x + self.freq_pos_embed
 		else:
-			x = x + self.pos_embed
+			# add pos embed w/o cls token
+			if self.use_cls_token:
+				x = x + self.pos_embed[:, 1:, :]
+			else:
+				x = x + self.pos_embed
+
 		# masking: length -> length * mask_ratio
 		x, mask, ids_restore = self.random_masking(x, mask_ratio)
 		# append cls token
 		if self.use_cls_token:
-			cls_token = self.cls_token + self.pos_embed[:, :1, :]
+			if self.use_learned_pos_embd:
+				cls_token = self.cls_token + self.cls_pos_embed
+			else:
+				cls_token = self.cls_token + self.pos_embed[:, :1, :]
 			cls_tokens = cls_token.expand(x.shape[0], -1, -1)
 			x = torch.cat((cls_tokens, x), dim=1)
 
@@ -492,8 +521,6 @@ def mae_vitc_tiny_patch16x16(**kwargs):
 
 if __name__ == "__main__":
 
-	mae = mae_vit_base_patch16x16(use_decoder=True)
-	
+	mae = mae_vit_base_patch16x16()
 	x = torch.randn(128, 1, 64, 96)
-	loss, latent = mae(x, mask_ratio=0.75, masked_recon=True)
-	print(loss)
+	latents = mae(x)

@@ -16,6 +16,45 @@ def off_diagonal(x):
 	return x.flatten()[:-1].view(n - 1, n + 1)[:, 1:].flatten()
 
 
+class Projection(nn.Module):
+
+	def __init__(self, cfg, feature_dim):
+		super().__init__()
+		self.cfg = cfg 
+
+		sizes = [feature_dim] + self.cfg.projector_n_hidden_layers*[self.cfg.projector_hidden_dim] + [self.cfg.projector_out_dim]
+		layers = []
+		for i in range(len(sizes) - 2):
+			layers.append(nn.Linear(sizes[i], sizes[i + 1], bias=False))
+			layers.append(nn.BatchNorm1d(sizes[i + 1]))
+			layers.append(nn.ReLU(inplace=True))
+		layers.append(nn.Linear(sizes[-2], sizes[-1], bias=False))
+		self.projector = nn.Sequential(*layers)
+
+		self.bn = nn.BatchNorm1d(sizes[-1], affine=False)
+
+	def forward(self, feature1, feature2):
+		z1 = self.projector(feature1)
+		z2 = self.projector(feature2)
+		
+		# empirical cross-correlation matrix
+		c = self.bn(z1).T @ self.bn(z2)
+		
+		# sum the cross-correlation matrix between all gpus
+		c.div_(z1.shape[0])
+		if utils.is_dist_avail_and_initialized():
+			torch.distributed.all_reduce(c)
+		
+		on_diag = torch.diagonal(c).add_(-1).pow_(2).sum()
+		if self.cfg.HSIC:
+			# encouraging off_diag to be negative ones
+			off_diag = off_diagonal(c).add_(1).pow_(2).sum()
+		else:
+			off_diag = off_diagonal(c).pow_(2).sum()
+		loss = self.cfg.alpha * on_diag + self.cfg.lmbda * off_diag
+		return loss
+		
+
 class BarlowTwins(nn.Module):
 	
 	def __init__(self, cfg):
