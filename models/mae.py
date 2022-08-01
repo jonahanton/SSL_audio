@@ -517,7 +517,7 @@ def mae_vitc_tiny_patchX(patch_size, **kwargs):
 
 
 def mae_vitc_base_patch16x16(**kwargs):
-	return mae_vit_base_patchX([16, 16], **kwargs)
+	return mae_vitc_base_patchX([16, 16], **kwargs)
 
 
 def mae_vitc_small_patch16x16(**kwargs):
@@ -531,6 +531,8 @@ def mae_vitc_tiny_patch16x16(**kwargs):
 
 if __name__ == "__main__":
 
-	mae = mae_vit_base_patch16x16()
+	mae = mae_vitc_base_patch16x16()
 	x = torch.randn(128, 1, 64, 96)
-	latents = mae(x)
+	attns = mae.forward_attn(x)
+	print(len(attns))
+	print(attns[0].shape)
