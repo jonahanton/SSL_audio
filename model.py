@@ -76,10 +76,12 @@ class BarlowTwins(nn.Module):
 		elif self.cfg.model_type == 'audiontt':
 			self.encoder = AudioNTT2022(squeeze_excitation=self.cfg.squeeze_excitation)
 		elif 'vit' in self.cfg.model_type:
-			if self.cfg.model_type.split('_')[0] == 'vitc':
-				self.encoder = ViT(c=True, size=self.cfg.model_type.split('_')[-1])
-			else:
-				self.encoder = ViT(c=False, size=self.cfg.model_type.split('_')[-1])
+			conv_stem_bool = self.cfg.model_type.split('_')[0] == 'vitc'
+			self.encoder = ViT(
+				c=conv_stem_bool, 
+				size=self.cfg.model_type.split('_')[-1], 
+				use_learned_pos_embd=self.cfg.use_learned_pos_embd,
+			)
 		else:
 			raise NotImplementedError(f'Model type {self.cfg.model_type} is not supported')
 		feature_dim = self.encoder.embed_dim
@@ -145,24 +147,24 @@ class BarlowTwins(nn.Module):
 
 
 class ViT(nn.Module):
-	def __init__(self, c=True, size='base'):
+	def __init__(self, c=True, size='base', use_learned_pos_embd=False):
 		super().__init__()
 		if c:
 			if size == 'base':
-				self.encoder = mae.mae_vitc_base_patch16x16()
+				self.encoder = mae.mae_vitc_base_patch16x16(use_learned_pos_embd=use_learned_pos_embd)
 			elif size == 'small':
-				self.encoder = mae.mae_vitc_small_patch16x16()
+				self.encoder = mae.mae_vitc_small_patch16x16(use_learned_pos_embd=use_learned_pos_embd)
 			elif size == 'tiny':
-				self.encoder = mae.mae_vitc_tiny_patch16x16()
+				self.encoder = mae.mae_vitc_tiny_patch16x16(use_learned_pos_embd=use_learned_pos_embd)
 			else:
 				raise NotImplementedError(f'ViTc size {size} is not supported')
 		else:
 			if size == 'base':
-				self.encoder = mae.mae_vit_base_patch16x16()
+				self.encoder = mae.mae_vit_base_patch16x16(use_learned_pos_embd=use_learned_pos_embd)
 			elif size == 'small':
-				self.encoder = mae.mae_vit_small_patch16x16()
+				self.encoder = mae.mae_vit_small_patch16x16(use_learned_pos_embd=use_learned_pos_embd)
 			elif size == 'tiny':
-				self.encoder = mae.mae_vit_tiny_patch16x16()
+				self.encoder = mae.mae_vit_tiny_patch16x16(use_learned_pos_embd=use_learned_pos_embd)
 			else:
 				raise NotImplementedError(f'ViT size {size} is not supported')
 		self.embed_dim = self.encoder.embed_dim

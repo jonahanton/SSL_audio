@@ -9,6 +9,7 @@ References:
 	https://github.com/YuanGongND/ssast/blob/main/src/models/ast_models.py#L76
 """
 from functools import partial
+import math
 
 import torch
 import torch.nn as nn
@@ -162,10 +163,7 @@ class MaskedAutoencoderViT(nn.Module):
 			print('NO [CLS] TOKEN')
 		
 		if use_learned_pos_embd:
-			if use_cls_token:
-				self.cls_pos_embed = nn.Parameter(torch.zeros(1, 1, embed_dim))
-			self.freq_pos_embed = nn.Parameter(torch.zeros(1, embed_dim, self.patch_embed.grid_size[0], 1))  # (f, 1)
-			self.time_pos_embed = nn.Parameter(torch.zeros(1, embed_dim, 1, self.patch_embed.grid_size[1]))  # (1, t)
+			self.pos_embed = nn.Parameter(torch.zeros(1, total_patches, embed_dim))
 		else:
 			self.pos_embed = nn.Parameter(torch.zeros(1, total_patches, embed_dim), requires_grad=False)  # fixed sin-cos embedding
 
@@ -211,8 +209,7 @@ class MaskedAutoencoderViT(nn.Module):
 	def initialize_weights(self, use_2d_dec_pos_embd=False):
 		# initialization
 		if self.use_learned_pos_embd:
-			torch.nn.init.normal_(self.freq_pos_embed, std=.02)
-			torch.nn.init.normal_(self.time_pos_embed, std=.02)
+			torch.nn.init.normal_(self.pos_embed, std=.02)
 		else:
 			# initialize (and freeze) pos_embed by sin-cos embedding
 			pos_embed = get_2d_sincos_pos_embed(self.pos_embed.shape[-1], self.grid_size(), cls_token=self.use_cls_token)
@@ -316,41 +313,48 @@ class MaskedAutoencoderViT(nn.Module):
 		mask = torch.gather(mask, dim=1, index=ids_restore)
 
 		return x_masked, mask, ids_restore
-
-	
-	def interpolate_time_pos_encoding(self, x, time_pos_embed):
-		return
-
 	
 	def prepare_tokens(self, x, mask_ratio):
 		# embed patches
-		x = self.patch_embed(x)  # [] ?
-		print(x.shape)
+		x = self.patch_embed(x)  
 
 		if self.use_learned_pos_embd:
-			# use learned time/freq pos embeddings
-			time_pos_embed = self.interpolate_time_pos_encoding(x, self.time_pos_embed)
-			x = x + time_pos_embed
-			x = x + self.freq_pos_embed
-		else:
-			# add pos embed w/o cls token
+			# use learned pos embeddings
 			if self.use_cls_token:
-				x = x + self.pos_embed[:, 1:, :]
+				pos_embed = self.interpolate_pos_encoding(x, self.pos_embed[:, 1:, :])
 			else:
-				x = x + self.pos_embed
+				pos_embed = self.interpolate_pos_encoding(x, self.pos_embed)
+		else:
+			if self.use_cls_token:
+				pos_embed = self.pos_embed[:, 1:, :]
+			else:
+				pos_embed = self.pos_embed
+		x = x + pos_embed
 
 		# masking: length -> length * mask_ratio
 		x, mask, ids_restore = self.random_masking(x, mask_ratio)
 		# append cls token
 		if self.use_cls_token:
-			if self.use_learned_pos_embd:
-				cls_token = self.cls_token + self.cls_pos_embed
-			else:
-				cls_token = self.cls_token + self.pos_embed[:, :1, :]
+			cls_token = self.cls_token + self.pos_embed[:, :1, :]
 			cls_tokens = cls_token.expand(x.shape[0], -1, -1)
 			x = torch.cat((cls_tokens, x), dim=1)
 
 		return x, mask, ids_restore
+
+	def interpolate_pos_encoding(self, x, pos_embed):
+		npatch = x.shape[1] 
+		N = pos_embed.shape[1] 
+		if npatch == N:
+			return pos_embed
+
+		dim = x.shape[-1]
+		pos_embed = nn.functional.interpolate(
+			pos_embed.reshape(1, int(math.sqrt(N)), int(math.sqrt(N)), dim).permute(0, 3, 1, 2),
+			scale_factor=math.sqrt(npatch / N),
+			mode='bicubic',
+		)
+		pos_embed = pos_embed.permute(0, 2, 3, 1).view(1, -1, dim)
+		return pos_embed
 
 	def forward_encoder(self, x, mask_ratio):
 		x, mask, ids_restore = self.prepare_tokens(x, mask_ratio)

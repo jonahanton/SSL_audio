@@ -213,12 +213,16 @@ if __name__ == '__main__':
 	parser.add_argument('--mask_ratio', type=float, default=0)
 	# auxiliary loss on intermediate layers
 	parser.add_argument('--int_layers', action='store_true', default=False)
+	# learned positional embeddings (not sin-cos) for vit encoders
+	parser.add_argument('--use_learned_pos_embd', action='store_true', default=False)
 	
 	# args parse
 	args = parser.parse_args()
 
 	if args.int_layers:
 		assert 'vit' in args.model_type, f'{args.model_type} not supported with aux loss on intermediate layers'
+	if args.use_learned_pos_embd:
+		assert 'vit' in args.model_type, f'{args.model_type} does not use positional embeddings'
 
 	# distributed training 
 	utils.init_distributed_mode(args)
