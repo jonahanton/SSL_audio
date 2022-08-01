@@ -211,9 +211,14 @@ if __name__ == '__main__':
 	# masking 
 	parser.add_argument('--mask', action='store_true', default=False)
 	parser.add_argument('--mask_ratio', type=float, default=0)
+	# auxiliary loss on intermediate layers
+	parser.add_argument('--int_layers', action='store_true', default=False)
 	
 	# args parse
 	args = parser.parse_args()
+
+	if args.int_layers:
+		assert 'vit' in args.model_type, f'{args.model_type} not supported with aux loss on intermediate layers'
 
 	# distributed training 
 	utils.init_distributed_mode(args)

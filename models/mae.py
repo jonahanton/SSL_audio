@@ -304,32 +304,42 @@ class MaskedAutoencoderViT(nn.Module):
 		mask = torch.gather(mask, dim=1, index=ids_restore)
 
 		return x_masked, mask, ids_restore
-
-	def forward_encoder(self, x, mask_ratio):
+	
+	def prepare_tokens(self, x, mask_ratio):
 		# embed patches
 		x = self.patch_embed(x)
-
 		# add pos embed w/o cls token
 		if self.use_cls_token:
 			x = x + self.pos_embed[:, 1:, :]
 		else:
 			x = x + self.pos_embed
-
 		# masking: length -> length * mask_ratio
 		x, mask, ids_restore = self.random_masking(x, mask_ratio)
-
 		# append cls token
 		if self.use_cls_token:
 			cls_token = self.cls_token + self.pos_embed[:, :1, :]
 			cls_tokens = cls_token.expand(x.shape[0], -1, -1)
 			x = torch.cat((cls_tokens, x), dim=1)
 
+		return x, mask, ids_restore
+
+	def forward_encoder(self, x, mask_ratio):
+		x, mask, ids_restore = self.prepare_tokens(x, mask_ratio)
 		# apply Transformer blocks
 		for blk in self.blocks:
 			x = blk(x)
 		x = self.norm(x)
+		return [x], mask, ids_restore
 
-		return x, mask, ids_restore
+	def forward_encoder_intermediate_layers(self, x, mask_ratio, step=3):
+		# we return the output tokens from the `n` last blocks
+		x, mask, ids_restore = self.prepare_tokens(x, mask_ratio)
+		output = []
+		for i, blk in enumerate(self.blocks):
+			x = blk(x)
+			if ((i+1)%step==0) or (i==len(self.blocks)-1):
+				output.append(self.norm(x))
+		return output, mask, ids_restore
 
 	def forward_decoder(self, x, ids_restore):
 		# embed tokens
@@ -379,14 +389,18 @@ class MaskedAutoencoderViT(nn.Module):
 		loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
 		return loss
 
-	def forward(self, imgs, mask_ratio=0., masked_recon=False):
-		latent, mask, ids_restore = self.forward_encoder(imgs, mask_ratio)
+	def forward(self, imgs, mask_ratio=0, int_layers=False, masked_recon=False):
+		if int_layers:
+			latents, mask, ids_restore = self.forward_encoder_intermediate_layers(imgs, mask_ratio)
+		else:
+			latents, mask, ids_restore = self.forward_encoder(imgs, mask_ratio)
+		latent = latents[-1]
 		if masked_recon:
 			pred = self.forward_decoder(latent, ids_restore)  # [N, L, p*p*3]
 			loss = self.forward_loss(imgs, pred, mask)
 			# return loss, pred, mask
-			return loss, latent
-		return latent 
+			return loss, latents
+		return latents
 
 	def forward_viz(self, imgs, mask_ratio=0.75):
 		loss, pred, mask = self.forward(imgs, mask_ratio)

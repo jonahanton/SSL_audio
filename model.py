@@ -1,3 +1,4 @@
+from tkinter import Y
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -55,16 +56,7 @@ class BarlowTwins(nn.Module):
 
 		self.bn = nn.BatchNorm1d(sizes[-1], affine=False)
 	
-
-	def forward(self, y1, y2):
-		
-		if self.cfg.mask:
-			assert 'vit' in self.cfg.model_type, f'Model type {self.cfg.model_type} is not supported with view masking'
-			feature1 = self.encoder(y1, mask_ratio=self.cfg.mask_ratio)
-		else:
-			feature1 = self.encoder(y1)
-		feature2 = self.encoder(y2)
-
+	def forward_loss(self, feature1, feature2):
 		z1 = self.projector(feature1)
 		z2 = self.projector(feature2)
 		
@@ -84,6 +76,33 @@ class BarlowTwins(nn.Module):
 			off_diag = off_diagonal(c).pow_(2).sum()
 		loss = self.cfg.alpha * on_diag + self.cfg.lmbda * off_diag
 		return loss
+
+	def forward(self, y1, y2):
+		
+		if 'vit' in self.cfg.model_type:
+			if self.cfg.mask:
+				feature1 = self.encoder(y1, mask_ratio=self.cfg.mask_ratio, int_layers=self.cfg.int_layers)
+			else:
+				feature1 = self.encoder(y1, int_layers=self.cfg.int_layers)
+			feature2 = self.encoder(y2, int_layers=self.cfg.int_layers)
+		else:
+			feature1 = self.encoder(y1)
+			feature2 = self.encoder(y2)
+
+		if not isinstance(feature1, list):
+			feature1 = [feature1]
+		if not isinstance(feature2, list):
+			feature2 = [feature2]
+
+		loss = None
+		for f1, f2 in zip(feature1, feature2):
+			if loss is None:
+				loss = self.forward_loss(f1, f2)
+			else:
+				loss += self.forward_loss(f1, f2)
+
+		return loss
+
 
 
 class ViT(nn.Module):
@@ -109,10 +128,10 @@ class ViT(nn.Module):
 				raise NotImplementedError(f'ViT size {size} is not supported')
 		self.embed_dim = self.encoder.embed_dim
 
-	def forward(self, x, mask_ratio=0.):
-		x = self.encoder(x, mask_ratio=mask_ratio)
-		feature = x[:, 0].contiguous()  # Take [CLS] token as clip representation
-		return feature
+	def forward(self, x, mask_ratio=0, int_layers=False):
+		x = self.encoder(x, mask_ratio=mask_ratio, int_layers=int_layers)
+		x = [y[:, 0].contiguous() for y in x]  # Take [CLS] token only
+		return x
 
 
 class AudioNTT2022Encoder(nn.Module):

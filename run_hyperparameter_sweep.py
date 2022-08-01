@@ -81,6 +81,7 @@ def get_std_parser():
 	parser.add_argument('--squeeze_excitation', action='store_true', default=False)
 	parser.add_argument('--mask', action='store_true', default=False)
 	parser.add_argument('--mask_ratio', type=float, default=0)
+	parser.add_argument('--int_layers', action='store_true', default=False)
 	return parser
 
 
