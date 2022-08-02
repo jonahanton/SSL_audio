@@ -81,6 +81,7 @@ class BarlowTwins(nn.Module):
 				c=conv_stem_bool, 
 				size=self.cfg.model_type.split('_')[-1], 
 				use_learned_pos_embd=self.cfg.use_learned_pos_embd,
+				use_max_pool=self.cfg.use_max_pool,
 			)
 		else:
 			raise NotImplementedError(f'Model type {self.cfg.model_type} is not supported')
@@ -148,7 +149,7 @@ class BarlowTwins(nn.Module):
 
 
 class ViT(nn.Module):
-	def __init__(self, c=True, size='base', use_learned_pos_embd=False):
+	def __init__(self, c=True, size='base', use_learned_pos_embd=False, use_max_pool=False):
 		super().__init__()
 		if c:
 			if size == 'base':
@@ -169,10 +170,14 @@ class ViT(nn.Module):
 			else:
 				raise NotImplementedError(f'ViT size {size} is not supported')
 		self.embed_dim = self.encoder.embed_dim
+		self.use_max_pool = use_max_pool
 
 	def forward(self, x, mask_ratio=0, int_layers=False):
 		x = self.encoder(x, mask_ratio=mask_ratio, int_layers=int_layers)
-		x = [y[:, 0].contiguous() for y in x]  # Take [CLS] token only
+		if self.use_max_pool:
+			x = [torch.mean(y[:, 1:], dim=1).contiguous() for y in x]
+		else:
+			x = [y[:, 0].contiguous() for y in x]  # Take [CLS] token only
 		return x
 
 

@@ -29,7 +29,7 @@ from optuna.trial import TrialState
 import wandb
 
 from utils.torch_mlp_clf import TorchMLPClassifier
-from utils import transforms, utils
+from utils import transforms, utils, hyperparameters
 import datasets
 from model import BarlowTwins
 
@@ -53,38 +53,6 @@ CLASSES = dict(
 	fsd50k=200,
 	nsynth=88,
 )
-
-
-def get_std_parser():
-	parser = argparse.ArgumentParser(add_help=False)
-	parser.add_argument('--lr', type=float, default=1e-4)
-	parser.add_argument('--lr_weights', type=float, default=0.4)
-	parser.add_argument('--lr_biases', type=float, default=0.0048)
-	parser.add_argument('--lmbda', type=float, default=0.005)
-	parser.add_argument('--alpha', type=float, default=1)
-	parser.add_argument('--projector_out_dim', default=8192, type=int)
-	parser.add_argument('--projector_n_hidden_layers', default=1, type=int)
-	parser.add_argument('--projector_hidden_dim', default=8192, type=int)
-	parser.add_argument('--unit_sec', type=float, default=0.95)
-	parser.add_argument('--crop_frames', type=int, default=96)
-	parser.add_argument('--sample_rate', type=int, default=16000)
-	parser.add_argument('--n_fft', type=int, default=1024)
-	parser.add_argument('--win_length', type=int, default=1024)
-	parser.add_argument('--hop_length', type=int, default=160)
-	parser.add_argument('--n_mels', type=int, default=64)
-	parser.add_argument('--f_min', type=int, default=60)
-	parser.add_argument('--f_max', type=int, default=7800)
-	parser.add_argument('--num_workers', type=int, default=20)
-	parser.add_argument('--mixup_ratio', type=float, default=0.2)
-	parser.add_argument('--virtual_crop_scale', nargs='+', type=float, default=[1, 1.5])
-	parser.add_argument('--HSIC', action='store_true', default=False)
-	parser.add_argument('--squeeze_excitation', action='store_true', default=False)
-	parser.add_argument('--mask', action='store_true', default=False)
-	parser.add_argument('--mask_ratio', type=float, default=0)
-	parser.add_argument('--int_layers', action='store_true', default=False)
-	parser.add_argument('--int_layer_step', type=int, default=3)
-	parser.add_argument('--use_learned_pos_embd', action='store_true', default=False)
-	return parser
 
 
 def objective(trial):
@@ -414,34 +382,15 @@ def plot_and_save_intermediate_values(study, save_path):
 
 if __name__ == '__main__':
 
-	parser = argparse.ArgumentParser(description='Hyperparameter tuning', parents=[get_std_parser()])
-	parser.add_argument('--batch_size', type=int, default=64)
-	parser.add_argument('--dataset', type=str, default='fsd50k', choices=['fsd50k', 'nsynth'])
-	parser.add_argument('--eval', type=str, default='linear', choices=['linear', 'knn'])
-	parser.add_argument('--tune', nargs='+', type=str, default=['lr', 'wd'], choices=HYPERPARAMETERS)
-	parser.add_argument('--n_trials', type=int, default=10)
-	parser.add_argument('--train_epochs', type=int, default=20)
-	parser.add_argument('--model_type', type=str, default='audiontt', choices=MODELS)
-	parser.add_argument('--optimizer', type=str, default='LARS', choices=['Adam', 'AdamW', 'SGD', 'LARS'])
-	parser.add_argument('--load_lms', action='store_true', default=True)
-	parser.add_argument('--load_wav', dest='load_lms', action='store_false')
-	parser.add_argument('--mixup', action='store_true', default=True)
-	parser.add_argument('--no_mixup', action='store_false', dest='mixup')
-	parser.add_argument('--RRC', action='store_true', default=True)
-	parser.add_argument('--no_RRC', action='store_false', dest='RRC')
-	parser.add_argument('--RLF', action='store_true', default=True)
-	parser.add_argument('--no_RLF', action='store_false', dest='RLF')
-	parser.add_argument('--Gnoise', action='store_true', default=False)
-	parser.add_argument('--name', type=str, default='')
-	parser.add_argument('--use_fp16', action='store_true', default=False)
-	args = parser.parse_args()
-
-	if args.optimizer in ['Adam', 'SGD']:
-		args.wd = 0
-	elif args.optimizer == 'AdamW':
-		args.wd = 0.24
-	elif args.optimizer == 'LARS':
-		args.wd = 1e-5
+	parser_a = argparse.ArgumentParser(description='Model args')
+	parser_a.add_argument('--model_type', default='audiontt', type=str, choices=MODELS)
+	model_args = parser_a.parse_args()
+	parser_b = argparse.ArgumentParser(description='All args', parents=hyperparameters.get_hyperparameters(model_args))
+	parser_b.add_argument('--eval', type=str, default='linear', choices=['linear', 'knn'])
+	parser_b.add_argument('--tune', nargs='+', type=str, default=['lr', 'wd'], choices=HYPERPARAMETERS)
+	parser_b.add_argument('--n_trials', type=int, default=10)
+	parser_b.add_argument('--train_epochs', type=int, default=20)
+	args = parser_b.parse_args()
 
 	wandb_kwargs = dict(
 		project=f'Hyperparameter sweep {args.model_type} [{args.dataset}]',

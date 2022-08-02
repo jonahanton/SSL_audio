@@ -8,10 +8,9 @@ from tqdm import tqdm
 import time
 import datetime
 import wandb
-import copy
 
 from augmentations import RunningNorm, NormalizeBatch
-from utils import utils, transforms
+from utils import utils, transforms, hyperparameters
 import datasets
 from model import BarlowTwinsBYOL
 
@@ -89,78 +88,7 @@ def train_one_epoch(args, epoch, model, data_loader, optimizer, wandb_run):
 	return total_loss / total_num
 
 
-if __name__ == '__main__':
-	parser = argparse.ArgumentParser(description='Train barlow twins')
-	parser.add_argument('--dataset', default='fsd50k', type=str, choices=DATASETS)
-	parser.add_argument('--batch_size', default=128, type=int, help='Number of images in each mini-batch')
-	parser.add_argument('--epochs', default=100, type=int, help='Number of iterations over the dataset to train for')
-	parser.add_argument('--epoch_save_f', default=20, type=int)
-	parser.add_argument('--optimizer', default='Adam', type=str, choices = ['Adam', 'AdamW'])
-	parser.add_argument('--lr', type=float, default=1e-4)
-	# model type 
-	parser.add_argument('--model_type', default='audiontt', type=str, choices=MODELS)
-	# for barlow twins
-	parser.add_argument('--lmbda', default=0.005, type=float, help='Lambda that controls the on- and off-diagonal terms')
-	parser.add_argument('--projector_out_dim', default=256, type=int)
-	parser.add_argument('--projector_n_hidden_layers', default=1, type=int)
-	parser.add_argument('--projector_hidden_dim', default=4096, type=int)
-	parser.add_argument('--HSIC', action='store_true', default=False)
-	parser.add_argument('--stop_gradient', action='store_true', default=True)
-	parser.add_argument('--no_stop_gradient', action='store_false', dest='stop_gradient')
-	parser.add_argument('--predictor', action='store_true', default=True)
-	parser.add_argument('--no_predictor', action='store_false', dest='predictor')
-	parser.add_argument('--moving_average_decay', type=float, default=0.99)
-	# for audio processing
-	parser.add_argument('--unit_sec', type=float, default=0.95)
-	parser.add_argument('--crop_frames', type=int, default=96)
-	parser.add_argument('--sample_rate', type=int, default=16000)
-	parser.add_argument('--n_fft', type=int, default=1024)
-	parser.add_argument('--win_length', type=int, default=1024)
-	parser.add_argument('--hop_length', type=int, default=160)
-	parser.add_argument('--n_mels', type=int, default=64)
-	parser.add_argument('--f_min', type=int, default=60)
-	parser.add_argument('--f_max', type=int, default=7800)
-	# data augmentations
-	parser.add_argument('--mixup', action='store_true', default=True)
-	parser.add_argument('--no_mixup', action='store_false', dest='mixup')
-	parser.add_argument('--RRC', action='store_true', default=True)
-	parser.add_argument('--no_RRC', action='store_false', dest='RRC')
-	parser.add_argument('--RLF', action='store_true', default=True)
-	parser.add_argument('--no_RLF', action='store_false', dest='RLF')
-	parser.add_argument('--Gnoise', action='store_true', default=False)
-	parser.add_argument('--pre_norm', action='store_true', default=False)
-	parser.add_argument('--post_norm', action='store_true', default=False)
-	# load pre-computed lms 
-	parser.add_argument('--load_lms', action='store_true', default=True)
-	parser.add_argument('--load_wav', action='store_false', dest='load_lms')
-	# distributed training 
-	parser.add_argument('--distributed', action='store_true', default=False)
-	# data loader
-	parser.add_argument('--num_workers', type=int, default=20)
-	parser.add_argument('--name', type=str, default=None)
-	
-	# args parse
-	args = parser.parse_args()
-
-	# distributed training 
-	utils.init_distributed_mode(args)
-	args.batch_size_per_gpu = int(args.batch_size / args.world_size)
-
-	# wandb init
-	timestamp = datetime.datetime.now().strftime('%H:%M_%h%d')
-	save_name = '(asymm)_{}_{}_epochs'.format(args.model_type, args.epochs) if args.name is None else args.name
-	save_name += timestamp
-	if utils.is_main_process():
-		wandb_run = wandb.init(
-				project='Pre-training {}'.format(args.dataset),
-				config=args,
-				settings=wandb.Settings(start_method="fork"),
-				name=save_name,
-			)
-	else:
-		wandb_run = None
-		
-	# data prepare
+def get_data(args):
 	if args.dataset == 'fsd50k':
 		# fsd50k [mean, std] (lms)
 		norm_stats = [-4.950, 5.855]
@@ -197,13 +125,75 @@ if __name__ == '__main__':
 	train_loader = DataLoader(train_data, batch_size=args.batch_size_per_gpu, shuffle=(True if train_sampler is None else False),
 							  num_workers=args.num_workers, pin_memory=True, sampler=train_sampler, drop_last=True)
 
-	# model setup 
+	return train_loader
+
+
+def get_optimizer(args):
+
+	if args.optimizer == 'Adam':
+		args.wd = 0
+		optimizer = optim.Adam(utils.get_param_groups(model), lr=args.lr, weight_decay=args.wd)
+	elif args.optimizer == 'AdamW':
+		optimizer = optim.AdamW(utils.get_param_groups(model), lr=args.lr, weight_decay=args.wd)
+	elif args.optimizer == 'SGD':
+		args.wd = 0
+		optimizer = optim.SGD(utils.get_param_groups(model), lr=args.lr, weight_decay=args.wd)
+	elif args.optimizer == 'LARS':
+		# separate lr for weights and biases using LARS optimizer
+		param_weights = []
+		param_biases = []
+		for param in model.parameters():
+			if param.ndim == 1:
+				param_biases.append(param)
+			else:
+				param_weights.append(param)
+		parameters = [
+			{'params': param_weights, 'lr': args.lr_weights},
+			{'params': param_biases, 'lr': args.lr_biases},
+		]
+		optimizer = utils.LARS(parameters, lr=0, weight_decay=args.wd,
+			weight_decay_filter=True, lars_adaptation_filter=True)
+	
+	return optimizer
+
+if __name__ == '__main__':
+	parser_a = argparse.ArgumentParser(description='Model args')
+	parser_a.add_argument('--model_type', default='audiontt', type=str, choices=MODELS)
+	model_args = parser_a.parse_args()
+	parser_b = argparse.ArgumentParser(description='All args', parents=hyperparameters.get_hyperparameters(model_args))
+	parser_b.add_argument('--stop_gradient', action='store_true', default=True)
+	parser_b.add_argument('--no_stop_gradient', action='store_false', dest='stop_gradient')
+	parser_b.add_argument('--predictor', action='store_true', default=True)
+	parser_b.add_argument('--no_predictor', action='store_false', dest='predictor')
+	parser_b.add_argument('--moving_average_decay', type=float, default=0.99)
+	args = parser_b.parse_args()
+	args.model_type = model_args.model_type
+
+	# distributed training 
+	utils.init_distributed_mode(args)
+	args.batch_size_per_gpu = int(args.batch_size / args.world_size)
+
+	# wandb init
+	timestamp = datetime.datetime.now().strftime('%H:%M_%h%d')
+	save_name = '(asymm)_{}_{}_epochs'.format(args.model_type, args.epochs) if args.name == '' else args.name
+	save_name += timestamp
+	if utils.is_main_process():
+		wandb_run = wandb.init(
+				project='Pre-training {}'.format(args.dataset),
+				config=args,
+				settings=wandb.Settings(start_method="fork"),
+				name=save_name,
+			)
+	else:
+		wandb_run = None
+		
+	# data 
+	train_loader = get_data(args)
+	# model 
 	model = BarlowTwinsBYOL(args).cuda()
 
 	if args.distributed:
-		# sync batch norms
 		model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
-		# wrap model with ddp
 		model = nn.parallel.DistributedDataParallel(
 			model,
 			device_ids=[args.gpu],
@@ -212,16 +202,15 @@ if __name__ == '__main__':
 		model_without_ddp = model.module
 	else:
 		model_without_ddp = model
-	
-	if args.optimizer == 'Adam':
-		optimizer = optim.Adam(model.parameters(), lr=args.lr)
-	elif args.optimizer == 'AdamW':
-		optimizer = optim.AdamW(utils.get_param_groups(model), lr=args.lr)
+
+	# optimizer
+	optimizer = get_optimizer(args)
 
 	# model checkpoint path
 	ckpt_path = f'results/{args.dataset}/{args.model_type}_{save_name}'
 	os.makedirs(ckpt_path, exist_ok=True)
 
+	# training 
 	for epoch in range(1, args.epochs+1):
 		train_loss = train_one_epoch(args, epoch, model, train_loader, optimizer, wandb_run)
 		if epoch % args.epoch_save_f == 0 or epoch == args.epochs:
