@@ -14,45 +14,6 @@ def off_diagonal(x):
 	n, m = x.shape
 	assert n == m
 	return x.flatten()[:-1].view(n - 1, n + 1)[:, 1:].flatten()
-
-
-class Projection(nn.Module):
-
-	def __init__(self, cfg, feature_dim):
-		super().__init__()
-		self.cfg = cfg 
-
-		sizes = [feature_dim] + self.cfg.projector_n_hidden_layers*[self.cfg.projector_hidden_dim] + [self.cfg.projector_out_dim]
-		layers = []
-		for i in range(len(sizes) - 2):
-			layers.append(nn.Linear(sizes[i], sizes[i + 1], bias=False))
-			layers.append(nn.BatchNorm1d(sizes[i + 1]))
-			layers.append(nn.ReLU(inplace=True))
-		layers.append(nn.Linear(sizes[-2], sizes[-1], bias=False))
-		self.projector = nn.Sequential(*layers)
-
-		self.bn = nn.BatchNorm1d(sizes[-1], affine=False)
-
-	def forward(self, feature1, feature2):
-		z1 = self.projector(feature1)
-		z2 = self.projector(feature2)
-		
-		# empirical cross-correlation matrix
-		c = self.bn(z1).T @ self.bn(z2)
-		
-		# sum the cross-correlation matrix between all gpus
-		c.div_(z1.shape[0])
-		if utils.is_dist_avail_and_initialized():
-			torch.distributed.all_reduce(c)
-		
-		on_diag = torch.diagonal(c).add_(-1).pow_(2).sum()
-		if self.cfg.HSIC:
-			# encouraging off_diag to be negative ones
-			off_diag = off_diagonal(c).add_(1).pow_(2).sum()
-		else:
-			off_diag = off_diagonal(c).pow_(2).sum()
-		loss = self.cfg.alpha * on_diag + self.cfg.lmbda * off_diag
-		return loss
 		
 
 class BarlowTwins(nn.Module):
@@ -62,7 +23,6 @@ class BarlowTwins(nn.Module):
 		self.cfg = cfg
 		self._setup_model()
 	
-
 	def _setup_model(self):
 		
 		if self.cfg.model_type == 'resnet50':
@@ -77,9 +37,10 @@ class BarlowTwins(nn.Module):
 			self.encoder = AudioNTT2022(squeeze_excitation=self.cfg.squeeze_excitation)
 		elif 'vit' in self.cfg.model_type:
 			conv_stem_bool = self.cfg.model_type.split('_')[0] == 'vitc'
-			self.encoder = ViT(
-				c=conv_stem_bool, 
+			self.encoder = ViT( 
 				size=self.cfg.model_type.split('_')[-1], 
+				patch_size=self.cfg.patch_size,
+				c=conv_stem_bool,
 				use_learned_pos_embd=self.cfg.use_learned_pos_embd,
 				use_max_pool=self.cfg.use_max_pool,
 			)
@@ -138,7 +99,7 @@ class BarlowTwins(nn.Module):
 
 		loss = None
 		for i, (f1, f2) in enumerate(zip(feature1, feature2)):
-			if ((i+1) % self.cfg.int_layer_step == 0) or (i == len(feature1)-1):
+			if ((i+1) % self.cfg.int_layer_step == 0) or (i == len(feature1) - 1):
 				if loss is None:
 					loss = self.forward_loss(f1, f2)
 				else:
@@ -149,33 +110,20 @@ class BarlowTwins(nn.Module):
 
 
 class ViT(nn.Module):
-	def __init__(self, c=True, size='base', use_learned_pos_embd=False, use_max_pool=False):
+	def __init__(self, size='base', patch_size=None, c=True, use_learned_pos_embd=False, use_max_pool=False):
 		super().__init__()
-		if c:
-			if size == 'base':
-				self.encoder = mae.mae_vitc_base_patch16x16(use_learned_pos_embd=use_learned_pos_embd)
-			elif size == 'small':
-				self.encoder = mae.mae_vitc_small_patch16x16(use_learned_pos_embd=use_learned_pos_embd)
-			elif size == 'tiny':
-				self.encoder = mae.mae_vitc_tiny_patch16x16(use_learned_pos_embd=use_learned_pos_embd)
-			else:
-				raise NotImplementedError(f'ViTc size {size} is not supported')
-		else:
-			if size == 'base':
-				self.encoder = mae.mae_vit_base_patch16x16(use_learned_pos_embd=use_learned_pos_embd)
-			elif size == 'small':
-				self.encoder = mae.mae_vit_small_patch16x16(use_learned_pos_embd=use_learned_pos_embd)
-			elif size == 'tiny':
-				self.encoder = mae.mae_vit_tiny_patch16x16(use_learned_pos_embd=use_learned_pos_embd)
-			else:
-				raise NotImplementedError(f'ViT size {size} is not supported')
+		
+		if patch_size is None:
+			patch_size = [16, 16]
+		self.encoder = mae.get_mae_vit(size, patch_size, c, use_learned_pos_embd=use_learned_pos_embd)
+		
 		self.embed_dim = self.encoder.embed_dim
 		self.use_max_pool = use_max_pool
 
 	def forward(self, x, mask_ratio=0, int_layers=False):
 		x = self.encoder(x, mask_ratio=mask_ratio, int_layers=int_layers)
 		if self.use_max_pool:
-			x = [torch.mean(y[:, 1:], dim=1).contiguous() for y in x]
+			x = [torch.mean(y[:, 1:], dim=1).contiguous() for y in x]  # Take mean pool over patch embeds
 		else:
 			x = [y[:, 0].contiguous() for y in x]  # Take [CLS] token only
 		return x

@@ -20,14 +20,6 @@ import datasets
 from model import BarlowTwins
 
 
-MODELS = [
-	'resnet50', 'resnet50_ReGP_NRF',
-	'audiontt',
-	'vit_base', 'vit_small', 'vit_tiny',
-	'vitc_base', 'vitc_small', 'vitc_tiny'
-]
-
-
 if torch.cuda.is_available():
 	torch.backends.cudnn.benchmark = True
 
@@ -221,13 +213,9 @@ def get_optimizer(args):
 
 
 if __name__ == '__main__':
-	parser_a = argparse.ArgumentParser(description='Model args')
-	parser_a.add_argument('--model_type', default='audiontt', type=str, choices=MODELS)
-	model_args = parser_a.parse_args()
-	parser_b = argparse.ArgumentParser(description='All args', parents=hyperparameters.get_hyperparameters(model_args))
-	args = parser_b.parse_args()
-	args.model_type = model_args.model_type
-
+	parser = argparse.ArgumentParser(description='Training args', parents=hyperparameters.get_hyperparameters())
+	args = parser.parse_args()
+	hyperparameters.setup_hyperparameters(args)
 
 	# distributed training 
 	utils.init_distributed_mode(args)

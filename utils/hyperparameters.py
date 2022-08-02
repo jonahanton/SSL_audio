@@ -1,5 +1,11 @@
 import argparse 
 
+MODELS = [
+	'resnet50', 'resnet50_ReGP_NRF',
+	'audiontt',
+	'vit_base', 'vit_small', 'vit_tiny',
+	'vitc_base', 'vitc_small', 'vitc_tiny'
+]
 
 DATASETS = [
 	'fsd50k',
@@ -15,19 +21,14 @@ OPTIMIZERS = [
 	'LARS',
 ]
 
-def get_hyperparameters(args):
-
-	model_type = args.model_type
-	parsers = [get_std_parameters()]
-	if 'vit' in model_type:
-		parsers.append(get_vit_parameters())
-	else:
-		parsers.append(get_conv_parameters())
-	return parsers
+def get_hyperparameters():
+	parser = [get_std_parameters()]
+	return parser
 
 
 def get_std_parameters():
 	parser = argparse.ArgumentParser(add_help=False)
+	parser.add_argument('--model_type', default='audiontt', type=str, choices=MODELS)
 	parser.add_argument('--dataset', default='fsd50k', type=str, choices=DATASETS)
 	parser.add_argument('--epochs', default=100, type=int)
 	parser.add_argument('--epoch_save_f', default=20, type=int)
@@ -64,29 +65,30 @@ def get_std_parameters():
 	parser.add_argument('--distributed', action='store_true', default=False)
 	parser.add_argument('--use_fp16', action='store_true', default=False)
 	parser.add_argument('--name', type=str, default='')
-	return parser 
-
-
-def get_vit_parameters():
-	parser = argparse.ArgumentParser(add_help=False)
-	parser.add_argument('--lr', type=float, default=2e-5)
-	parser.add_argument('--wd', type=float, default=0.24)
-	parser.add_argument('--optimizer', type=str, default='AdamW', choices=OPTIMIZERS)
+	parser.add_argument('--squeeze_excitation', action='store_true', default=False)
 	parser.add_argument('--mask', action='store_true', default=False)
 	parser.add_argument('--mask_ratio', type=float, default=0)
 	parser.add_argument('--int_layers', action='store_true', default=False)
 	parser.add_argument('--int_layer_step', type=int, default=3)
 	parser.add_argument('--use_learned_pos_embd', action='store_true', default=False)
 	parser.add_argument('--use_max_pool', action='store_true', default=False)
-	return parser
+	parser.add_argument('--patch_size', nargs='+', type=int, default=[16, 16])
+
+	parser.add_argument('--optimizer', type=str, default=None)
+	parser.add_argument('--lr', type=float, default=None)
+	parser.add_argument('--lr_weights', type=float, default=None)
+	parser.add_argument('--lr_biases', type=float, default=None)
+	parser.add_argument('--wd', type=float, default=None)
+	return parser 
 
 
-def get_conv_parameters():
-	parser = argparse.ArgumentParser(add_help=False)
-	parser.add_argument('--lr', type=float, default=1e-4)
-	parser.add_argument('--lr_weights', type=float, default=0.4)
-	parser.add_argument('--lr_biases', type=float, default=0.0048)
-	parser.add_argument('--wd', type=float, default=0.24)
-	parser.add_argument('--optimizer', type=str, default='LARS', choices=OPTIMIZERS)
-	parser.add_argument('--squeeze_excitation', action='store_true', default=False)
-	return parser
+def setup_hyperparameters(args):
+	if 'vit' in args.model_type:
+		args.optimizer = 'AdamW' if args.optimizer is None else args.optimizer
+		args.lr = 1e-5 * args.batch_size / 64 if args.lr is None else args.lr
+		args.wd = 0.24 if args.wd is None else args.wd
+	else:
+		args.optimizer = 'LARS' if args.optimizer is None else args.optimizer
+		args.lr_weights = 0.4 if args.lr_weights is None else args.lr_weights
+		args.lr_biases = 0.0048 if args.lr_biases is None else args.lr_biases
+		args.wd = 1e-5

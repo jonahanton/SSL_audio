@@ -153,6 +153,9 @@ class MaskedAutoencoderViT(nn.Module):
 			self.patch_embed = ConvStem(img_size, patch_size, in_chans, embed_dim)
 		else:
 			self.patch_embed = PatchEmbed(img_size, patch_size, in_chans, embed_dim)
+			# random patch projection [Chen et al., 2021]
+			for param in self.patch_embed.parameters():
+				param.requires_grad = False
 		num_patches = self.patch_embed.num_patches
 
 		total_patches = num_patches + (1 if use_cls_token else 0)
@@ -481,13 +484,20 @@ def mae_vit_tiny_patchX(patch_size, **kwargs):
 def mae_vit_base_patch16x16(**kwargs):
 	return mae_vit_base_patchX([16, 16], **kwargs)
 
+def mae_vit_base_patch8x8(**kwargs):
+	return mae_vit_base_patchX([8, 8], **kwargs)
 
 def mae_vit_small_patch16x16(**kwargs):
 	return mae_vit_small_patchX([16, 16], **kwargs)
 
+def mae_vit_small_patch8x8(**kwargs):
+	return mae_vit_small_patchX([8, 8], **kwargs)
 
 def mae_vit_tiny_patch16x16(**kwargs):
 	return mae_vit_tiny_patchX([16, 16], **kwargs)
+
+def mae_vit_tiny_patch8x8(**kwargs):
+	return mae_vit_tiny_patchX([8, 8], **kwargs)
 
 
 def mae_vitc_base_patchX(patch_size, **kwargs):
@@ -527,6 +537,29 @@ def mae_vitc_small_patch16x16(**kwargs):
 
 def mae_vitc_tiny_patch16x16(**kwargs):
 	return mae_vitc_tiny_patchX([16, 16], **kwargs)
+
+
+def get_mae_vit(size='base', patch_size=None, c=False, **kwargs):
+	if patch_size is None:
+		patch_size = [16, 16]
+	if c:
+		if size == 'base':
+			return mae_vitc_base_patchX(patch_size, **kwargs)
+		elif size == 'small':
+			return mae_vitc_small_patchX(patch_size, **kwargs)
+		elif size == 'tiny':
+			return mae_vitc_tiny_patchX(patch_size, **kwargs)
+		else:
+			raise NotImplementedError(f'Size {size} is not supported')
+	else:
+		if size == 'base':
+			return mae_vit_base_patchX(patch_size, **kwargs)
+		elif size == 'small':
+			return mae_vit_small_patchX(patch_size, **kwargs)
+		elif size == 'tiny':
+			return mae_vit_tiny_patchX(patch_size, **kwargs)
+		else:
+			raise NotImplementedError(f'Size {size} is not supported')
 
 
 

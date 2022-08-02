@@ -15,20 +15,6 @@ import datasets
 from model import BarlowTwinsBYOL
 
 
-MODELS = [
-	'resnet50', 'resnet50_ReGP_NRF',
-	'audiontt',
-	'vit_base', 'vit_small', 'vit_tiny',
-	'vitc_base', 'vitc_small', 'vitc_tiny'
-]
-
-DATASETS = [
-	'fsd50k',
-	'audioset',
-	'librispeech',
-	'fsd50k+librispeech',
-]
-
 if torch.cuda.is_available():
 	torch.backends.cudnn.benchmark = True
 
@@ -157,17 +143,14 @@ def get_optimizer(args):
 	return optimizer
 
 if __name__ == '__main__':
-	parser_a = argparse.ArgumentParser(description='Model args')
-	parser_a.add_argument('--model_type', default='audiontt', type=str, choices=MODELS)
-	model_args = parser_a.parse_args()
-	parser_b = argparse.ArgumentParser(description='All args', parents=hyperparameters.get_hyperparameters(model_args))
-	parser_b.add_argument('--stop_gradient', action='store_true', default=True)
-	parser_b.add_argument('--no_stop_gradient', action='store_false', dest='stop_gradient')
-	parser_b.add_argument('--predictor', action='store_true', default=True)
-	parser_b.add_argument('--no_predictor', action='store_false', dest='predictor')
-	parser_b.add_argument('--moving_average_decay', type=float, default=0.99)
-	args = parser_b.parse_args()
-	args.model_type = model_args.model_type
+	parser = argparse.ArgumentParser(description='Training args', parents=hyperparameters.get_hyperparameters())
+	parser.add_argument('--stop_gradient', action='store_true', default=True)
+	parser.add_argument('--no_stop_gradient', action='store_false', dest='stop_gradient')
+	parser.add_argument('--predictor', action='store_true', default=True)
+	parser.add_argument('--no_predictor', action='store_false', dest='predictor')
+	parser.add_argument('--moving_average_decay', type=float, default=0.99)
+	args = parser.parse_args()
+	hyperparameters.setup_hyperparameters(args)
 
 	# distributed training 
 	utils.init_distributed_mode(args)
