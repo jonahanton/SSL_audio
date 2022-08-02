@@ -68,7 +68,7 @@ class AttnModelWrapper(nn.Module):
 		if model_file_path is None:
 			return
 		sd = torch.load(model_file_path, map_location='cpu')
-		sd = {k.replace("encoder.", "", 1): v for k, v in sd.items() if "encoder." in k}
+		sd = {k.replace("encoder.encoder.", "", 1): v for k, v in sd.items() if "encoder.encoder." in k}
 		self.model.load_state_dict(sd, strict=True)
 
 	@torch.no_grad()
@@ -106,7 +106,7 @@ class AttnModelWrapper(nn.Module):
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description='JS divergence for attention distribution', parents=[get_std_parser()])
 	parser.add_argument('--model_type', type=str, default='vit_base', choices=MODELS)
-	parser.add_argument('--model_file_path', type=str, default='results/fsd50k/vit_base_vit_base11:35_Jul29/model_40.pth')
+	parser.add_argument('--model_file_path', type=str, default='results/fsd50k/vit_base_vit_base_auxloss15:28_Aug01/model_100.pth')
 	parser.add_argument('--use_learned_pos_embd', action='store_true', default=False)
 	parser.add_argument('--name', type=str, default='')
 	args = parser.parse_args()
