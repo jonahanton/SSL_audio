@@ -41,6 +41,11 @@ def get_std_parser():
 	parser.add_argument('--HSIC', action='store_true', default=False)
 	parser.add_argument('--squeeze_excitation', action='store_true', default=False)
 	parser.add_argument('--load_lms', action='store_true', default=True)
+	parser.add_argument('--mask', action='store_true', default=False)
+	parser.add_argument('--mask_ratio', type=float, default=0)
+	parser.add_argument('--int_layers', action='store_true', default=False)
+	parser.add_argument('--int_layer_step', type=int, default=3)
+	parser.add_argument('--use_learned_pos_embd', action='store_true', default=False)
 	return parser
 
 
@@ -49,7 +54,10 @@ def get_embeddings(model, data_loader):
 	model.eval()
 	embs, targets = [], []
 	for data, target in data_loader:
-		emb = model(data.cuda(non_blocking=True)).detach().cpu().numpy()
+		emb = model(data.cuda(non_blocking=True))
+		if isinstance(emb, list):
+			emb = emb[-1]
+		emb = emb.detach().cpu().numpy()
 		embs.extend(emb)
 		targets.extend(target.numpy())
 
@@ -133,7 +141,9 @@ if __name__ == '__main__':
 
 	# Load model
 	model = BarlowTwins(args).encoder
-	model.load_state_dict(torch.load(args.model_file_path, map_location='cpu'), strict=False)
+	sd = torch.load(args.model_file_path, map_location='cpu')
+	sd = {k.replace("encoder.", "", 1): v for k, v in sd.items() if "encoder." in k}
+	model.load_state_dict(sd, strict=True)
 	model = model.cuda()
 	model.eval()
 

@@ -105,8 +105,10 @@ def get_embeddings(model, data_loader):
 	model.eval()
 	embs, targets = [], []
 	for data, target in data_loader:
-		emb = model(data.cuda(non_blocking=True)).detach().cpu().numpy()
-		embs.extend(emb)
+		emb = model(data.cuda(non_blocking=True))
+		if isinstance(emb, list):
+			emb = emb[-1]
+		emb = emb.detach().cpu().numpy()
 		targets.extend(target.numpy())
 
 	return np.array(embs), np.array(targets)

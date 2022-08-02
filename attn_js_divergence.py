@@ -5,9 +5,11 @@ sns.set()
 
 import torch 
 import torch.nn as nn
+from torch.utils.data import DataLoader
 from scipy.spatial.distance import jensenshannon
 
 from models import mae
+import datasets
 
 
 MODELS = [
@@ -27,6 +29,7 @@ def get_std_parser():
 	parser.add_argument('--n_mels', type=int, default=64)
 	parser.add_argument('--f_min', type=int, default=60)
 	parser.add_argument('--f_max', type=int, default=7800)
+	parser.add_argument('--load_lms', action='store_true', default=True)
 	return parser
 
 
@@ -65,7 +68,7 @@ class AttnModelWrapper(nn.Module):
 		if model_file_path is None:
 			return
 		sd = torch.load(model_file_path, map_location='cpu')
-		sd = {k.replace("encoder.encoder.", ""): v for k, v in sd.items() if "encoder.encoder." in k}
+		sd = {k.replace("encoder.", "", 1): v for k, v in sd.items() if "encoder." in k}
 		self.model.load_state_dict(sd, strict=True)
 
 	@torch.no_grad()
@@ -101,12 +104,19 @@ class AttnModelWrapper(nn.Module):
 
 
 if __name__ == "__main__":
-	parser = argparse.ArgumentParser(description='JS divergence for attention', parents=[get_std_parser()])
-	parser.add_argument('--model_type', type=str, default='vitc_base', choices=MODELS)
-	parser.add_argument('--model_file_path', type=str, default=None)
+	parser = argparse.ArgumentParser(description='JS divergence for attention distribution', parents=[get_std_parser()])
+	parser.add_argument('--model_type', type=str, default='vit_base', choices=MODELS)
+	parser.add_argument('--model_file_path', type=str, default='results/fsd50k/vit_base_vit_base11:35_Jul29/model_40.pth')
 	parser.add_argument('--use_learned_pos_embd', action='store_true', default=False)
+	parser.add_argument('--name', type=str, default='')
 	args = parser.parse_args()
 
+	norm_stats = [-4.950, 5.855]
+	loader = DataLoader(
+		datasets.FSD50K(args, split='train', transform=None, norm_stats=norm_stats),
+		batch_size=128, shuffle=False, num_workers=4, pin_memory=True, drop_last=False,
+	)
+	x, _ = next(iter(loader))
+
 	attn_model = AttnModelWrapper(args)
-	x = torch.randn(12, 1, 64, 96)
-	attn_model.forward_viz_js(x, 'attention.png')
+	attn_model.forward_viz_js(x, f'attention_{args.name}.png')
