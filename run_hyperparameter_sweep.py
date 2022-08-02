@@ -56,7 +56,7 @@ def objective(trial):
 	# Generate the optimizers
 	if args.optimizer in ['Adam', 'AdamW', 'SGD']:
 		if 'lr' in args.tune:
-			args.lr = trial.suggest_categorical("lr", [5e-6, 1e-5, 2e-5, 3e-5, 5e-5])
+			args.lr = trial.suggest_float("lr", 1e-6, 1e-2, log=True)
 		if 'wd' in args.tune:
 			args.wd = trial.suggest_float("wd", 1e-3, 1e0, log=True)
 	if args.optimizer == 'Adam':
@@ -183,7 +183,10 @@ def get_embeddings(model, data_loader):
 	model.eval()
 	embs, targets = [], []
 	for data, target in data_loader:
-		emb = model(data.cuda(non_blocking=True)).detach().cpu().numpy()
+		emb = model(data.cuda(non_blocking=True))
+		if isinstance(emb, list):
+			emb = emb[-1]
+		emb = emb.detach().cpu().numpy()
 		embs.extend(emb)
 		targets.extend(target.numpy())
 
