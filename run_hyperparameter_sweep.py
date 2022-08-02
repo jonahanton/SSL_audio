@@ -42,13 +42,6 @@ HYPERPARAMETERS = [
 	'virtual_crop_scale',
 ]
 
-MODELS = [
-	'resnet50', 'resnet50_ReGP_NRF',
-	'audiontt',
-	'vit_base', 'vit_small', 'vit_tiny',
-	'vitc_base', 'vitc_small', 'vitc_tiny',
-]
-
 CLASSES = dict(
 	fsd50k=200,
 	nsynth=88,
@@ -382,15 +375,14 @@ def plot_and_save_intermediate_values(study, save_path):
 
 if __name__ == '__main__':
 
-	parser_a = argparse.ArgumentParser(description='Model args')
-	parser_a.add_argument('--model_type', default='audiontt', type=str, choices=MODELS)
-	model_args = parser_a.parse_args()
-	parser_b = argparse.ArgumentParser(description='All args', parents=hyperparameters.get_hyperparameters(model_args))
-	parser_b.add_argument('--eval', type=str, default='linear', choices=['linear', 'knn'])
-	parser_b.add_argument('--tune', nargs='+', type=str, default=['lr', 'wd'], choices=HYPERPARAMETERS)
-	parser_b.add_argument('--n_trials', type=int, default=10)
-	parser_b.add_argument('--train_epochs', type=int, default=20)
-	args = parser_b.parse_args()
+	parser = argparse.ArgumentParser(description='All args', parents=hyperparameters.get_hyperparameters())
+	parser.add_argument('--eval', type=str, default='linear', choices=['linear', 'knn'])
+	parser.add_argument('--tune', nargs='+', type=str, default=['lr', 'wd'], choices=HYPERPARAMETERS)
+	parser.add_argument('--n_trials', type=int, default=10)
+	parser.add_argument('--train_epochs', type=int, default=20)
+	args = parser.parse_args()
+	hyperparameters.setup_hyperparameters(args)
+
 
 	wandb_kwargs = dict(
 		project=f'Hyperparameter sweep {args.model_type} [{args.dataset}]',
