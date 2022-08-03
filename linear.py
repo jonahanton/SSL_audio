@@ -8,6 +8,7 @@ import time
 import datetime
 import logging
 
+from utils import hyperparameters
 from utils.torch_mlp_clf import TorchMLPClassifier
 import datasets
 from model import BarlowTwins
@@ -119,12 +120,8 @@ def log_print(msg):
 
 if __name__ == '__main__':
 
-	parser = argparse.ArgumentParser(description='Hyperparameter tuning', parents=[get_std_parser()])
-	parser.add_argument('--batch_size', type=int, default=256)
-	parser.add_argument('--dataset', type=str, default='fsd50k', choices=['fsd50k'])
-	parser.add_argument('--model_type', type=str, default='audiontt', choices=MODELS)
+	parser = argparse.ArgumentParser(description='Linear eval', parents=hyperparameters.get_hyperparameters())
 	parser.add_argument('--model_file_path', type=str, required=True)
-	parser.add_argument('--name', type=str, default='')
 	args = parser.parse_args()
 
 
