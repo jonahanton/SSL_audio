@@ -38,6 +38,7 @@ class BarlowTwins(nn.Module):
 		elif 'vit' in self.cfg.model_type:
 			conv_stem_bool = self.cfg.model_type.split('_')[0] == 'vitc'
 			self.encoder = ViT( 
+				dataset=self.cfg.dataset,
 				size=self.cfg.model_type.split('_')[-1], 
 				patch_size=self.cfg.patch_size,
 				c=conv_stem_bool,
@@ -110,12 +111,16 @@ class BarlowTwins(nn.Module):
 
 
 class ViT(nn.Module):
-	def __init__(self, size='base', patch_size=None, c=True, use_learned_pos_embd=False, use_max_pool=False):
+	def __init__(self, dataset='fsd50k', size='base', patch_size=None, c=True, use_learned_pos_embd=False, use_max_pool=False):
 		super().__init__()
 		
 		if patch_size is None:
 			patch_size = [16, 16]
-		self.encoder = mae.get_mae_vit(size, patch_size, c, use_learned_pos_embd=use_learned_pos_embd)
+		if dataset == 'cifar10':
+			self.encoder = mae.get_mae_vit(size, patch_size, c, use_learned_pos_embd=use_learned_pos_embd,
+			img_size=(32,32), in_chans=3)
+		else:
+			self.encoder = mae.get_mae_vit(size, patch_size, c, use_learned_pos_embd=use_learned_pos_embd)
 		
 		self.embed_dim = self.encoder.embed_dim
 		self.use_max_pool = use_max_pool

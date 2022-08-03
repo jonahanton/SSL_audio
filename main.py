@@ -11,6 +11,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
+import torchvision
 import numpy as np
 
 from augmentations import RunningNorm, NormalizeBatch
@@ -18,6 +19,14 @@ from utils import utils, transforms, hyperparameters
 from utils.torch_mlp_clf import TorchMLPClassifier
 import datasets
 from model import BarlowTwins
+
+
+CLASSES = dict(
+	fsd50k=200,
+	nsynth=88,
+	cifar10=10,
+)
+
 
 
 if torch.cuda.is_available():
@@ -144,7 +153,17 @@ def get_fsd50k(args):
 
 
 def get_data(args):
-	if args.dataset == 'fsd50k':
+	if args.dataset == 'cifar10':
+		train_data = torchvision.datasets.CIFAR10(root='data', train=True, transform=transforms.CifarPairTransform(train_transform=True), download=True)
+		memory_data = torchvision.datasets.CIFAR10(root='data', train=True, transform=transforms.CifarPairTransform(train_transform=False), download=True)
+		test_data = torchvision.datasets.CIFAR10(root='data', train=False, transform=transforms.CifarPairTransform(train_transform=False), download=True)
+
+		train_loader = DataLoader(train_data, batch_size=args.batch_size_per_gpu, shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=True)
+		memory_loader = DataLoader(memory_data, batch_size=args.batch_size_per_gpu, shuffle=False, num_workers=args.num_workers, pin_memory=True)
+		test_loader = DataLoader(test_data, batch_size=args.batch_size_per_gpu, shuffle=False, num_workers=args.num_workers, pin_memory=True)
+		
+		return train_loader, memory_loader, test_loader
+	elif args.dataset == 'fsd50k':
 		# fsd50k [mean, std] (lms)
 		norm_stats = [-4.950, 5.855]
 		len_files = 40966 
@@ -236,7 +255,11 @@ if __name__ == '__main__':
 		wandb_run = None
 		
 	# data 
-	train_loader = get_data(args)
+	if args.dataset == 'cifar10':
+		assert args.distributed == False, f'Distributed training is not supported with cifar10'
+		train_loader, memory_loader, test_loader = get_data(args)
+	else:
+		train_loader = get_data(args)
 	# model 
 	model = BarlowTwins(args).cuda()
 	if args.distributed:
@@ -263,13 +286,22 @@ if __name__ == '__main__':
 	# training
 	for epoch in range(1, args.epochs+1):
 		train_loss = train_one_epoch(args, epoch, model, train_loader, optimizer, fp16_scaler, wandb_run)
+		if args.dataset == 'cifar10':
+			if utils.is_main_process():
+				test_acc_1, test_acc_5 = utils.eval_knn(model_without_ddp.encoder, memory_loader, test_loader, epoch, args.epochs, 10)
+				if wandb_run is not None:
+					wandb_run.log({'knn_test_acc_1': test_acc_1, 'knn_test_acc_5': test_acc_5})
 		if epoch % args.epoch_save_f == 0 or epoch == args.epochs:
 			utils.save_on_master(model_without_ddp.state_dict(), ckpt_path + f'/model_{epoch}.pth')
 	
-	# linear evaluation on fsd50k
+	# linear evaluation 
 	if utils.is_main_process():
-		eval_train_loader, eval_val_loader, eval_test_loader = get_fsd50k(args)
-		score = eval_linear(model_without_ddp.encoder, eval_train_loader, eval_val_loader, eval_test_loader)
-		print(f'Score: {score}')
-		wandb_run.log({'FSD50K score': score})
+		if args.dataset == 'cifar10':
+			pass
+		else:
+			eval_train_loader, eval_val_loader, eval_test_loader = get_fsd50k(args)
+			score = eval_linear(model_without_ddp.encoder, eval_train_loader, eval_val_loader, eval_test_loader)
+			print(f'Score: {score}')
+			wandb_run.log({'FSD50K score': score})
+	
 

@@ -575,6 +575,7 @@ def get_mae_vit(size='base', patch_size=None, c=False, **kwargs):
 
 
 
+
 if __name__ == "__main__":
 
 	mae = mae_vitc_base_patch16x16()
