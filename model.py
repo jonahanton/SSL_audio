@@ -84,7 +84,7 @@ class BarlowTwins(nn.Module):
 		
 		if 'vit' in self.cfg.model_type:
 			if self.cfg.mask:
-				feature1 = self.encoder(y1, mask_ratio=self.cfg.mask_ratio, int_layers=self.cfg.int_layers)
+				feature1 = self.encoder(y1, mask_ratio=self.cfg.mask_ratio, int_layers=self.cfg.int_layers, entropy_shuffle=self.cfg.entropy_shuffle)
 			else:
 				feature1 = self.encoder(y1, int_layers=self.cfg.int_layers)
 			feature2 = self.encoder(y2, int_layers=self.cfg.int_layers)
@@ -120,8 +120,8 @@ class ViT(nn.Module):
 		self.embed_dim = self.encoder.embed_dim
 		self.use_max_pool = use_max_pool
 
-	def forward(self, x, mask_ratio=0, int_layers=False):
-		x = self.encoder(x, mask_ratio=mask_ratio, int_layers=int_layers)
+	def forward(self, x, mask_ratio=0, int_layers=False, entropy_shuffle=False):
+		x = self.encoder(x, mask_ratio=mask_ratio, int_layers=int_layers, entropy_shuffle=entropy_shuffle)
 		if self.use_max_pool:
 			x = [torch.mean(y[:, 1:], dim=1).contiguous() for y in x]  # Take mean pool over patch embeds
 		else:

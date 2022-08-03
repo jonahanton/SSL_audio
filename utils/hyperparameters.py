@@ -68,6 +68,7 @@ def get_std_parameters():
 	parser.add_argument('--squeeze_excitation', action='store_true', default=False)
 	parser.add_argument('--mask', action='store_true', default=False)
 	parser.add_argument('--mask_ratio', type=float, default=0)
+	parser.add_argument('--entropy_shuffle', action='store_true', default=False)
 	parser.add_argument('--int_layers', action='store_true', default=False)
 	parser.add_argument('--int_layer_step', type=int, default=3)
 	parser.add_argument('--use_learned_pos_embd', action='store_true', default=False)
@@ -91,4 +92,4 @@ def setup_hyperparameters(args):
 		args.optimizer = 'LARS' if args.optimizer is None else args.optimizer
 		args.lr_weights = 0.4 if args.lr_weights is None else args.lr_weights
 		args.lr_biases = 0.0048 if args.lr_biases is None else args.lr_biases
-		args.wd = 1e-5
+		args.wd = 1e-5 if args.wd is None else args.wd

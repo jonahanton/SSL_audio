@@ -14,6 +14,7 @@ import math
 import torch
 import torch.nn as nn
 import numpy as np
+import scipy
 from timm.models.vision_transformer import PatchEmbed, DropPath, Mlp
 from timm.models.layers.helpers import to_2tuple
 from models.pos_embed import get_2d_sincos_pos_embed, get_sinusoid_encoding_table
@@ -276,7 +277,7 @@ class MaskedAutoencoderViT(nn.Module):
 		imgs = x.reshape(shape=(x.shape[0], self.in_chans, h * ph, w * pw))
 		return imgs
 
-	def random_masking(self, x, mask_ratio):
+	def random_masking(self, x, mask_ratio, entropy_shuffle=False, descending=False):
 		"""
 		Perform per-sample random masking by per-sample shuffling.
 		Per-sample shuffling is done by argsort random noise.
@@ -297,12 +298,23 @@ class MaskedAutoencoderViT(nn.Module):
 			ids_restore = torch.tensor(list(range(L))).to(torch.int)
 			return x, mask, ids_restore
 		else:
-			# Random mask
 			len_keep = int(L * (1 - mask_ratio))
-			noise = torch.rand(N, L, device=x.device)  # noise in [0, 1]
-			# sort noise for each sample
-			ids_shuffle = torch.argsort(noise, dim=1)  # ascend: small is keep, large is remove
-			ids_restore = torch.argsort(ids_shuffle, dim=1)
+			if entropy_shuffle:
+				# Mask based on the entropy of patches
+				# entropy calc. requires values as probs (scaled between 0-1)
+				def scale(X, axis=-1):
+					X -= X.min(axis, keepdim=True)[0]
+					X /= X.max(axis, keepdim=True)[0]
+					return X
+				patch_complexity = torch.tensor(scipy.stats.entropy(scale(x.clone()), axis=-1))
+				ids_shuffle = torch.argsort(patch_complexity, dim=1, descending=descending)  # descending=False = remove low entropy, keep high entropy
+				ids_restore = torch.argsort(ids_shuffle, dim=1)
+			else:
+				# Random mask
+				noise = torch.rand(N, L, device=x.device)  # noise in [0, 1]
+				# sort noise for each sample
+				ids_shuffle = torch.argsort(noise, dim=1)  # ascend: small is keep, large is remove
+				ids_restore = torch.argsort(ids_shuffle, dim=1)
 
 		# keep the first subset
 		ids_keep = ids_shuffle[:, :len_keep]
@@ -316,7 +328,7 @@ class MaskedAutoencoderViT(nn.Module):
 
 		return x_masked, mask, ids_restore
 	
-	def prepare_tokens(self, x, mask_ratio):
+	def prepare_tokens(self, x, mask_ratio, **kwargs):
 		# embed patches
 		x = self.patch_embed(x)  
 
@@ -334,7 +346,7 @@ class MaskedAutoencoderViT(nn.Module):
 		x = x + pos_embed
 
 		# masking: length -> length * mask_ratio
-		x, mask, ids_restore = self.random_masking(x, mask_ratio)
+		x, mask, ids_restore = self.random_masking(x, mask_ratio, **kwargs)
 		# append cls token
 		if self.use_cls_token:
 			cls_token = self.cls_token + self.pos_embed[:, :1, :]
@@ -358,16 +370,16 @@ class MaskedAutoencoderViT(nn.Module):
 		pos_embed = pos_embed.permute(0, 2, 3, 1).view(1, -1, dim)
 		return pos_embed
 
-	def forward_encoder(self, x, mask_ratio):
-		x, mask, ids_restore = self.prepare_tokens(x, mask_ratio)
+	def forward_encoder(self, x, mask_ratio, **kwargs):
+		x, mask, ids_restore = self.prepare_tokens(x, mask_ratio, **kwargs)
 		# apply Transformer blocks
 		for blk in self.blocks:
 			x = blk(x)
 		x = self.norm(x)
 		return [x], mask, ids_restore
 
-	def forward_encoder_intermediate_layers(self, x, mask_ratio):
-		x, mask, ids_restore = self.prepare_tokens(x, mask_ratio)
+	def forward_encoder_intermediate_layers(self, x, mask_ratio, **kwargs):
+		x, mask, ids_restore = self.prepare_tokens(x, mask_ratio, **kwargs)
 		output = []
 		for i, blk in enumerate(self.blocks):
 			x = blk(x)
@@ -423,11 +435,11 @@ class MaskedAutoencoderViT(nn.Module):
 		loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
 		return loss
 
-	def forward(self, imgs, mask_ratio=0, int_layers=False, masked_recon=False):
+	def forward(self, imgs, mask_ratio=0, int_layers=False, masked_recon=False, **kwargs):
 		if int_layers:
-			latents, mask, ids_restore = self.forward_encoder_intermediate_layers(imgs, mask_ratio)
+			latents, mask, ids_restore = self.forward_encoder_intermediate_layers(imgs, mask_ratio, **kwargs)
 		else:
-			latents, mask, ids_restore = self.forward_encoder(imgs, mask_ratio)
+			latents, mask, ids_restore = self.forward_encoder(imgs, mask_ratio, **kwargs)
 		latent = latents[-1]
 		if masked_recon:
 			pred = self.forward_decoder(latent, ids_restore)  # [N, L, p*p*3]
@@ -436,8 +448,8 @@ class MaskedAutoencoderViT(nn.Module):
 			return loss, latents
 		return latents
 
-	def forward_viz(self, imgs, mask_ratio=0.75):
-		loss, pred, mask = self.forward(imgs, mask_ratio)
+	def forward_viz(self, imgs, mask_ratio=0, **kwargs):
+		loss, pred, mask = self.forward(imgs, mask_ratio, **kwargs)
 		# recons_as_is = self.unpatchify(pred)
 		# overwrite visible patches with original image.
 		pred_org_on_mask = pred.clone()
@@ -447,8 +459,8 @@ class MaskedAutoencoderViT(nn.Module):
 		errormap = ((recons - imgs) ** 2).sqrt()
 		return loss, recons, errormap, mask.reshape(mask.shape[0], *self.grid_size())
 
-	def forward_attn(self, imgs, mask_ratio=0):
-		x, mask, ids_restore = self.prepare_tokens(imgs, mask_ratio)
+	def forward_attn(self, imgs, mask_ratio=0, **kwargs):
+		x, mask, ids_restore = self.prepare_tokens(imgs, mask_ratio, **kwargs)
 		attns = []
 		for blk in self.blocks:
 			attn = blk(x, return_attention=True)
