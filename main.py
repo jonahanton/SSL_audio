@@ -104,6 +104,7 @@ def get_embeddings(model, data_loader):
 		if isinstance(emb, list):
 			emb = emb[-1]
 		emb = emb.detach().cpu().numpy()
+		embs.extend(emb)
 		targets.extend(target.numpy())
 
 	return np.array(embs), np.array(targets)
