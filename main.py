@@ -42,7 +42,7 @@ def train_one_epoch(args, epoch, model, data_loader, optimizer, fp16_scaler, log
 	for iteration, data_tuple in enumerate(train_bar):
 		data_time = time.time() - tflag
 
-		iteration = iteration + len(data_loader) * epoch  # global training iteration
+		iteration += len(data_loader) * (epoch - 1)  # global training iteration
 
 		tflag = time.time()
 		(pos_1, pos_2), _ = data_tuple
@@ -275,7 +275,7 @@ if __name__ == '__main__':
 	if utils.is_main_process():
 		log_dir = f"logs/training/{args.dataset}/{save_name}/"
 		os.makedirs(log_dir, exist_ok=True)
-		log_path = os.path.join(log_dir, f"log.txt")
+		log_path = os.path.join(log_dir, f"log.csv")
 		logger = logging.getLogger()
 		logger.setLevel(logging.INFO)  # Setup the root logger
 		logger.addHandler(logging.FileHandler(log_path, mode="w"))
