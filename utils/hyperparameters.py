@@ -33,6 +33,7 @@ def get_std_parameters():
 	parser.add_argument('--dataset', default='fsd50k', type=str, choices=DATASETS)
 	parser.add_argument('--epochs', default=100, type=int)
 	parser.add_argument('--epoch_save_f', default=20, type=int)
+	parser.add_argument('--epoch_eval_f', default=5, type=int)
 	parser.add_argument('--batch_size', type=int, default=128)
 	parser.add_argument('--lmbda', type=float, default=0.005)
 	parser.add_argument('--alpha', type=float, default=1)

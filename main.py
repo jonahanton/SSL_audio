@@ -6,6 +6,7 @@ import datetime
 import wandb
 import math
 import sys
+import logging
 
 import torch
 import torch.nn as nn
@@ -32,16 +33,18 @@ if torch.cuda.is_available():
 	torch.backends.cudnn.benchmark = True
 
 
-def train_one_epoch(args, epoch, model, data_loader, optimizer, fp16_scaler, wandb_run):
+def train_one_epoch(args, epoch, model, data_loader, optimizer, fp16_scaler, logger, wandb_run):
 	model.train()
 	total_loss, total_num, train_bar = 0, 0, tqdm(data_loader)
 	
 	total_data_time, total_forward_time, total_backward_time = 0, 0, 0
 	tflag = time.time()
-	for data_tuple in train_bar:
+	for iteration, data_tuple in enumerate(train_bar):
 		data_time = time.time() - tflag
-		tflag = time.time()
 
+		iteration = iteration + len(data_loader) * epoch  # global training iteration
+
+		tflag = time.time()
 		(pos_1, pos_2), _ = data_tuple
 
 		if args.post_norm:
@@ -86,6 +89,9 @@ def train_one_epoch(args, epoch, model, data_loader, optimizer, fp16_scaler, wan
 								  forward_time, total_forward_time,
 								  backward_time, total_backward_time))
 		
+		if logger is not None:
+			logger.info('epoch,{},step,{},loss,{}'.format(
+						epoch, iteration, total_loss / total_num))
 		if wandb_run is not None:
 			wandb_run.log({'Loss': total_loss / total_num})
 
@@ -129,18 +135,18 @@ def eval_linear(model, train_loader, val_loader, test_loader):
 	)
 	clf.fit(X_train, y_train, X_val=X_val, y_val=y_val)
 
-	score = clf.score(X_test, y_test)
+	score_all = clf.score(X_test, y_test)
 	print(f'Done\tTime elapsed = {time.time() - start:.2f}s')
 
 	# Low-shot linear evaluation
 	print('Performing linear evaluation with 5 example per class')
 	start = time.time()
-	linear_score_5 = utils.eval_linear_low_shot(X_train, y_train, X_val, y_val, X_test, y_test, n=5)
+	score_5 = utils.eval_linear_low_shot(X_train, y_train, X_val, y_val, X_test, y_test, n=5)
 	print(f'Done\tTime elapsed = {time.time() - start:.2f}s')
 
 	results_dict = dict(
-		linear_score_all = linear_score_all,
-		linear_score_5 = linear_score_5,
+		score_all = score_all,
+		score_5 = score_5,
 	)
 
 	return results_dict
@@ -264,6 +270,17 @@ if __name__ == '__main__':
 			)
 	else:
 		wandb_run = None
+
+	# logging
+	if utils.is_main_process():
+		log_dir = f"logs/training/{args.dataset}/{save_name}/"
+		os.makedirs(log_dir, exist_ok=True)
+		log_path = os.path.join(log_dir, f"log.txt")
+		logger = logging.getLogger()
+		logger.setLevel(logging.INFO)  # Setup the root logger
+		logger.addHandler(logging.FileHandler(log_path, mode="w"))
+	else:
+		logger = None
 		
 	# data 
 	if args.dataset == 'cifar10':
@@ -296,24 +313,32 @@ if __name__ == '__main__':
 
 	# training
 	for epoch in range(1, args.epochs+1):
-		train_loss = train_one_epoch(args, epoch, model, train_loader, optimizer, fp16_scaler, wandb_run)
+		train_loss = train_one_epoch(args, epoch, model, train_loader, optimizer, fp16_scaler, logger, wandb_run)
 		if args.dataset == 'cifar10':
 			if utils.is_main_process():
 				test_acc_1, test_acc_5 = utils.eval_knn(model_without_ddp.encoder, memory_loader, test_loader, epoch, args.epochs, 10)
 				if wandb_run is not None:
 					wandb_run.log({'knn_test_acc_1': test_acc_1, 'knn_test_acc_5': test_acc_5})
 		if epoch % args.epoch_save_f == 0 or epoch == args.epochs:
-			utils.save_on_master(model_without_ddp.state_dict(), ckpt_path + f'/model_{epoch}.pth')	
-			# linear evaluation 
+			utils.save_on_master(
+				model_without_ddp.state_dict(),
+				ckpt_path + f'/model_{epoch}.pth',
+			)	
+		if epoch % args.epoch_eval_f == 0:
 			if utils.is_main_process():
 				if args.dataset == 'cifar10':
 					pass
 				else:
 					eval_train_loader, eval_val_loader, eval_test_loader = get_fsd50k(args)
 					scores = eval_linear(model_without_ddp.encoder, eval_train_loader, eval_val_loader, eval_test_loader)
+					score_all = scores.get('score_all')
+					score_5 = scores.get('score_5')
+					if logger is not None:
+						logger.info('epoch,{},step,{},linear_score,{},linear_score_5_mean,{}, linear_score_5_std,{}'.format(
+									epoch,len(train_loader)*epoch,score_all,score_5[0],score_5[1]))
 					wandb_run.log({
-						'FSD50K score (100%)': scores['linear_score_all'],
-						'FSD50K score (5pC) (mean)': scores['linear_score_5'][0],
+						'FSD50K score (100%)': score_all,
+						'FSD50K score (5pC) (mean)': score_5[0],
 					})
 	
 
