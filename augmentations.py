@@ -124,7 +124,7 @@ class MixGaussianNoise(nn.Module):
 	"""Gaussian Noise Mixer.
 	This interpolates with random sample, unlike Mixup.
 	"""
-	def __init__(self, ratio=0.3):
+	def __init__(self, ratio=0.2):
 		super().__init__()
 		self.ratio = ratio
 
