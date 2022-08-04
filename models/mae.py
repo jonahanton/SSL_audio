@@ -10,6 +10,7 @@ References:
 """
 from functools import partial
 import math
+from multiprocessing.sharedctypes import Value
 
 import torch
 import torch.nn as nn
@@ -31,7 +32,15 @@ class ConvStem(nn.Module):
 		img_size = to_2tuple(img_size)
 		patch_size = to_2tuple(patch_size)
 
-		assert tuple(patch_size) == (16, 16), 'ConvStem only supports patch size of 16x16'
+		# assert tuple(patch_size) == (16, 16), 'ConvStem only supports patch size of 16x16'
+		if tuple(patch_size) == (16, 16):
+			strides = [2, 2, 2, 2]
+		elif tuple(patch_size) == (16, 8):
+			strides = [2, 2, 2, [2, 1]]
+		elif tuple(patch_size) == (8, 8):
+			strides = [2, 2, 2, 1]
+		else:
+			raise ValueError(f'Patch size {patch_size[0]}x{patch_size[1]} is not supported by ConvStem')
 		assert embed_dim % 8 == 0, 'Embed dimension must be divisible by 8 for ConvStem'
 
 		self.img_size = img_size
@@ -44,7 +53,7 @@ class ConvStem(nn.Module):
 		stem = []
 		input_dim, output_dim = 1, embed_dim // 8
 		for l in range(4):
-			stem.append(nn.Conv2d(input_dim, output_dim, kernel_size=3, stride=2, padding=1, bias=False))
+			stem.append(nn.Conv2d(input_dim, output_dim, kernel_size=3, stride=strides[l], padding=1, bias=False))
 			stem.append(nn.BatchNorm2d(output_dim))
 			stem.append(nn.ReLU(inplace=True))
 			input_dim = output_dim
