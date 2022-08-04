@@ -34,13 +34,20 @@ class ConvStem(nn.Module):
 
 		# assert tuple(patch_size) == (16, 16), 'ConvStem only supports patch size of 16x16'
 		if tuple(patch_size) == (16, 16):
+			kernels = [3, 3, 3, 3]
 			strides = [2, 2, 2, 2]
 		elif tuple(patch_size) == (16, 8):
+			kernels = [3, 3, 3, 3]
 			strides = [2, 2, 2, [2, 1]]
 		elif tuple(patch_size) == (8, 8):
+			kernels = [3, 3, 3, 3]
 			strides = [2, 2, 2, 1]
+		elif tuple(patch_size) == (64, 2):
+			kernels = [3, 3, 3, 3, 3, 3]
+			strides = [2, [2, 1], [2, 1], [2, 1], [2, 1], [2, 1]]
 		else:
 			raise ValueError(f'Patch size {patch_size[0]}x{patch_size[1]} is not supported by ConvStem')
+		assert len(kernels) == len(strides), 'Number of kernels must match number of strides'
 		assert embed_dim % 8 == 0, 'Embed dimension must be divisible by 8 for ConvStem'
 
 		self.img_size = img_size
@@ -52,12 +59,13 @@ class ConvStem(nn.Module):
 		# build stem, similar to the design in https://arxiv.org/abs/2106.14881
 		stem = []
 		input_dim, output_dim = 1, embed_dim // 8
-		for l in range(4):
-			stem.append(nn.Conv2d(input_dim, output_dim, kernel_size=3, stride=strides[l], padding=1, bias=False))
+		for l in range((len(kernels))):
+			stem.append(nn.Conv2d(input_dim, output_dim, kernel_size=kernels[l], stride=strides[l], padding=1, bias=False))
 			stem.append(nn.BatchNorm2d(output_dim))
 			stem.append(nn.ReLU(inplace=True))
 			input_dim = output_dim
-			output_dim *= 2
+			if output_dim < embed_dim:
+				output_dim *= 2
 		stem.append(nn.Conv2d(input_dim, embed_dim, kernel_size=1))
 		self.proj = nn.Sequential(*stem)
 
