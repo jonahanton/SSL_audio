@@ -1,7 +1,6 @@
 import argparse
 import logging
 import os
-from sklearn.metrics import average_precision_score
 import torch
 from torch.utils.data import DataLoader
 import numpy as np
@@ -113,17 +112,20 @@ def eval(model, train_loader, val_loader, test_loader):
 			elif len(subset_3_5[c]) < 5:
 				subset_3_5[c].append(idx)
 
-	subset_1_1 = flatten_list([idxs for idxs in subset_1_1.values()])
-	subset_2_1 = flatten_list([idxs for idxs in subset_2_1.values()])
-	subset_3_1 = flatten_list([idxs for idxs in subset_3_1.values()]) 
+	subset_1_1 = np.unique(flatten_list([idxs for idxs in subset_1_1.values()]), axis=0)
+	subset_2_1 = np.unique(flatten_list([idxs for idxs in subset_2_1.values()]), axis=0)
+	subset_3_1 = np.unique(flatten_list([idxs for idxs in subset_3_1.values()]), axis=0)
 
-	subset_1_2 = flatten_list([idxs for idxs in subset_1_2.values()])
-	subset_2_2 = flatten_list([idxs for idxs in subset_2_2.values()])
-	subset_3_2 = flatten_list([idxs for idxs in subset_3_2.values()]) 
+	subset_1_2 = np.unique(flatten_list([idxs for idxs in subset_1_2.values()]), axis=0)
+	subset_2_2 = np.unique(flatten_list([idxs for idxs in subset_2_2.values()]), axis=0)
+	subset_3_2 = np.unique(flatten_list([idxs for idxs in subset_3_2.values()]), axis=0)
 
-	subset_1_5 = flatten_list([idxs for idxs in subset_1_5.values()])
-	subset_2_5 = flatten_list([idxs for idxs in subset_2_5.values()])
-	subset_3_5 = flatten_list([idxs for idxs in subset_3_5.values()]) 
+	subset_1_5 = np.unique(flatten_list([idxs for idxs in subset_1_5.values()]), axis=0)
+	subset_2_5 = np.unique(flatten_list([idxs for idxs in subset_2_5.values()]), axis=0)
+	subset_3_5 = np.unique(flatten_list([idxs for idxs in subset_3_5.values()]), axis=0)
+
+	print(subset_1_1)
+	print(len(subset_1_1))
 
 	print(f'Done\tTime elapsed = {time.time() - start:.2f}s')
 	print('Fitting logistic regression classifiers')
