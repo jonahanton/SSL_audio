@@ -66,7 +66,7 @@ def eval(model, train_loader, val_loader, test_loader):
 	)
 	clf.fit(X_train, y_train, X_val=X_val, y_val=y_val)
 
-	linear_score = clf.score(X_test, y_test)
+	linear_score_all = clf.score(X_test, y_test)
 	print(f'Done\tTime elapsed = {time.time() - start:.2f}s')
 
 	# Extract random subsets containing 1, 2, 5 examples per class 
@@ -112,65 +112,54 @@ def eval(model, train_loader, val_loader, test_loader):
 			elif len(subset_3_5[c]) < 5:
 				subset_3_5[c].append(idx)
 
-	subset_1_1 = np.unique(flatten_list([idxs for idxs in subset_1_1.values()]), axis=0)
-	subset_2_1 = np.unique(flatten_list([idxs for idxs in subset_2_1.values()]), axis=0)
-	subset_3_1 = np.unique(flatten_list([idxs for idxs in subset_3_1.values()]), axis=0)
+	subset_1_1 = np.unique(flatten_list([idxs for idxs in subset_1_1.values()]))
+	subset_2_1 = np.unique(flatten_list([idxs for idxs in subset_2_1.values()]))
+	subset_3_1 = np.unique(flatten_list([idxs for idxs in subset_3_1.values()]))
 
-	subset_1_2 = np.unique(flatten_list([idxs for idxs in subset_1_2.values()]), axis=0)
-	subset_2_2 = np.unique(flatten_list([idxs for idxs in subset_2_2.values()]), axis=0)
-	subset_3_2 = np.unique(flatten_list([idxs for idxs in subset_3_2.values()]), axis=0)
+	subset_1_2 = np.unique(flatten_list([idxs for idxs in subset_1_2.values()]))
+	subset_2_2 = np.unique(flatten_list([idxs for idxs in subset_2_2.values()]))
+	subset_3_2 = np.unique(flatten_list([idxs for idxs in subset_3_2.values()]))
 
-	subset_1_5 = np.unique(flatten_list([idxs for idxs in subset_1_5.values()]), axis=0)
-	subset_2_5 = np.unique(flatten_list([idxs for idxs in subset_2_5.values()]), axis=0)
-	subset_3_5 = np.unique(flatten_list([idxs for idxs in subset_3_5.values()]), axis=0)
-
-	print(subset_1_1)
-	print(len(subset_1_1))
+	subset_1_5 = np.unique(flatten_list([idxs for idxs in subset_1_5.values()]))
+	subset_2_5 = np.unique(flatten_list([idxs for idxs in subset_2_5.values()]))
+	subset_3_5 = np.unique(flatten_list([idxs for idxs in subset_3_5.values()]))
 
 	print(f'Done\tTime elapsed = {time.time() - start:.2f}s')
-	print('Fitting logistic regression classifiers')
+	print('Fitting linear classifiers')
 	start = time.time()
 
-	clf = MultiOutputClassifier(LogisticRegression()).fit(X_test[subset_1_1], y_test[subset_1_1])
-	y_pred = clf.predict(X_test)
-	log_score_1_1 = average_precision_score(y_test, y_pred)
-	clf = MultiOutputClassifier(LogisticRegression()).fit(X_test[subset_2_1], y_test[subset_2_1])
-	y_pred = clf.predict(X_test)
-	log_score_2_1 = average_precision_score(y_test, y_pred)
-	clf = MultiOutputClassifier(LogisticRegression()).fit(X_test[subset_3_1], y_test[subset_3_1])
-	y_pred = clf.predict(X_test)
-	log_score_3_1 = average_precision_score(y_test, y_pred)
-	log_score_1 = [log_score_1_1, log_score_2_1, log_score_3_1]
+	clf.fit(X_train[subset_1_1], y_train[subset_1_1], X_val=X_val, y_val=y_val)
+	linear_score_1_1 = clf.score(X_test, y_test)
+	clf.fit(X_train[subset_2_1], y_train[subset_2_1], X_val=X_val, y_val=y_val)
+	linear_score_2_1 = clf.score(X_test, y_test)
+	clf.fit(X_train[subset_3_1], y_train[subset_3_1], X_val=X_val, y_val=y_val)
+	linear_score_3_1 = clf.score(X_test, y_test)
+	linear_score_1 = [linear_score_1_1, linear_score_2_1, linear_score_3_1]
 
-	clf = MultiOutputClassifier(LogisticRegression()).fit(X_test[subset_1_2], y_test[subset_1_2])
-	y_pred = clf.predict(X_test)
-	log_score_1_2 = average_precision_score(y_test, y_pred)
-	clf = MultiOutputClassifier(LogisticRegression()).fit(X_test[subset_2_2], y_test[subset_2_2])
-	y_pred = clf.predict(X_test)
-	log_score_2_2 = average_precision_score(y_test, y_pred)
-	clf = MultiOutputClassifier(LogisticRegression()).fit(X_test[subset_3_2], y_test[subset_3_2])
-	y_pred = clf.predict(X_test)
-	log_score_3_2 = average_precision_score(y_test, y_pred)
-	log_score_2 = [log_score_1_2, log_score_2_2, log_score_3_2]
+	clf.fit(X_train[subset_1_2], y_train[subset_1_2], X_val=X_val, y_val=y_val)
+	linear_score_1_2 = clf.score(X_test, y_test)
+	clf.fit(X_train[subset_2_2], y_train[subset_2_2], X_val=X_val, y_val=y_val)
+	linear_score_2_2 = clf.score(X_test, y_test)
+	clf.fit(X_train[subset_3_2], y_train[subset_3_2], X_val=X_val, y_val=y_val)
+	linear_score_3_2 = clf.score(X_test, y_test)
+	linear_score_2 = [linear_score_1_2, linear_score_2_2, linear_score_3_2]
+
+	clf.fit(X_train[subset_1_5], y_train[subset_1_5], X_val=X_val, y_val=y_val)
+	linear_score_1_5 = clf.score(X_test, y_test)
+	clf.fit(X_train[subset_2_5], y_train[subset_2_5], X_val=X_val, y_val=y_val)
+	linear_score_2_5 = clf.score(X_test, y_test)
+	clf.fit(X_train[subset_3_5], y_train[subset_3_5], X_val=X_val, y_val=y_val)
+	linear_score_3_5 = clf.score(X_test, y_test)
+	linear_score_5 = [linear_score_1_5, linear_score_2_5, linear_score_3_5]
 	
-	clf = MultiOutputClassifier(LogisticRegression()).fit(X_test[subset_1_5], y_test[subset_1_5])
-	y_pred = clf.predict(X_test)
-	log_score_1_5 = average_precision_score(y_test, y_pred)
-	clf = MultiOutputClassifier(LogisticRegression()).fit(X_test[subset_2_5], y_test[subset_2_5])
-	y_pred = clf.predict(X_test)
-	log_score_2_5 = average_precision_score(y_test, y_pred)
-	clf = MultiOutputClassifier(LogisticRegression()).fit(X_test[subset_3_5], y_test[subset_3_5])
-	y_pred = clf.predict(X_test)
-	log_score_3_5 = average_precision_score(y_test, y_pred)
-	log_score_5 = [log_score_1_5, log_score_2_5, log_score_3_5]
 	
 	print(f'Done\tTime elapsed = {time.time() - start:.2f}s')
 
 	results_dict = dict(
-		linear_score = linear_score,
-		log_score_1 = (log_score_1.mean(), log_score_1.std()),
-		log_score_2 = (log_score_2.mean(), log_score_2.std()),
-		log_score_5 = (log_score_5.mean(), log_score_5.std()),
+		linear_score_all = linear_score_all,
+		linear_score_1 = (linear_score_1.mean(), linear_score_1.std()),
+		linear_score_2 = (linear_score_2.mean(), linear_score_2.std()),
+		linear_score_5 = (linear_score_5.mean(), linear_score_5.std()),
 	)
 
 	return results_dict
@@ -233,8 +222,8 @@ if __name__ == '__main__':
 
 	# Linear evaluation 
 	results = eval(model, eval_train_loader, eval_val_loader, eval_test_loader)
-	log_print(f"Linear classification score: {results['linear_score']}\n"
-			  f"Logistic regression scores\n"
-			  f"\t1 example per class: {results['log_score_1'][0]} +/- {results['log_score_1'][1]}\n"
-			  f"\t2 examples per class: {results['log_score_2'][0]} +/- {results['log_score_2'][1]}\n"
-			  f"\t5 examples per class: {results['log_score_5'][0]} +/- {results['log_score_5'][1]}")
+	log_print(f"Linear classification score (100% label fraction): {results['linear_score_all']}\n"
+			  f"Extreme low-shot linear classification score scores\n"
+			  f"\t1 example per class: {results['linear_score_1'][0]} +/- {results['linear_score_1'][1]}\n"
+			  f"\t2 examples per class: {results['linear_score_2'][0]} +/- {results['linear_score_2'][1]}\n"
+			  f"\t5 examples per class: {results['linear_score_5'][0]} +/- {results['linear_score_5'][1]}")
