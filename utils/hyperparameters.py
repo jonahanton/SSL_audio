@@ -87,8 +87,8 @@ def get_std_parameters():
 def setup_hyperparameters(args):
 	if 'vit' in args.model_type:
 		args.optimizer = 'AdamW' if args.optimizer is None else args.optimizer
-		args.lr = 1e-5 * args.batch_size / 64 if args.lr is None else args.lr
-		args.wd = 0.24 if args.wd is None else args.wd
+		args.lr = 1e-4 * args.batch_size / 128 if args.lr is None else args.lr
+		args.wd = 0.06 if args.wd is None else args.wd
 	else:
 		args.optimizer = 'LARS' if args.optimizer is None else args.optimizer
 		args.lr_weights = 0.4 if args.lr_weights is None else args.lr_weights

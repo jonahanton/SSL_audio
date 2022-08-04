@@ -243,7 +243,7 @@ if __name__ == '__main__':
 
 	# wandb init
 	timestamp = datetime.datetime.now().strftime('%H:%M_%h%d')
-	save_name = '{}_{}_epochs'.format(args.model_type, args.epochs) if args.name == '' else args.name
+	save_name = '{}_{}_epochs'.format(args.model_type, args.epochs) if args.name == '' else '{}_{}'.format(args.model_type, args.name)
 	save_name += timestamp
 	if utils.is_main_process():
 		wandb_run = wandb.init(
@@ -281,7 +281,7 @@ if __name__ == '__main__':
 		fp16_scaler = torch.cuda.amp.GradScaler()	
 
 	# model checkpoint path
-	ckpt_path = f'results/{args.dataset}/{args.model_type}_{save_name}'
+	ckpt_path = f'results/{args.dataset}/{save_name}'
 	os.makedirs(ckpt_path, exist_ok=True)
 
 	# training
