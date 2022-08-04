@@ -63,14 +63,14 @@ def eval(model, train_loader, val_loader, test_loader):
 	print(f'Done\tTime elapsed = {time.time() - start:.2f}s')
 
 	# Extreme low-shot linear evaluation
-	print('Performing linear evaluation with 1 example per class')
+	print('Performing linear evaluation with 5 example per class')
 	start = time.time()
-	linear_score_1 = utils.eval_linear_low_shot(X_train, y_train, X_val, y_val, X_test, y_test, n=1)
+	linear_score_5 = utils.eval_linear_low_shot(X_train, y_train, X_val, y_val, X_test, y_test, n=5)
 	print(f'Done\tTime elapsed = {time.time() - start:.2f}s')
 
 	results_dict = dict(
 		linear_score_all = linear_score_all,
-		linear_score_1 = linear_score_1,
+		linear_score_5 = linear_score_5,
 	)
 
 	return results_dict
@@ -134,5 +134,5 @@ if __name__ == '__main__':
 	# Linear evaluation 
 	results = eval(model, eval_train_loader, eval_val_loader, eval_test_loader)
 	log_print(f"Linear classification score (100% label fraction): {results['linear_score_all']}\n"
-			  f"Extreme low-shot linear classification score scores\n"
-			  f"\t1 example per class: {results['linear_score_1'][0]} +/- {results['linear_score_1'][1]}")
+			  f"Low-shot linear classification score scores\n"
+			  f"\t5 examples per class: {results['linear_score_5'][0]} +/- {results['linear_score_5'][1]}")

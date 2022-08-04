@@ -132,7 +132,18 @@ def eval_linear(model, train_loader, val_loader, test_loader):
 	score = clf.score(X_test, y_test)
 	print(f'Done\tTime elapsed = {time.time() - start:.2f}s')
 
-	return score
+	# Low-shot linear evaluation
+	print('Performing linear evaluation with 5 example per class')
+	start = time.time()
+	linear_score_5 = utils.eval_linear_low_shot(X_train, y_train, X_val, y_val, X_test, y_test, n=5)
+	print(f'Done\tTime elapsed = {time.time() - start:.2f}s')
+
+	results_dict = dict(
+		linear_score_all = linear_score_all,
+		linear_score_5 = linear_score_5,
+	)
+
+	return results_dict
 
 
 def get_fsd50k(args):
@@ -299,8 +310,10 @@ if __name__ == '__main__':
 					pass
 				else:
 					eval_train_loader, eval_val_loader, eval_test_loader = get_fsd50k(args)
-					score = eval_linear(model_without_ddp.encoder, eval_train_loader, eval_val_loader, eval_test_loader)
-					print(f'Epoch {epoch} / {args.epochs}\tScore: {score}')
-					wandb_run.log({'FSD50K score': score})
+					scores = eval_linear(model_without_ddp.encoder, eval_train_loader, eval_val_loader, eval_test_loader)
+					wandb_run.log({
+						'FSD50K score (100%)': scores['linear_score_all'],
+						'FSD50K score (5pC) (mean)': scores['linear_score_5'][0],
+					})
 	
 
