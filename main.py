@@ -104,6 +104,7 @@ def get_embeddings(model, data_loader):
 		if isinstance(emb, list):
 			emb = emb[-1]
 		emb = emb.detach().cpu().numpy()
+		embs.extend(emb)
 		targets.extend(target.numpy())
 
 	return np.array(embs), np.array(targets)
@@ -292,16 +293,15 @@ if __name__ == '__main__':
 				if wandb_run is not None:
 					wandb_run.log({'knn_test_acc_1': test_acc_1, 'knn_test_acc_5': test_acc_5})
 		if epoch % args.epoch_save_f == 0 or epoch == args.epochs:
-			utils.save_on_master(model_without_ddp.state_dict(), ckpt_path + f'/model_{epoch}.pth')
-	
-	# linear evaluation 
-	if utils.is_main_process():
-		if args.dataset == 'cifar10':
-			pass
-		else:
-			eval_train_loader, eval_val_loader, eval_test_loader = get_fsd50k(args)
-			score = eval_linear(model_without_ddp.encoder, eval_train_loader, eval_val_loader, eval_test_loader)
-			print(f'Score: {score}')
-			wandb_run.log({'FSD50K score': score})
+			utils.save_on_master(model_without_ddp.state_dict(), ckpt_path + f'/model_{epoch}.pth')	
+			# linear evaluation 
+			if utils.is_main_process():
+				if args.dataset == 'cifar10':
+					pass
+				else:
+					eval_train_loader, eval_val_loader, eval_test_loader = get_fsd50k(args)
+					score = eval_linear(model_without_ddp.encoder, eval_train_loader, eval_val_loader, eval_test_loader)
+					print(f'Epoch {epoch} / {args.epochs}\tScore: {score}')
+					wandb_run.log({'FSD50K score': score})
 	
 
