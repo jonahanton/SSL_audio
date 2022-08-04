@@ -5,6 +5,14 @@ import torch.distributed as dist
 import os
 import sys
 from tqdm import tqdm
+import numpy as np
+
+from utils.torch_mlp_clf import TorchMLPClassifier
+from itertools import chain
+
+
+def flatten_list(lists):
+    return list(chain.from_iterable(lists))
 
 
 """------------------------------------Training utils---------------------------------------"""
@@ -111,6 +119,46 @@ def eval_knn(net, memory_data_loader, test_data_loader, epoch, epochs, c, k=200,
 									.format(epoch, epochs, total_top1 / total_num * 100, total_top5 / total_num * 100))
 
 	return total_top1 / total_num * 100, total_top5 / total_num * 100
+
+
+def eval_linear_low_shot(X_train, y_train, X_val, y_val, X_test, y_test, n):
+
+	subset_1, subset_2, subset_3 = {}, {}, {}
+	for idx, label in enumerate(y_train):
+		classes = np.nonzero(label)[0]
+		for c in classes:
+			subset_1.setdefault(c, [])
+			subset_2.setdefault(c, [])
+			subset_3.setdefault(c, [])
+
+			if len(subset_1[c]) < n:
+				subset_1[c].append(idx)
+			elif len(subset_2[c]) < n:
+				subset_2[c].append(idx)
+			elif len(subset_3[c]) < n:
+				subset_3[c].append(idx)
+
+	subset_1 = np.unique(flatten_list([idxs for idxs in subset_1.values()]))
+	subset_2 = np.unique(flatten_list([idxs for idxs in subset_2.values()]))
+	subset_3 = np.unique(flatten_list([idxs for idxs in subset_3.values()]))
+
+	clf = TorchMLPClassifier(
+		hidden_layer_sizes=(1024,),
+		max_iter=500,
+		early_stopping=True,
+		n_iter_no_change=20,
+		debug=True,
+	)
+
+	clf.fit(X_train[subset_1], y_train[subset_1], X_val=X_val, y_val=y_val)
+	score_1 = clf.score(X_test, y_test)
+	clf.fit(X_train[subset_2], y_train[subset_2], X_val=X_val, y_val=y_val)
+	score_2 = clf.score(X_test, y_test)
+	clf.fit(X_train[subset_3], y_train[subset_3], X_val=X_val, y_val=y_val)
+	score_3 = clf.score(X_test, y_test)
+
+	scores = [score_1, score_2, score_3]
+	return np.mean(scores), np.std(scores)
 				
 
 """--------------------------------For distributed training---------------------------------"""
