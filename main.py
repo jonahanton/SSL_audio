@@ -334,7 +334,7 @@ if __name__ == '__main__':
 					score_all = scores.get('score_all')
 					score_5 = scores.get('score_5')
 					if logger is not None:
-						logger.info('epoch,{},step,{},linear_score,{},linear_score_5_mean,{}, linear_score_5_std,{}'.format(
+						logger.info('epoch,{},step,{},linear_score,{},linear_score_5_mean,{},linear_score_5_std,{}'.format(
 									epoch,len(train_loader)*epoch,score_all,score_5[0],score_5[1]))
 					wandb_run.log({
 						'FSD50K score (100%)': score_all,
