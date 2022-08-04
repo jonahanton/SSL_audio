@@ -22,34 +22,6 @@ MODELS = [
 ]
 
 
-def get_std_parser():
-	parser = argparse.ArgumentParser(add_help=False)
-	parser.add_argument('--lmbda', type=float, default=0.005)
-	parser.add_argument('--alpha', type=float, default=1)
-	parser.add_argument('--projector_out_dim', default=8192, type=int)
-	parser.add_argument('--projector_n_hidden_layers', default=2, type=int)
-	parser.add_argument('--projector_hidden_dim', default=8192, type=int)
-	parser.add_argument('--unit_sec', type=float, default=0.95)
-	parser.add_argument('--crop_frames', type=int, default=96)
-	parser.add_argument('--sample_rate', type=int, default=16000)
-	parser.add_argument('--n_fft', type=int, default=1024)
-	parser.add_argument('--win_length', type=int, default=1024)
-	parser.add_argument('--hop_length', type=int, default=160)
-	parser.add_argument('--n_mels', type=int, default=64)
-	parser.add_argument('--f_min', type=int, default=60)
-	parser.add_argument('--f_max', type=int, default=7800)
-	parser.add_argument('--num_workers', type=int, default=4)
-	parser.add_argument('--HSIC', action='store_true', default=False)
-	parser.add_argument('--squeeze_excitation', action='store_true', default=False)
-	parser.add_argument('--load_lms', action='store_true', default=True)
-	parser.add_argument('--mask', action='store_true', default=False)
-	parser.add_argument('--mask_ratio', type=float, default=0)
-	parser.add_argument('--int_layers', action='store_true', default=False)
-	parser.add_argument('--int_layer_step', type=int, default=3)
-	parser.add_argument('--use_learned_pos_embd', action='store_true', default=False)
-	return parser
-
-
 @torch.no_grad()
 def get_embeddings(model, data_loader):
 	model.eval()
@@ -99,15 +71,15 @@ def get_data(args):
 def get_fsd50k(args):
 	norm_stats = [-4.950, 5.855]
 	eval_train_loader = DataLoader(
-		datasets.FSD50K(args, split='train', transform=None, norm_stats=norm_stats),
+		datasets.FSD50K(args, split='train', transform=None, norm_stats=norm_stats, crop_frames=711),
 		batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=False,
 	)
 	eval_val_loader = DataLoader(
-		datasets.FSD50K(args, split='val', transform=None, norm_stats=norm_stats),
+		datasets.FSD50K(args, split='val', transform=None, norm_stats=norm_stats, crop_frames=711),
 		batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=False,
 	)
 	eval_test_loader = DataLoader(
-		datasets.FSD50K(args, split='test', transform=None, norm_stats=norm_stats),
+		datasets.FSD50K(args, split='test', transform=None, norm_stats=norm_stats, crop_frames=711),
 		batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=False,
 	)
 	return eval_train_loader, eval_val_loader, eval_test_loader
@@ -139,7 +111,9 @@ if __name__ == '__main__':
 	# Load model
 	model = BarlowTwins(args).encoder
 	sd = torch.load(args.model_file_path, map_location='cpu')
-	sd = {k.replace("encoder.", "", 1): v for k, v in sd.items() if "encoder." in k}
+	sd_try = {k.replace("encoder.", "", 1): v for k, v in sd.items() if "encoder." in k}
+	if len(sd_try) > 0:
+		sd = sd_try
 	model.load_state_dict(sd, strict=True)
 	model = model.cuda()
 	model.eval()

@@ -28,7 +28,6 @@ CLASSES = dict(
 )
 
 
-
 if torch.cuda.is_available():
 	torch.backends.cudnn.benchmark = True
 
@@ -139,15 +138,15 @@ def eval_linear(model, train_loader, val_loader, test_loader):
 def get_fsd50k(args):
 	norm_stats = [-4.950, 5.855]
 	eval_train_loader = DataLoader(
-		datasets.FSD50K(args, split='train', transform=None, norm_stats=norm_stats),
+		datasets.FSD50K(args, split='train', transform=None, norm_stats=norm_stats, crop_frames=711),
 		batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=False,
 	)
 	eval_val_loader = DataLoader(
-		datasets.FSD50K(args, split='val', transform=None, norm_stats=norm_stats),
+		datasets.FSD50K(args, split='val', transform=None, norm_stats=norm_stats, crop_frames=711),
 		batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=False,
 	)
 	eval_test_loader = DataLoader(
-		datasets.FSD50K(args, split='test', transform=None, norm_stats=norm_stats),
+		datasets.FSD50K(args, split='test', transform=None, norm_stats=norm_stats, crop_frames=711),
 		batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=False,
 	)
 	return eval_train_loader, eval_val_loader, eval_test_loader

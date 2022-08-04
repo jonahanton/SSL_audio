@@ -25,7 +25,7 @@ def make_index_dict(label_csv):
 
 class FSD50K(Dataset):
 	
-	def __init__(self, cfg, split='train', transform=None, norm_stats=None):
+	def __init__(self, cfg, split='train', transform=None, norm_stats=None, crop_frames=None):
 		super().__init__()
 		
 		# initializations
@@ -33,6 +33,7 @@ class FSD50K(Dataset):
 		self.split = split
 		self.transform = transform
 		self.norm_stats = norm_stats
+		self.crop_frames = self.cfg.crop_frames if crop_frames is None else crop_frames
 
 		self.unit_length = int(cfg.unit_sec * cfg.sample_rate)
 		self.to_melspecgram = AT.MelSpectrogram(
@@ -84,13 +85,13 @@ class FSD50K(Dataset):
 			lms = torch.tensor(np.load(audio_path)).unsqueeze(0)
 			# Trim or pad
 			l = lms.shape[-1]
-			if l > self.cfg.crop_frames:
-				start = np.random.randint(l - self.cfg.crop_frames)
-				lms = lms[..., start:start + self.cfg.crop_frames]
-			elif l < self.cfg.crop_frames:
+			if l > self.crop_frames:
+				start = np.random.randint(l - self.crop_frames)
+				lms = lms[..., start:start + self.crop_frames]
+			elif l < self.crop_frames:
 				pad_param = []
 				for i in range(len(lms.shape)):
-					pad_param += [0, self.cfg.crop_frames - l] if i == 0 else [0, 0]
+					pad_param += [0, self.crop_frames - l] if i == 0 else [0, 0]
 				lms = F.pad(lms, pad_param, mode='constant', value=0)
 			lms = lms.to(torch.float)
 		else:
