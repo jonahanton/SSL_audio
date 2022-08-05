@@ -165,7 +165,7 @@ def eval_linear_low_shot(X_train, y_train, X_val, y_val, X_test, y_test, n):
 	return np.mean(scores), np.std(scores)
 
 
-def encode_vit(model, x, cls=True):
+def encode_vit(model, x, use_cls=True):
 	patch_fbins = model.grid_size()[0]
 	embed_d = model.embed_dim
 	unit_frames = model.img_size[1]  # number of time frames for inputs 
@@ -175,7 +175,7 @@ def encode_vit(model, x, cls=True):
 		x = F.pad(x, (0, pad_frames))
 
 	embeddings = []
-	if cls:
+	if use_cls:
 		# [CLS] embeddings only
 		for i in range(x.shape[-1] // unit_frames):
 			emb = model(x[..., i*unit_frames:(i+1)*unit_frames])
