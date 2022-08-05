@@ -74,7 +74,8 @@ def get_std_parameters():
 	parser.add_argument('--int_layers', action='store_true', default=False)
 	parser.add_argument('--int_layer_step', type=int, default=3)
 	parser.add_argument('--use_learned_pos_embd', action='store_true', default=False)
-	parser.add_argument('--use_max_pool', action='store_true', default=False)
+	parser.add_argument('--use_cls', action='store_true', default=True)
+	parser.add_argument('--use_mean_pool', action='store_true', default=False)
 	parser.add_argument('--patch_size', nargs='+', type=int, default=[16, 16])
 
 	parser.add_argument('--optimizer', type=str, default=None)
