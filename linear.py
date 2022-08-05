@@ -40,7 +40,7 @@ def get_embeddings(model, data_loader):
 	return np.array(embs), np.array(targets)
 
 
-def eval(model, train_loader, val_loader, test_loader):
+def eval_linear(model, train_loader, val_loader, test_loader):
 
 	print('Extracting embeddings')
 	start = time.time()
@@ -59,18 +59,18 @@ def eval(model, train_loader, val_loader, test_loader):
 		debug=True,
 	)
 	clf.fit(X_train, y_train, X_val=X_val, y_val=y_val)
-	linear_score_all = clf.score(X_test, y_test)
+	score_all = clf.score(X_test, y_test)
 	print(f'Done\tTime elapsed = {time.time() - start:.2f}s')
 
 	# Extreme low-shot linear evaluation
 	print('Performing linear evaluation with 5 example per class')
 	start = time.time()
-	linear_score_5 = utils.eval_linear_low_shot(X_train, y_train, X_val, y_val, X_test, y_test, n=5)
+	score_5 = utils.eval_linear_low_shot(X_train, y_train, X_val, y_val, X_test, y_test, n=5)
 	print(f'Done\tTime elapsed = {time.time() - start:.2f}s')
 
 	results_dict = dict(
-		linear_score_all = linear_score_all,
-		linear_score_5 = linear_score_5,
+		score_all = score_all,
+		score_5 = score_5,
 	)
 
 	return results_dict
@@ -98,25 +98,21 @@ def get_fsd50k(args):
 	return eval_train_loader, eval_val_loader, eval_test_loader
 
 
-def log_print(msg):
-	logger.info(msg)
-	print(msg)
-
-
 if __name__ == '__main__':
 
 	parser = argparse.ArgumentParser(description='Linear eval', parents=hyperparameters.get_hyperparameters())
 	parser.add_argument('--model_file_path', type=str, required=True)
+	parser.add_argument('--model_name', type=str, required=True)
+	parser.add_argument('--model_epoch', type=int, default=100)
 	args = parser.parse_args()
 
 
-	log_dir = f"logs/linear_eval/{args.dataset}/{args.name}/"
+	log_dir = f"logs/linear_eval/{args.dataset}/{args.model_name}/"
 	os.makedirs(log_dir, exist_ok=True)
-	timestamp = datetime.datetime.now().strftime('%H:%M_%h%d')
-	log_path = os.path.join(log_dir, f"{timestamp}.log")
+	log_path = os.path.join(log_dir, f"log.csv")
 	logger = logging.getLogger()
-	logger.setLevel(logging.DEBUG)  # Setup the root logger
-	logger.addHandler(logging.FileHandler(log_path, mode="w"))
+	logger.setLevel(logging.INFO)  # Setup the root logger
+	logger.addHandler(logging.FileHandler(log_path, mode="a"))
 
 	# Get data
 	eval_train_loader, eval_val_loader, eval_test_loader = get_data(args)
@@ -132,7 +128,8 @@ if __name__ == '__main__':
 	model.eval()
 
 	# Linear evaluation 
-	results = eval(model, eval_train_loader, eval_val_loader, eval_test_loader)
-	log_print(f"Linear classification score (100% label fraction): {results['linear_score_all']}\n"
-			  f"Low-shot linear classification score scores\n"
-			  f"\t5 examples per class: {results['linear_score_5'][0]} +/- {results['linear_score_5'][1]}")
+	scores = eval_linear(model, eval_train_loader, eval_val_loader, eval_test_loader)
+	score_all = scores.get('score_all')
+	score_5 = scores.get('score_5')
+	logger.info('epoch,{},linear_score,{},linear_score_5_mean,{},linear_score_5_std,{}'.format(
+				args.model_epoch,score_all,score_5[0],score_5[1]))
