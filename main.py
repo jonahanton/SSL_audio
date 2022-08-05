@@ -105,7 +105,15 @@ def get_embeddings(model, data_loader):
 	model.eval()
 	embs, targets = [], []
 	for data, target in data_loader:
-		emb = model(data.cuda(non_blocking=True))
+		if 'vit' in args.model_type:
+			emb = utils.encode_vit(
+				model.encoder,
+				data.cuda(non_blocking=True),
+				use_cls=args.use_cls,
+				flatten=False,
+			)
+		else:
+			emb = model(data.cuda(non_blocking=True))
 		if isinstance(emb, list):
 			emb = emb[-1]
 		emb = emb.detach().cpu().numpy()

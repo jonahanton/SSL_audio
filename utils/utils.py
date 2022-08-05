@@ -165,7 +165,7 @@ def eval_linear_low_shot(X_train, y_train, X_val, y_val, X_test, y_test, n):
 	return np.mean(scores), np.std(scores)
 
 
-def encode_vit(model, x, use_cls=True):
+def encode_vit(model, x, use_cls=True, flatten=False):
 	patch_fbins = model.grid_size()[0]
 	embed_d = model.embed_dim
 	unit_frames = model.img_size[1]  # number of time frames for inputs 
@@ -203,7 +203,10 @@ def encode_vit(model, x, use_cls=True):
 		if pad_emb_frames > 0:
 			x = x[:, :-pad_emb_frames]  # remove padded tails
 	
-	x = torch.mean(x, dim=1)
+	if flatten:
+		x = torch.flatten(x, start_dim=1)
+	else:
+		x = torch.mean(x, dim=1)
 	return x 
 				
 

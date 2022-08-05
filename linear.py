@@ -7,6 +7,7 @@ import numpy as np
 import time
 import datetime
 import logging
+from tqdm import tqdm
 from itertools import chain
 
 from utils import utils, hyperparameters
@@ -29,12 +30,13 @@ MODELS = [
 def get_embeddings(model, data_loader):
 	model.eval()
 	embs, targets = [], []
-	for data, target in data_loader:
+	for data, target in tqdm(data_loader, desc='Extracting embeddings...'):
 		if 'vit' in args.model_type:
 			emb = utils.encode_vit(
 				model.encoder,
 				data.cuda(non_blocking=True),
 				use_cls=args.use_cls,
+				flatten=False,
 			)
 		else:
 			emb = model(data.cuda(non_blocking=True))
@@ -91,15 +93,15 @@ def get_data(args):
 def get_fsd50k(args):
 	norm_stats = [-4.950, 5.855]
 	eval_train_loader = DataLoader(
-		datasets.FSD50K(args, split='train', transform=None, norm_stats=norm_stats, crop_frames=711),
+		datasets.FSD50K(args, split='train', transform=None, norm_stats=norm_stats, crop_frames=96),
 		batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=False,
 	)
 	eval_val_loader = DataLoader(
-		datasets.FSD50K(args, split='val', transform=None, norm_stats=norm_stats, crop_frames=711),
+		datasets.FSD50K(args, split='val', transform=None, norm_stats=norm_stats, crop_frames=96),
 		batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=False,
 	)
 	eval_test_loader = DataLoader(
-		datasets.FSD50K(args, split='test', transform=None, norm_stats=norm_stats, crop_frames=711),
+		datasets.FSD50K(args, split='test', transform=None, norm_stats=norm_stats, crop_frames=96),
 		batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=False,
 	)
 	return eval_train_loader, eval_val_loader, eval_test_loader
