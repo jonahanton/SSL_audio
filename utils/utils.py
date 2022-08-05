@@ -1,11 +1,15 @@
 import torch
 import builtins
 import datetime
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 import torch.distributed as dist
 import os
 import sys
 from tqdm import tqdm
 import numpy as np
+from einops import rearrange
 
 from utils.torch_mlp_clf import TorchMLPClassifier
 from itertools import chain
@@ -159,6 +163,48 @@ def eval_linear_low_shot(X_train, y_train, X_val, y_val, X_test, y_test, n):
 
 	scores = [score_1, score_2, score_3]
 	return np.mean(scores), np.std(scores)
+
+
+def encode_vit(model, x, cls=True):
+	patch_fbins = model.grid_size()[0]
+	embed_d = model.embed_dim
+	unit_frames = model.img_size[1]  # number of time frames for inputs 
+	# pad input's (x's) number of frames so that it's an integer multiple of unit_frames
+	pad_frames = unit_frames - (x.shape[-1] % unit_frames)
+	if pad_frames > 0:
+		x = F.pad(x, (0, pad_frames))
+
+	embeddings = []
+	if cls:
+		# [CLS] embeddings only
+		for i in range(x.shape[-1] // unit_frames):
+			emb = model(x[..., i*unit_frames:(i+1)*unit_frames])
+			if isinstance(emb, list):
+				emb = emb[-1]
+			assert model.use_cls_token, '[CLS] NOT AVAILABLE'
+			emb = emb[:, :1]  # [emb] = [b, 1, d], n.b. emb = emb[:, 0] -> [emb] = [b, d]
+			embeddings.append(emb)
+
+		# concat along the 2nd dimension (dim=1), i.e., concat. [CLS] tokens from the different divided segments
+		x = torch.hstack(embeddings)  # [x] = [b, n_unit_frames, d], n_unit_frames = x.shape[-1] // unit_frames
+	else:
+		# stack embeddings
+		for i in range(x.shape[-1] // unit_frames):
+			emb = model(x[..., i*unit_frames:(i+1)*unit_frames])
+			if isinstance(emb, list):
+				emb = emb[-1]
+			if model.use_cls_token:
+				emb = emb[:, 1:, :]
+			emb = rearrange(emb, ' b (f t) d -> b t (f d)', f=patch_fbins, d=embed_d)
+			embeddings.append(emb)
+		# concat along the 2nd dimension (dim=1)
+		x = torch.hstack(embeddings)  # [x] = [b, n_unit_frames*patch_tbins, patch_fbins*d]
+		pad_emb_frames = int(embeddings[0].shape[1] * pad_frames / unit_frames)
+		if pad_emb_frames > 0:
+			x = x[:, :-pad_emb_frames]  # remove padded tails
+	
+	x = torch.mean(x, dim=1)
+	return x 
 				
 
 """--------------------------------For distributed training---------------------------------"""

@@ -43,7 +43,7 @@ class BarlowTwins(nn.Module):
 				patch_size=self.cfg.patch_size,
 				c=conv_stem_bool,
 				use_learned_pos_embd=self.cfg.use_learned_pos_embd,
-				use_max_pool=self.cfg.use_max_pool,
+				use_mean_pool=self.cfg.use_mean_pool,
 			)
 		else:
 			raise NotImplementedError(f'Model type {self.cfg.model_type} is not supported')
@@ -111,7 +111,7 @@ class BarlowTwins(nn.Module):
 
 
 class ViT(nn.Module):
-	def __init__(self, dataset='fsd50k', size='base', patch_size=None, c=True, use_learned_pos_embd=False, use_max_pool=False):
+	def __init__(self, dataset='fsd50k', size='base', patch_size=None, c=True, use_learned_pos_embd=False, use_mean_pool=False):
 		super().__init__()
 		
 		if patch_size is None:
@@ -123,11 +123,11 @@ class ViT(nn.Module):
 			self.encoder = mae.get_mae_vit(size, patch_size, c, use_learned_pos_embd=use_learned_pos_embd)
 		
 		self.embed_dim = self.encoder.embed_dim
-		self.use_max_pool = use_max_pool
+		self.use_max_pool = use_mean_pool
 
 	def forward(self, x, mask_ratio=0, int_layers=False, entropy_shuffle=False):
 		x = self.encoder(x, mask_ratio=mask_ratio, int_layers=int_layers, entropy_shuffle=entropy_shuffle)
-		if self.use_max_pool:
+		if self.use_mean_pool:
 			x = [torch.mean(y[:, 1:], dim=1).contiguous() for y in x]  # Take mean pool over patch embeds
 		else:
 			x = [y[:, 0].contiguous() for y in x]  # Take [CLS] token only
