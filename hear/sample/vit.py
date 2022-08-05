@@ -36,6 +36,7 @@ class ViTModelWrapper(nn.Module):
 		super().__init__()
 		# needed for HEAR API
 		self.cfg = cfg
+		self.use_cls = True if self.cfg.use_cls is None else self.cfg.use_cls
 		self.sample_rate = cfg.sample_rate
 		embed_size = self._get_model(model_type)
 		self._load_weights(model_file_path)
@@ -58,7 +59,14 @@ class ViTModelWrapper(nn.Module):
 			else:
 				raise NotImplementedError(f'ViTc size {size} is not supported')
 		else:
-			raise NotImplementedError(f'Model type {model_type} is not supported')
+			if size == 'base':
+				self.model = mae.mae_vit_base_patch16x16()
+			elif size == 'small':
+				self.model = mae.mae_vit_small_patch16x16()
+			elif size == 'tiny':
+				self.model = mae.mae_vit_tiny_patch16x16()
+			else:
+				raise NotImplementedError(f'ViT size {size} is not supported')
 		return self.model.embed_dim
 
 
@@ -97,7 +105,9 @@ class ViTModelWrapper(nn.Module):
 		return x 
 
 	
-	def _encode_lms(self, x, cls_only=True):
+	def _encode_lms(self, x, cls_only=None):
+
+		cls_only = self.use_cls is cls_only is None else cls_only
 
 		patch_fbins = self.model.grid_size()[0]
 		embed_d = self.model.embed_dim
@@ -134,9 +144,9 @@ class ViTModelWrapper(nn.Module):
 		return x 
 	
 	
-	def _encode(self, batch_audio, cls_only=True):
+	def _encode(self, batch_audio):
 		x = self._to_normalized_spec(batch_audio)
-		return self._encode_lms(x, cls_only)
+		return self._encode_lms(x)
 	
 
 	def get_scene_embeddings(self, audio):
@@ -145,7 +155,7 @@ class ViTModelWrapper(nn.Module):
 		Returns:
 			embedding: A float32 Tensor with shape (n_sounds, model.scene_embedding_size).
 		"""
-		x = self._encode(audio, cls_only=True)
+		x = self._encode(audio)
 		x = torch.mean(x, dim=1)  # average [CLS] tokens from different audio segments (orig. clip split into lengths of cfg.input_size[1] = 96) 
 		return x
 

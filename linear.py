@@ -120,9 +120,9 @@ if __name__ == '__main__':
 	# Load model
 	model = BarlowTwins(args).encoder
 	sd = torch.load(args.model_file_path, map_location='cpu')
-	sd_try = {k.replace("encoder.", "", 1): v for k, v in sd.items() if "encoder." in k}
-	if len(sd_try) > 0:
-		sd = sd_try
+	clean_sd = {k.replace("encoder.", "", 1): v for k, v in sd.items() if "encoder." in k}
+	if clean_sd:
+		sd = clean_sd
 	model.load_state_dict(sd, strict=True)
 	model = model.cuda()
 	model.eval()

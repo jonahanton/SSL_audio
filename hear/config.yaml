@@ -8,3 +8,6 @@ hop_length: 160
 n_mels: 64
 f_min: 60
 f_max: 7800
+# vit encoder
+use_cls: true
+patch_size: [16, 16]
