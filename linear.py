@@ -27,19 +27,20 @@ MODELS = [
 
 
 @torch.no_grad()
-def get_embeddings(model, data_loader):
+def get_embeddings(model, data_loader, fp16_scaler):
 	model.eval()
 	embs, targets = [], []
 	for data, target in tqdm(data_loader, desc='Extracting embeddings...'):
-		if 'vit' in args.model_type:
-			emb = utils.encode_vit(
-				model.encoder,
-				data.cuda(non_blocking=True),
-				use_cls=args.use_cls,
-				flatten=False,
-			)
-		else:
-			emb = model(data.cuda(non_blocking=True))
+		with torch.cuda.amp.autocast(enabled=(fp16_scaler is not None)):
+			if 'vit' in args.model_type:
+				emb = utils.encode_vit(
+					model.encoder,
+					data.cuda(non_blocking=True),
+					use_cls=args.use_cls,
+					flatten=False,
+				)
+			else:
+				emb = model(data.cuda(non_blocking=True))
 		if isinstance(emb, list):
 			emb = emb[-1]
 		emb = emb.detach().cpu().numpy()
@@ -49,13 +50,18 @@ def get_embeddings(model, data_loader):
 	return np.array(embs), np.array(targets)
 
 
-def eval_linear(model, train_loader, val_loader, test_loader):
+def eval_linear(model, train_loader, val_loader, test_loader, use_fp16):
+
+	# mixed precision
+	fp16_scaler = None 
+	if use_fp16:
+		fp16_scaler = torch.cuda.amp.GradScaler()	
 
 	print('Extracting embeddings')
 	start = time.time()
-	X_train, y_train = get_embeddings(model, train_loader)
-	X_val, y_val = get_embeddings(model, val_loader)
-	X_test, y_test = get_embeddings(model, test_loader)
+	X_train, y_train = get_embeddings(model, train_loader, fp16_scaler)
+	X_val, y_val = get_embeddings(model, val_loader, fp16_scaler)
+	X_test, y_test = get_embeddings(model, test_loader, fp16_scaler)
 	print(f'Done\tTime elapsed = {time.time() - start:.2f}s')
 
 	print('Fitting linear classifier')
@@ -93,15 +99,15 @@ def get_data(args):
 def get_fsd50k(args):
 	norm_stats = [-4.950, 5.855]
 	eval_train_loader = DataLoader(
-		datasets.FSD50K(args, split='train', transform=None, norm_stats=norm_stats, crop_frames=96),
+		datasets.FSD50K(args, split='train', transform=None, norm_stats=norm_stats, crop_frames=711),
 		batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=False,
 	)
 	eval_val_loader = DataLoader(
-		datasets.FSD50K(args, split='val', transform=None, norm_stats=norm_stats, crop_frames=96),
+		datasets.FSD50K(args, split='val', transform=None, norm_stats=norm_stats, crop_frames=711),
 		batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=False,
 	)
 	eval_test_loader = DataLoader(
-		datasets.FSD50K(args, split='test', transform=None, norm_stats=norm_stats, crop_frames=96),
+		datasets.FSD50K(args, split='test', transform=None, norm_stats=norm_stats, crop_frames=711),
 		batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=False,
 	)
 	return eval_train_loader, eval_val_loader, eval_test_loader
@@ -137,7 +143,7 @@ if __name__ == '__main__':
 	model.eval()
 
 	# Linear evaluation 
-	scores = eval_linear(model, eval_train_loader, eval_val_loader, eval_test_loader)
+	scores = eval_linear(model, eval_train_loader, eval_val_loader, eval_test_loader, args.use_fp16_eval)
 	score_all = scores.get('score_all')
 	score_5 = scores.get('score_5')
 	logger.info('epoch,{},linear_score,{},linear_score_5_mean,{},linear_score_5_std,{}'.format(

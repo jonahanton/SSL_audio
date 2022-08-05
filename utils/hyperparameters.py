@@ -66,6 +66,7 @@ def get_std_parameters():
 	parser.add_argument('--load_wav', action='store_false', dest='load_lms')
 	parser.add_argument('--distributed', action='store_true', default=False)
 	parser.add_argument('--use_fp16', action='store_true', default=False)
+	parser.add_argument('--use_fp16_eval', action='store_true', default=False)
 	parser.add_argument('--name', type=str, default='')
 	parser.add_argument('--squeeze_excitation', action='store_true', default=False)
 	parser.add_argument('--mask', action='store_true', default=False)
