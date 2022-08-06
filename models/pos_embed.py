@@ -12,7 +12,7 @@ import torch
 # Transformer: https://github.com/tensorflow/models/blob/master/official/nlp/transformer/model_utils.py
 # MoCo v3: https://github.com/facebookresearch/moco-v3
 # --------------------------------------------------------
-def get_2d_sincos_pos_embed(embed_dim, grid_sizes, cls_token=False):
+def get_2d_sincos_pos_embed(embed_dim, grid_sizes, cls_token=True):
     """
     grid_size: int of the grid height and width
     return:
@@ -94,7 +94,7 @@ def interpolate_pos_embed(model, checkpoint_model):
 
 # sin-cos position encoding
 # https://github.com/jadore801120/attention-is-all-you-need-pytorch/blob/master/transformer/Models.py#L31
-def get_sinusoid_encoding_table(n_position, d_hid, cls_token=False): 
+def get_sinusoid_encoding_table(n_position, d_hid, cls_token=True): 
     ''' Sinusoid position encoding table ''' 
     # TODO: make it with torch instead of numpy 
     def get_position_angle_vec(position): 

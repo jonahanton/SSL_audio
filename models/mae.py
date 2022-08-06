@@ -16,9 +16,31 @@ import torch
 import torch.nn as nn
 import numpy as np
 import scipy
-from timm.models.vision_transformer import PatchEmbed, DropPath, Mlp
+from timm.models.vision_transformer import DropPath, Mlp
 from timm.models.layers.helpers import to_2tuple
 from models.pos_embed import get_2d_sincos_pos_embed, get_sinusoid_encoding_table
+
+
+class PatchEmbed(nn.Module):
+	""" Image to Patch Embedding
+	"""
+	def __init__(self, img_size=224, patch_size=16, in_chans=3, embed_dim=768):
+		super().__init__()
+
+		img_size = to_2tuple(img_size)
+		patch_size = to_2tuple(patch_size)
+
+		self.img_size = img_size
+		self.patch_size = patch_size
+		self.grid_size = (img_size[0] // patch_size[0], img_size[1] // patch_size[1])
+		self.num_patches = self.grid_size[0] * self.grid_size[1]
+
+		self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
+
+	def forward(self, x):
+		B, C, H, W = x.shape
+		x = self.proj(x).flatten(2).transpose(1, 2)
+		return x
 
 
 class ConvStem(nn.Module):
@@ -34,20 +56,15 @@ class ConvStem(nn.Module):
 
 		# assert tuple(patch_size) == (16, 16), 'ConvStem only supports patch size of 16x16'
 		if tuple(patch_size) == (16, 16):
-			kernels = [3, 3, 3, 3]
 			strides = [2, 2, 2, 2]
 		elif tuple(patch_size) == (16, 8):
-			kernels = [3, 3, 3, 3]
 			strides = [2, 2, 2, [2, 1]]
 		elif tuple(patch_size) == (8, 8):
-			kernels = [3, 3, 3, 3]
 			strides = [2, 2, 2, 1]
 		elif tuple(patch_size) == (64, 2):
-			kernels = [3, 3, 3, 3, 3, 3]
 			strides = [2, [2, 1], [2, 1], [2, 1], [2, 1], [2, 1]]
 		else:
 			raise ValueError(f'Patch size {patch_size[0]}x{patch_size[1]} is not supported by ConvStem')
-		assert len(kernels) == len(strides), 'Number of kernels must match number of strides'
 		assert embed_dim % 8 == 0, 'Embed dimension must be divisible by 8 for ConvStem'
 
 		self.img_size = img_size
@@ -59,8 +76,8 @@ class ConvStem(nn.Module):
 		# build stem, similar to the design in https://arxiv.org/abs/2106.14881
 		stem = []
 		input_dim, output_dim = 1, embed_dim // 8
-		for l in range((len(kernels))):
-			stem.append(nn.Conv2d(input_dim, output_dim, kernel_size=kernels[l], stride=strides[l], padding=1, bias=False))
+		for l in range((len(strides))):
+			stem.append(nn.Conv2d(input_dim, output_dim, kernel_size=3, stride=strides[l], padding=1, bias=False))
 			stem.append(nn.BatchNorm2d(output_dim))
 			stem.append(nn.ReLU(inplace=True))
 			input_dim = output_dim
@@ -154,14 +171,13 @@ class MaskedAutoencoderViT(nn.Module):
 				 use_decoder=False, use_learned_pos_embd=False,
 				 decoder_embed_dim=384, decoder_depth=8, decoder_num_heads=12,
 				 mlp_ratio=4., norm_layer=nn.LayerNorm, norm_pix_loss=False,
-				 use_cls_token=True, block_cls=BlockKBiasZero, use_2d_dec_pos_embd=False,
+				 block_cls=BlockKBiasZero, use_2d_dec_pos_embd=False,
 				 drop_path_rate=0.):
 		super().__init__()
 		self.img_size = img_size
 		self.in_chans = in_chans
 		self.embed_dim = embed_dim
 		self.conv_stem = conv_stem
-		self.use_cls_token = use_cls_token
 		self.use_decoder = use_decoder
 		self.use_learned_pos_embd = use_learned_pos_embd
 
@@ -176,11 +192,9 @@ class MaskedAutoencoderViT(nn.Module):
 				param.requires_grad = False
 		num_patches = self.patch_embed.num_patches
 
-		total_patches = num_patches + (1 if use_cls_token else 0)
-		if use_cls_token:
-			self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
-		else:
-			print('NO [CLS] TOKEN')
+		total_patches = num_patches + 1
+		self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
+
 		
 		if use_learned_pos_embd:
 			self.pos_embed = nn.Parameter(torch.zeros(1, total_patches, embed_dim))
@@ -212,7 +226,6 @@ class MaskedAutoencoderViT(nn.Module):
 		# --------------------------------------------------------------------------
 
 		self.norm_pix_loss = norm_pix_loss
-
 		self.initialize_weights(use_2d_dec_pos_embd)
 		
 
@@ -232,15 +245,15 @@ class MaskedAutoencoderViT(nn.Module):
 			torch.nn.init.normal_(self.pos_embed, std=.02)
 		else:
 			# initialize (and freeze) pos_embed by sin-cos embedding
-			pos_embed = get_2d_sincos_pos_embed(self.pos_embed.shape[-1], self.grid_size(), cls_token=self.use_cls_token)
+			pos_embed = get_2d_sincos_pos_embed(self.pos_embed.shape[-1], self.grid_size())
 			self.pos_embed.data.copy_(torch.from_numpy(pos_embed).float().unsqueeze(0))
 
 		if self.use_decoder:
 			if use_2d_dec_pos_embd:
-				decoder_pos_embed = get_2d_sincos_pos_embed(self.decoder_pos_embed.shape[-1], self.grid_size(), cls_token=self.use_cls_token)
+				decoder_pos_embed = get_2d_sincos_pos_embed(self.decoder_pos_embed.shape[-1], self.grid_size())
 			else:
 				grid_patches = self.grid_size()[0] * self.grid_size()[1]
-				decoder_pos_embed = get_sinusoid_encoding_table(grid_patches, self.decoder_pos_embed.shape[-1], cls_token=self.use_cls_token)
+				decoder_pos_embed = get_sinusoid_encoding_table(grid_patches, self.decoder_pos_embed.shape[-1])
 			self.decoder_pos_embed.data.copy_(torch.from_numpy(decoder_pos_embed).float().unsqueeze(0))
 
 		# initialize patch_embed like nn.Linear (instead of nn.Conv2d)
@@ -249,8 +262,7 @@ class MaskedAutoencoderViT(nn.Module):
 			torch.nn.init.xavier_uniform_(w.view([w.shape[0], -1]))
 
 		# timm's trunc_normal_(std=.02) is effectively normal_(std=0.02) as cutoff is too big (2.)
-		if self.use_cls_token:
-			torch.nn.init.normal_(self.cls_token, std=.02)
+		torch.nn.init.normal_(self.cls_token, std=.02)
 		if self.use_decoder:
 			torch.nn.init.normal_(self.mask_token, std=.02)
 
@@ -346,46 +358,49 @@ class MaskedAutoencoderViT(nn.Module):
 		return x_masked, mask, ids_restore
 	
 	def prepare_tokens(self, x, mask_ratio, **kwargs):
+		B, nc, w, h = x.shape
 		# embed patches
 		x = self.patch_embed(x)  
 
-		if self.use_learned_pos_embd:
-			# use learned pos embeddings
-			if self.use_cls_token:
-				pos_embed = self.interpolate_pos_encoding(x, self.pos_embed[:, 1:, :])
-			else:
-				pos_embed = self.interpolate_pos_encoding(x, self.pos_embed)
-		else:
-			if self.use_cls_token:
-				pos_embed = self.pos_embed[:, 1:, :]
-			else:
-				pos_embed = self.pos_embed
-		x = x + pos_embed
+		# interpolate pos encodings
+		pos_embed = self.interpolate_pos_encoding(x, w, h)
+		x = x + pos_embed[:, 1:, :]
 
 		# masking: length -> length * mask_ratio
 		x, mask, ids_restore = self.random_masking(x, mask_ratio, **kwargs)
 		# append cls token
-		if self.use_cls_token:
-			cls_token = self.cls_token + self.pos_embed[:, :1, :]
-			cls_tokens = cls_token.expand(x.shape[0], -1, -1)
-			x = torch.cat((cls_tokens, x), dim=1)
+		cls_token = self.cls_token + self.pos_embed[:, :1, :]
+		cls_tokens = cls_token.expand(x.shape[0], -1, -1)
+		x = torch.cat((cls_tokens, x), dim=1)
 
 		return x, mask, ids_restore
 
-	def interpolate_pos_encoding(self, x, pos_embed):
-		npatch = x.shape[1] 
-		N = pos_embed.shape[1] 
+	def interpolate_pos_encoding(self, x, w, h):
+		npatch = x.shape[1]
+		N = self.pos_embed.shape[1] - 1
 		if npatch == N:
-			return pos_embed
-
+			if self.use_learned_pos_embd:
+				if w == h:
+					return self.pos_embed
+			else:
+				return self.pos_embed
+		class_pos_embed = self.pos_embed[:, 0]
+		patch_pos_embed = self.pos_embed[:, 1:]
 		dim = x.shape[-1]
-		pos_embed = nn.functional.interpolate(
-			pos_embed.reshape(1, int(math.sqrt(N)), int(math.sqrt(N)), dim).permute(0, 3, 1, 2),
-			scale_factor=math.sqrt(npatch / N),
+		w0 = w // self.patch_embed.patch_size[0]
+		h0 = h // self.patch_embed.patch_size[1]
+		Nw, Nh = self.grid_size()
+		# we add a small number to avoid floating point error in the interpolation
+		# see discussion at https://github.com/facebookresearch/dino/issues/8
+		w0, h0 = w0 + 0.1, h0 + 0.1
+		patch_pos_embed = nn.functional.interpolate(
+			patch_pos_embed.reshape(1, Nw, Nh, dim).permute(0, 3, 1, 2),
+			scale_factor=(w0 / Nw, h0 / Nh),
 			mode='bicubic',
 		)
-		pos_embed = pos_embed.permute(0, 2, 3, 1).view(1, -1, dim)
-		return pos_embed
+		assert int(w0) == patch_pos_embed.shape[-2] and int(h0) == patch_pos_embed.shape[-1]
+		patch_pos_embed = patch_pos_embed.permute(0, 2, 3, 1).view(1, -1, dim)
+		return torch.cat((class_pos_embed.unsqueeze(0), patch_pos_embed), dim=1)
 
 	def forward_encoder(self, x, mask_ratio, **kwargs):
 		x, mask, ids_restore = self.prepare_tokens(x, mask_ratio, **kwargs)
@@ -412,10 +427,7 @@ class MaskedAutoencoderViT(nn.Module):
 		mask_tokens = self.mask_token.repeat(x.shape[0], ids_restore.shape[1] + 1 - x.shape[1], 1)
 		x_ = torch.cat([x[:, 1:, :], mask_tokens], dim=1)  # no cls token
 		x_ = torch.gather(x_, dim=1, index=ids_restore.unsqueeze(-1).repeat(1, 1, x.shape[2]))  # unshuffle
-		if self.use_cls_token:
-			x = torch.cat([x[:, :1, :], x_], dim=1)  # append cls token
-		else:
-			x = x_
+		x = torch.cat([x[:, :1, :], x_], dim=1)  # append cls token
 
 		# add pos embed
 		x = x + self.decoder_pos_embed
@@ -429,8 +441,7 @@ class MaskedAutoencoderViT(nn.Module):
 		x = self.decoder_pred(x)
 
 		# remove cls token
-		if self.use_cls_token:
-			x = x[:, 1:, :]
+		x = x[:, 1:, :]
 
 		return x
 
