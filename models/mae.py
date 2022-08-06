@@ -306,7 +306,7 @@ class MaskedAutoencoderViT(nn.Module):
 		imgs = x.reshape(shape=(x.shape[0], self.in_chans, h * ph, w * pw))
 		return imgs
 
-	def random_masking(self, x, mask_ratio, entropy_shuffle=False, descending=False):
+	def random_masking(self, x, mask_ratio):
 		"""
 		Perform per-sample random masking by per-sample shuffling.
 		Per-sample shuffling is done by argsort random noise.
@@ -328,22 +328,11 @@ class MaskedAutoencoderViT(nn.Module):
 			return x, mask, ids_restore
 		else:
 			len_keep = int(L * (1 - mask_ratio))
-			if entropy_shuffle:
-				# Mask based on the entropy of patches
-				# entropy calc. requires values as probs (scaled between 0-1)
-				def scale(X, axis=-1):
-					X -= X.min(axis, keepdim=True)[0]
-					X /= X.max(axis, keepdim=True)[0]
-					return X
-				patch_complexity = torch.tensor(scipy.stats.entropy(scale(x.clone()), axis=-1))
-				ids_shuffle = torch.argsort(patch_complexity, dim=1, descending=descending)  # descending=False = remove low entropy, keep high entropy
-				ids_restore = torch.argsort(ids_shuffle, dim=1)
-			else:
-				# Random mask
-				noise = torch.rand(N, L, device=x.device)  # noise in [0, 1]
-				# sort noise for each sample
-				ids_shuffle = torch.argsort(noise, dim=1)  # ascend: small is keep, large is remove
-				ids_restore = torch.argsort(ids_shuffle, dim=1)
+			# Random mask
+			noise = torch.rand(N, L, device=x.device)  # noise in [0, 1]
+			# sort noise for each sample
+			ids_shuffle = torch.argsort(noise, dim=1)  # ascend: small is keep, large is remove
+			ids_restore = torch.argsort(ids_shuffle, dim=1)
 
 		# keep the first subset
 		ids_keep = ids_shuffle[:, :len_keep]
@@ -402,22 +391,26 @@ class MaskedAutoencoderViT(nn.Module):
 		patch_pos_embed = patch_pos_embed.permute(0, 2, 3, 1).view(1, -1, dim)
 		return torch.cat((class_pos_embed.unsqueeze(0), patch_pos_embed), dim=1)
 
-	def forward_encoder(self, x, mask_ratio, **kwargs):
+	def forward_encoder(self, x, mask_ratio, mean_pool, **kwargs):
 		x, mask, ids_restore = self.prepare_tokens(x, mask_ratio, **kwargs)
 		# apply Transformer blocks
 		for blk in self.blocks:
 			x = blk(x)
 		x = self.norm(x)
+		if mean_pool:
+			x = torch.mean(x[:, 1:], dim=1).contiguous()
+		else:
+			x = x[:, 0]
 		return x, mask, ids_restore
 
-	def forward_encoder_intermediate_layers(self, x, mask_ratio, **kwargs):
-		x, mask, ids_restore = self.prepare_tokens(x, mask_ratio, **kwargs)
+	def get_intermediate_layers(self, x, mask_ratio, **kwargs):
+		x, _, _ = self.prepare_tokens(x, mask_ratio, **kwargs)
 		output = []
 		for i, blk in enumerate(self.blocks):
 			x = blk(x)
 			output.append(self.norm(x))
 
-		return output, mask, ids_restore
+		return output
 
 	def forward_decoder(self, x, ids_restore):
 		# embed tokens
@@ -463,18 +456,14 @@ class MaskedAutoencoderViT(nn.Module):
 		loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
 		return loss
 
-	def forward(self, imgs, mask_ratio=0, int_layers=False, masked_recon=False, **kwargs):
-		if int_layers:
-			latents, mask, ids_restore = self.forward_encoder_intermediate_layers(imgs, mask_ratio, **kwargs)
-			latent = latents[-1]
-		else:
-			latent, mask, ids_restore = self.forward_encoder(imgs, mask_ratio, **kwargs)
+	def forward(self, imgs, mask_ratio=0, mean_pool=False, masked_recon=False, **kwargs):
+		latent, mask, ids_restore = self.forward_encoder(imgs, mask_ratio, mean_pool, **kwargs)
 		if masked_recon:
 			pred = self.forward_decoder(latent, ids_restore)  # [N, L, p*p*3]
 			loss = self.forward_loss(imgs, pred, mask)
 			# return loss, pred, mask
-			return loss, latents
-		return latents
+			return loss, latent
+		return latent
 
 	def forward_viz(self, imgs, mask_ratio=0, **kwargs):
 		loss, pred, mask = self.forward(imgs, mask_ratio, **kwargs)

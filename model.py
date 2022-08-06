@@ -85,28 +85,16 @@ class BarlowTwins(nn.Module):
 		
 		if 'vit' in self.cfg.model_type:
 			if self.cfg.mask:
-				feature1 = self.encoder(y1, mask_ratio=self.cfg.mask_ratio, int_layers=self.cfg.int_layers, entropy_shuffle=self.cfg.entropy_shuffle)
+				feature1 = self.encoder(y1, mask_ratio=self.cfg.mask_ratio)
 			else:
-				feature1 = self.encoder(y1, int_layers=self.cfg.int_layers)
-			feature2 = self.encoder(y2, int_layers=self.cfg.int_layers)
+				feature1 = self.encoder(y1)
+			feature2 = self.encoder(y2)
 		else:
 			feature1 = self.encoder(y1)
 			feature2 = self.encoder(y2)
 
-		# compute loss on features from intermediate layers
-		if self.cfg.int_layers:
-			if not isinstance(feature1, list):
-				feature1 = [feature1]
-			if not isinstance(feature2, list):
-				feature2 = [feature2]
-			loss = None
-			for i, (f1, f2) in enumerate(zip(feature1, feature2)):
-				if ((i+1) % self.cfg.int_layer_step == 0) or (i == len(feature1) - 1):
-					if loss is None:
-						loss = self.forward_loss(f1, f2)
-					else:
-						loss += self.forward_loss(f1, f2)
-		
+		loss = self.forward_loss(feature1, feature2)
+
 		if self.cfg.multi_crop:
 			loss = None
 
@@ -122,19 +110,15 @@ class ViT(nn.Module):
 			patch_size = [16, 16]
 		if dataset == 'cifar10':
 			self.encoder = mae.get_mae_vit(size, patch_size, c, use_learned_pos_embd=use_learned_pos_embd,
-			img_size=(32,32), in_chans=3)
+										img_size=(32,32), in_chans=3)
 		else:
 			self.encoder = mae.get_mae_vit(size, patch_size, c, use_learned_pos_embd=use_learned_pos_embd)
 		
 		self.embed_dim = self.encoder.embed_dim
 		self.use_max_pool = use_mean_pool
 
-	def forward(self, x, mask_ratio=0, int_layers=False, entropy_shuffle=False):
-		x = self.encoder(x, mask_ratio=mask_ratio, int_layers=int_layers, entropy_shuffle=entropy_shuffle)
-		if self.use_mean_pool:
-			x = [torch.mean(y[:, 1:], dim=1).contiguous() for y in x]  # Take mean pool over patch embeds
-		else:
-			x = [y[:, 0].contiguous() for y in x]  # Take [CLS] token only
+	def forward(self, x, mask_ratio=0):
+		x = self.encoder(x, mask_ratio=mask_ratio, mean_pool=self.use_mean_pool)
 		return x
 
 
