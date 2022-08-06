@@ -408,7 +408,7 @@ class MaskedAutoencoderViT(nn.Module):
 		for blk in self.blocks:
 			x = blk(x)
 		x = self.norm(x)
-		return [x], mask, ids_restore
+		return x, mask, ids_restore
 
 	def forward_encoder_intermediate_layers(self, x, mask_ratio, **kwargs):
 		x, mask, ids_restore = self.prepare_tokens(x, mask_ratio, **kwargs)
@@ -466,9 +466,9 @@ class MaskedAutoencoderViT(nn.Module):
 	def forward(self, imgs, mask_ratio=0, int_layers=False, masked_recon=False, **kwargs):
 		if int_layers:
 			latents, mask, ids_restore = self.forward_encoder_intermediate_layers(imgs, mask_ratio, **kwargs)
+			latent = latents[-1]
 		else:
-			latents, mask, ids_restore = self.forward_encoder(imgs, mask_ratio, **kwargs)
-		latent = latents[-1]
+			latent, mask, ids_restore = self.forward_encoder(imgs, mask_ratio, **kwargs)
 		if masked_recon:
 			pred = self.forward_decoder(latent, ids_restore)  # [N, L, p*p*3]
 			loss = self.forward_loss(imgs, pred, mask)

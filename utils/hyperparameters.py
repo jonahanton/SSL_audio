@@ -62,6 +62,8 @@ def get_std_parameters():
 	parser.add_argument('--Gnoise', action='store_true', default=False)
 	parser.add_argument('--pre_norm', action='store_true', default=False)
 	parser.add_argument('--post_norm', action='store_true', default=False)
+	parser.add_argument('--multi_crop', action='store_true', default=False)
+	parser.add_argument('--local_crops_number', type=int, default=4)
 	parser.add_argument('--load_lms', action='store_true', default=True)
 	parser.add_argument('--load_wav', action='store_false', dest='load_lms')
 	parser.add_argument('--distributed', action='store_true', default=False)

@@ -93,18 +93,22 @@ class BarlowTwins(nn.Module):
 			feature1 = self.encoder(y1)
 			feature2 = self.encoder(y2)
 
-		if not isinstance(feature1, list):
-			feature1 = [feature1]
-		if not isinstance(feature2, list):
-			feature2 = [feature2]
-
-		loss = None
-		for i, (f1, f2) in enumerate(zip(feature1, feature2)):
-			if ((i+1) % self.cfg.int_layer_step == 0) or (i == len(feature1) - 1):
-				if loss is None:
-					loss = self.forward_loss(f1, f2)
-				else:
-					loss += self.forward_loss(f1, f2)
+		# compute loss on features from intermediate layers
+		if self.cfg.int_layers:
+			if not isinstance(feature1, list):
+				feature1 = [feature1]
+			if not isinstance(feature2, list):
+				feature2 = [feature2]
+			loss = None
+			for i, (f1, f2) in enumerate(zip(feature1, feature2)):
+				if ((i+1) % self.cfg.int_layer_step == 0) or (i == len(feature1) - 1):
+					if loss is None:
+						loss = self.forward_loss(f1, f2)
+					else:
+						loss += self.forward_loss(f1, f2)
+		
+		if self.cfg.multi_crop:
+			loss = None
 
 		return loss
 

@@ -302,8 +302,14 @@ if __name__ == '__main__':
 		train_loader, memory_loader, test_loader = get_data(args)
 	else:
 		train_loader = get_data(args)
+
 	# model 
 	model = BarlowTwins(args).cuda()
+
+	# multi-crop wrapper handles forward with inputs of different resolutions
+	if args.multi_crop:
+		model = utils.MultiCropWrapper(model)
+
 	if args.distributed:
 		model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
 		model = nn.parallel.DistributedDataParallel(
@@ -314,8 +320,10 @@ if __name__ == '__main__':
 		model_without_ddp = model.module
 	else:
 		model_without_ddp = model
+
 	# optimizer
 	optimizer = get_optimizer(args)
+	
 	# mixed precision
 	fp16_scaler = None 
 	if args.use_fp16:
