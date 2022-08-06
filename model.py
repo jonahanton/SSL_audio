@@ -1,4 +1,3 @@
-from tkinter import Y
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -9,14 +8,28 @@ from models import resnet, mae
 from utils import utils
 
 
-def off_diagonal(x):
-	# return a flattened view of the off-diagonal elements of a square matrix
-	n, m = x.shape
-	assert n == m
-	return x.flatten()[:-1].view(n - 1, n + 1)[:, 1:].flatten()
+class BarlowTwinsHead(nn.Module):
+	def __init__(self, cfg, in_dim):
+		super().__init__()
+		self.cfg = cfg
+
+		sizes = [in_dim] + self.cfg.projector_n_hidden_layers*[self.cfg.projector_hidden_dim] + [self.cfg.projector_out_dim]
+		layers = []
+		for i in range(len(sizes) - 2):
+			layers.append(nn.Linear(sizes[i], sizes[i + 1], bias=False))
+			layers.append(nn.BatchNorm1d(sizes[i + 1]))
+			layers.append(nn.ReLU(inplace=True))
+		layers.append(nn.Linear(sizes[-2], sizes[-1], bias=False))
+		self.projector = nn.Sequential(*layers)
+
+		self.bn = nn.BatchNorm1d(sizes[-1], affine=False)
+	
+	def forward(self, x):
+		z = self.projector(x)
+		return self.bn(z)
 		
 
-class BarlowTwins(nn.Module):
+class ModelWrapper(nn.Module):
 	
 	def __init__(self, cfg):
 		super().__init__()
@@ -34,6 +47,7 @@ class BarlowTwins(nn.Module):
 			self.encoder.fc = nn.Identity()
 			self.encoder.embed_dim = 16384
 		elif self.cfg.model_type == 'audiontt':
+			assert self.cfg.n_mels == 64, f'n_mels must be 64 to use AudioNTT encoder (n_mels set to {self.cfg.n_mels})'
 			self.encoder = AudioNTT2022(squeeze_excitation=self.cfg.squeeze_excitation)
 		elif 'vit' in self.cfg.model_type:
 			conv_stem_bool = self.cfg.model_type.split('_')[0] == 'vitc'
@@ -47,58 +61,12 @@ class BarlowTwins(nn.Module):
 			)
 		else:
 			raise NotImplementedError(f'Model type {self.cfg.model_type} is not supported')
-		feature_dim = self.encoder.embed_dim
-		
-		sizes = [feature_dim] + self.cfg.projector_n_hidden_layers*[self.cfg.projector_hidden_dim] + [self.cfg.projector_out_dim]
-		layers = []
-		for i in range(len(sizes) - 2):
-			layers.append(nn.Linear(sizes[i], sizes[i + 1], bias=False))
-			layers.append(nn.BatchNorm1d(sizes[i + 1]))
-			layers.append(nn.ReLU(inplace=True))
-		layers.append(nn.Linear(sizes[-2], sizes[-1], bias=False))
-		self.projector = nn.Sequential(*layers)
+		self.feature_dim = self.encoder.embed_dim
 
-		self.bn = nn.BatchNorm1d(sizes[-1], affine=False)
-	
-	def forward_loss(self, feature1, feature2):
-		z1 = self.projector(feature1)
-		z2 = self.projector(feature2)
-		
-		# empirical cross-correlation matrix
-		c = self.bn(z1).T @ self.bn(z2)
-		
-		# sum the cross-correlation matrix between all gpus
-		c.div_(z1.shape[0])
-		if utils.is_dist_avail_and_initialized():
-			torch.distributed.all_reduce(c)
-		
-		on_diag = torch.diagonal(c).add_(-1).pow_(2).sum()
-		if self.cfg.HSIC:
-			# encouraging off_diag to be negative ones
-			off_diag = off_diagonal(c).add_(1).pow_(2).sum()
-		else:
-			off_diag = off_diagonal(c).pow_(2).sum()
-		loss = self.cfg.alpha * on_diag + self.cfg.lmbda * off_diag
-		return loss
-
-	def forward(self, y1, y2):
-		
+	def forward(self, x, mask_ratio=0):
 		if 'vit' in self.cfg.model_type:
-			if self.cfg.mask:
-				feature1 = self.encoder(y1, mask_ratio=self.cfg.mask_ratio)
-			else:
-				feature1 = self.encoder(y1)
-			feature2 = self.encoder(y2)
-		else:
-			feature1 = self.encoder(y1)
-			feature2 = self.encoder(y2)
-
-		loss = self.forward_loss(feature1, feature2)
-
-		if self.cfg.multi_crop:
-			loss = None
-
-		return loss
+			return self.encoder(x, mask_ratio=mask_ratio)
+		return self.encoder(x)
 
 
 

@@ -19,7 +19,7 @@ from augmentations import RunningNorm, NormalizeBatch
 from utils import utils, transforms, hyperparameters
 from utils.torch_mlp_clf import TorchMLPClassifier
 import datasets
-from model import BarlowTwins
+from model import ModelWrapper, BarlowTwinsHead
 
 
 CLASSES = dict(
@@ -39,26 +39,28 @@ def train_one_epoch(args, epoch, model, data_loader, optimizer, fp16_scaler, log
 	
 	total_data_time, total_forward_time, total_backward_time = 0, 0, 0
 	tflag = time.time()
-	for iteration, data_tuple in enumerate(train_bar):
+	for iteration, (images, _) in enumerate(train_bar):
 		data_time = time.time() - tflag
 
 		iteration += len(data_loader) * (epoch - 1)  # global training iteration
 
 		tflag = time.time()
-		(pos_1, pos_2), _ = data_tuple
 
+		# post-normalization block from BYOL-A [Niizumi et al., 2021]
 		if args.post_norm:
-			# Post-normalization block from BYOL-A [Niizumi et al., 2021]
-			bs = pos_1.shape[0]
-			paired_inputs = torch.cat([pos_1, pos_2])  # [(B,1,F,T), (B,1,F,T)] -> (2*B,1,F,T)
-			paired_inputs = NormalizeBatch()(paired_inputs)
-			pos_1 = paired_inputs[:bs]
-			pos_2 = paired_inputs[bs:]
+			norm_images = []
+			for im in images:
+				norm_images.append(NormalizeBatch()(im))
+			images = norm_images
 
-		pos_1, pos_2 = pos_1.cuda(non_blocking=True), pos_2.cuda(non_blocking=True)
+		# move images to gpu
+		images = [im.cuda(non_blocking=True) for im in images]
 
+		# forward passes + compute barlow twins loss
 		with torch.cuda.amp.autocast(enabled=(fp16_scaler is not None)):
-			loss = model(pos_1, pos_2)
+			teacher_output = model(images[:2], mask_ratio=args.mask_ratio)  # only the 2 global crops passed through the teacher 
+			student_output = model(images)
+			loss = barlow_twins_loss(student_output, teacher_output)
 		forward_time = time.time() - tflag 
 		tflag = time.time()
 
@@ -201,26 +203,26 @@ def get_data(args):
 		if args.pre_norm:
 			transform = nn.Sequential(
 				RunningNorm(epoch_samples=len_files),
-				transforms.AudioPairTransform(args, train_transform=True),
+				transforms.AudioPairTransform(args),
 			)
 			train_data = datasets.FSD50K(args, split='train_val', transform=transform, norm_stats=None)
 		else:
-			transform = transforms.AudioPairTransform(args, train_transform=True)
+			transform = transforms.AudioPairTransform(args)
 			train_data = datasets.FSD50K(args, split='train_val', transform=transform, norm_stats=norm_stats)
 	elif args.dataset == 'librispeech':
 		# librispeech960 [mean, std] (lms)
 		norm_stats = [-3.332, 4.205]
-		train_data = datasets.LibriSpeech(args, train=True, transform=transforms.AudioPairTransform(args, train_transform=True), norm_stats=norm_stats)
+		train_data = datasets.LibriSpeech(args, train=True, transform=transforms.AudioPairTransform(args), norm_stats=norm_stats)
 	elif args.dataset == 'fsd50k+librispeech':
 		norm_stats_fsd50k = [-4.950, 5.855]
 		norm_stats_librispeech = [-3.332, 4.205]
 		train_data = torch.utils.data.dataset.ConcatDataset([
-			datasets.FSD50K(args, split='train_val', transform=transforms.AudioPairTransform(args, train_transform=True), norm_stats=norm_stats_fsd50k),
-			datasets.LibriSpeech(args, train=True, transform=transforms.AudioPairTransform(args, train_transform=True), norm_stats=norm_stats_librispeech),
+			datasets.FSD50K(args, split='train_val', transform=transforms.AudioPairTransform(args), norm_stats=norm_stats_fsd50k),
+			datasets.LibriSpeech(args, train=True, transform=transforms.AudioPairTransform(args), norm_stats=norm_stats_librispeech),
 		])
 	elif args.dataset == 'audioset':
 		norm_stats = [-0.8294, 4.6230]
-		train_data = datasets.AudioSet(args, transform=transforms.AudioPairTransform(args, train_transform=True), norm_stats=norm_stats)
+		train_data = datasets.AudioSet(args, transform=transforms.AudioPairTransform(args), norm_stats=norm_stats)
 	
 	if args.distributed:
 		train_sampler = torch.utils.data.distributed.DistributedSampler(train_data)
@@ -304,12 +306,19 @@ if __name__ == '__main__':
 		train_loader = get_data(args)
 
 	# model 
-	model = BarlowTwins(args).cuda()
-
+	model = ModelWrapper(args)
 	# multi-crop wrapper handles forward with inputs of different resolutions
-	if args.multi_crop:
-		model = utils.MultiCropWrapper(model)
-
+	model = utils.MultiCropWrapper(
+		backbone=model,
+		head=BarlowTwinsHead(
+			args,
+			in_dim=model.feature_dim, 
+		),
+	)
+	# move network to gpu
+	model = model.cuda()
+	
+	# set up model for distributed training
 	if args.distributed:
 		model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
 		model = nn.parallel.DistributedDataParallel(
@@ -320,6 +329,12 @@ if __name__ == '__main__':
 		model_without_ddp = model.module
 	else:
 		model_without_ddp = model
+
+	# prepare loss
+	barlow_twins_loss = utils.BarlowTwinsLoss(
+		args,
+		ncrops=args.local_crops_number + 2,  # total number of crops = 2 global crops + local_crops_number
+	).cuda()
 
 	# optimizer
 	optimizer = get_optimizer(args)
@@ -335,15 +350,32 @@ if __name__ == '__main__':
 
 	# training
 	for epoch in range(1, args.epochs+1):
-		train_loss = train_one_epoch(args, epoch, model, train_loader, optimizer, fp16_scaler, logger, wandb_run)
+		train_loss = train_one_epoch(
+			args,
+			epoch,
+			model,
+			barlow_twins_loss, 
+			train_loader,
+			optimizer,
+			fp16_scaler,
+			logger, 
+			wandb_run,
+		)
 		if args.dataset == 'cifar10':
 			if utils.is_main_process():
-				test_acc_1, test_acc_5 = utils.eval_knn(model_without_ddp.encoder, memory_loader, test_loader, epoch, args.epochs, 10)
+				test_acc_1, test_acc_5 = utils.eval_knn(model_without_ddp.backbone.encoder, memory_loader, test_loader, epoch, args.epochs, 10)
 				if wandb_run is not None:
 					wandb_run.log({'knn_test_acc_1': test_acc_1, 'knn_test_acc_5': test_acc_5})
 		if epoch % args.epoch_save_f == 0 or epoch == args.epochs:
+			save_dict = {
+				'model': model.state_dict(),
+				'optimizer': optimizer.state_dict(),
+				'epoch': epoch + 1,
+				'args': args,
+				'dino_loss': barlow_twins_loss.state_dict(),
+			}
 			utils.save_on_master(
-				model_without_ddp.state_dict(),
+				save_dict,
 				ckpt_path + f'/model_{epoch}.pth',
 			)	
 		if epoch % args.epoch_eval_f == 0:
@@ -352,7 +384,7 @@ if __name__ == '__main__':
 					pass
 				else:
 					eval_train_loader, eval_val_loader, eval_test_loader = get_fsd50k(args)
-					scores = eval_linear(model_without_ddp.encoder, eval_train_loader, eval_val_loader, eval_test_loader, args.use_fp16_eval)
+					scores = eval_linear(model_without_ddp.backbone.encoder, eval_train_loader, eval_val_loader, eval_test_loader, args.use_fp16_eval)
 					score_all = scores.get('score_all')
 					score_5 = scores.get('score_5')
 					if logger is not None:

@@ -12,13 +12,15 @@ import random
 class RandomResizeCrop(nn.Module):
 	"""Random Resize Crop block.
 	Args:
+		out_size: Output spatial size for interpolation.
 		virtual_crop_scale: Virtual crop area `(F ratio, T ratio)` in ratio to input size.
 		freq_scale: Random frequency range `(min, max)`.
 		time_scale: Random time frame range `(min, max)`.
 	"""
 
-	def __init__(self, virtual_crop_scale=(1.0, 1.5), freq_scale=(0.6, 1.5), time_scale=(0.6, 1.5)):
+	def __init__(self, out_size=(64,96), virtual_crop_scale=(1.0, 1.5), freq_scale=(0.6, 1.5), time_scale=(0.6, 1.5)):
 		super().__init__()
+		self.out_size = out_size
 		self.virtual_crop_scale = virtual_crop_scale
 		self.freq_scale = freq_scale
 		self.time_scale = time_scale
@@ -48,7 +50,7 @@ class RandomResizeCrop(nn.Module):
 		i, j, h, w = self.get_params(virtual_crop_area.shape[-2:], lms.shape[-2:], self.time_scale, self.freq_scale)
 		crop = virtual_crop_area[:, i:i+h, j:j+w]
 		# print(f'shapes {virtual_crop_area.shape} {crop.shape} -> {lms.shape}')
-		lms = F.interpolate(crop.unsqueeze(0), size=lms.shape[-2:],
+		lms = F.interpolate(crop.unsqueeze(0), size=self.resize,
 			mode=self.interpolation, align_corners=True).squeeze(0)
 		return lms.to(torch.float)
 

@@ -16,42 +16,93 @@ from itertools import chain
 
 
 def flatten_list(lists):
-    return list(chain.from_iterable(lists))
+	return list(chain.from_iterable(lists))
 
+
+def off_diagonal(x):
+	# return a flattened view of the off-diagonal elements of a square matrix
+	n, m = x.shape
+	assert n == m
+	return x.flatten()[:-1].view(n - 1, n + 1)[:, 1:].flatten()
 
 """------------------------------------Training utils---------------------------------------"""
 
-class MultiCropWrapper(nn.Module):
-    """
-    Perform forward pass separately on each resolution input.
-    The inputs corresponding to a single resolution are clubbed and single
-    forward is run on the same resolution inputs. Hence we do several
-    forward passes = number of different resolutions used. We then
-    concatenate all the output features.
-    """
-    def __init__(self, backbone):
-        super().__init__()
-        self.backbone = backbone
 
-    def forward(self, x, **kwargs):
-        # convert to list
-        if not isinstance(x, list):
-            x = [x]
-        idx_crops = torch.cumsum(torch.unique_consecutive(
-            torch.tensor([inp.shape[-1] for inp in x]),
-            return_counts=True,
-        )[1], 0)
-        start_idx, output = 0, torch.empty(0).to(x[0].device)
-        for end_idx in idx_crops:
-            _out = self.backbone(torch.cat(x[start_idx: end_idx]), **kwargs)
-            # The output is a tuple with XCiT model. See:
-            # https://github.com/facebookresearch/xcit/blob/master/xcit.py#L404-L405
-            if isinstance(_out, (tuple, list)):
-                _out = _out[0]
-            # accumulate outputs
-            output = torch.cat((output, _out))
-            start_idx = end_idx
-        return output
+class BarlowTwinsLoss(nn.Module):
+	def __init__(self, cfg, ncrops):
+		super().__init__()
+		self.cfg = cfg
+		self.ncrops = ncrops
+
+	def forward_loss(self, z1, z2):
+		# empirical cross-correlation matrix
+		c = z1.T @ z2
+		# sum the cross-correlation matrix between all gpus
+		c.div_(z1.shape[0])
+		if is_dist_avail_and_initialized():
+			torch.distributed.all_reduce(c)
+		
+		on_diag = torch.diagonal(c).add_(-1).pow_(2).sum()
+		if self.cfg.HSIC:
+			# encouraging off_diag to be negative ones
+			off_diag = off_diagonal(c).add_(1).pow_(2).sum()
+		else:
+			off_diag = off_diagonal(c).pow_(2).sum()
+		loss = self.cfg.alpha * on_diag + self.cfg.lmbda * off_diag
+		return loss
+
+	def forward(self, student_output, teacher_output):
+
+		student_out = student_output.chunk(self.ncrops)
+		teacher_out = teacher_output.detach().chunk(2)
+
+		total_loss = 0
+		n_loss_terms = 0
+		for iq, q in enumerate(teacher_out):
+			for v in range(len(student_out)):
+				if v == iq:
+					# we skip cases where student and teacher operate on the same view
+					continue
+				loss = self.forward_loss(q, student_out[v])
+				total_loss += loss
+				n_loss_terms += 1
+		total_loss /= n_loss_terms
+		return total_loss
+
+
+class MultiCropWrapper(nn.Module):
+	"""
+	Perform forward pass separately on each resolution input.
+	The inputs corresponding to a single resolution are clubbed and single
+	forward is run on the same resolution inputs. Hence we do several
+	forward passes = number of different resolutions used. We then
+	concatenate all the output features and run the head forward on these
+	concatenated features.
+	"""
+	def __init__(self, backbone, head):
+		super().__init__()
+		self.backbone = backbone
+		self.head = head
+
+	def forward(self, x, **kwargs):
+		# convert to list
+		if not isinstance(x, list):
+			x = [x]
+		idx_crops = torch.cumsum(torch.unique_consecutive(
+			torch.tensor([inp.shape[-1] for inp in x]),
+			return_counts=True,
+		)[1], 0)
+		start_idx, output = 0, torch.empty(0).to(x[0].device)
+		for end_idx in idx_crops:
+			_out = self.backbone(torch.cat(x[start_idx: end_idx]), **kwargs)
+			# The output is a tuple with XCiT model. See:
+			# https://github.com/facebookresearch/xcit/blob/master/xcit.py#L404-L405
+			if isinstance(_out, (tuple, list)):
+				_out = _out[0]
+			# accumulate outputs
+			output = torch.cat((output, _out))
+			start_idx = end_idx
+		return self.head(output)
 
 
 def get_param_groups(model):
