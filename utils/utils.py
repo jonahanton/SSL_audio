@@ -258,7 +258,7 @@ def encode_vit(model, x, split_frames=True, use_cls=True):
 			# [CLS] embeddings only
 			for i in range(x.shape[-1] // unit_frames):
 				emb = model(x[..., i*unit_frames:(i+1)*unit_frames])
-				emb = emb[:, :1]  # [emb] = [b, 1, d], n.b. emb = emb[:, 0] -> [emb] = [b, d]
+				emb = emb.unsqueeze(1)  # [emb] = [b, 1, d]
 				embeddings.append(emb)
 
 			# concat along the 2nd dimension (dim=1), i.e., concat. [CLS] tokens from the different divided segments
@@ -275,7 +275,7 @@ def encode_vit(model, x, split_frames=True, use_cls=True):
 			pad_emb_frames = int(embeddings[0].shape[1] * pad_frames / unit_frames)
 			if pad_emb_frames > 0:
 				x = x[:, :-pad_emb_frames]  # remove padded tails
-		x = torch.mean(x, dim=1)
+		x = torch.mean(x, dim=1)  # [x] = [b, d]
 	else:
 		x = model(x)  # [x] = [b, d]
 
