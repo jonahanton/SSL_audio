@@ -7,6 +7,7 @@ import copy
 from models import resnet, mae
 from utils import utils
 
+off_diagonal = utils.off_diagonal
 
 class BarlowTwinsHead(nn.Module):
 	def __init__(self, cfg, in_dim):
