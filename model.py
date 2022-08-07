@@ -88,7 +88,7 @@ class ViT(nn.Module):
 			self.encoder = mae.get_mae_vit(size, patch_size, c, use_learned_pos_embd=use_learned_pos_embd)
 		
 		self.embed_dim = self.encoder.embed_dim
-		self.use_max_pool = use_mean_pool
+		self.use_mean_pool = use_mean_pool
 
 	def forward(self, x, mask_ratio=0):
 		x = self.encoder(x, mask_ratio=mask_ratio, mean_pool=self.use_mean_pool)

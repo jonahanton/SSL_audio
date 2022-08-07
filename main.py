@@ -33,7 +33,7 @@ if torch.cuda.is_available():
 	torch.backends.cudnn.benchmark = True
 
 
-def train_one_epoch(args, epoch, model, data_loader, optimizer, fp16_scaler, logger, wandb_run):
+def train_one_epoch(args, epoch, model, barlow_twins_loss, data_loader, optimizer, fp16_scaler, logger, wandb_run):
 	model.train()
 	total_loss, total_num, train_bar = 0, 0, tqdm(data_loader)
 	
@@ -379,7 +379,7 @@ if __name__ == '__main__':
 				save_dict,
 				ckpt_path + f'/model_{epoch}.pth',
 			)	
-		if epoch % args.epoch_eval_f == 0:
+		if epoch % args.epoch_eval_f == 0 or epoch == args.epochs:
 			if utils.is_main_process():
 				if args.dataset == 'cifar10':
 					pass

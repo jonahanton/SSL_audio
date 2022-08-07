@@ -90,8 +90,8 @@ class ConvStem(nn.Module):
 
 	def forward(self, x):
 		B, C, H, W = x.shape
-		assert H == self.img_size[0] and W == self.img_size[1], \
-			f"Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]})."
+		# assert H == self.img_size[0] and W == self.img_size[1], \
+		# 	f"Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]})."
 		x = self.proj(x)
 		if self.flatten:
 			x = x.flatten(2).transpose(1, 2)  # BCHW -> BNC

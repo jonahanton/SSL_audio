@@ -25,7 +25,7 @@ class RandomResizeCrop(nn.Module):
 		self.freq_scale = freq_scale
 		self.time_scale = time_scale
 		self.interpolation = 'bicubic'
-		assert time_scale[1] >= 1.0 and freq_scale[1] >= 1.0
+		# assert time_scale[1] >= 1.0 and freq_scale[1] >= 1.0
 
 	@staticmethod
 	def get_params(virtual_crop_size, in_size, time_scale, freq_scale):
@@ -50,7 +50,7 @@ class RandomResizeCrop(nn.Module):
 		i, j, h, w = self.get_params(virtual_crop_area.shape[-2:], lms.shape[-2:], self.time_scale, self.freq_scale)
 		crop = virtual_crop_area[:, i:i+h, j:j+w]
 		# print(f'shapes {virtual_crop_area.shape} {crop.shape} -> {lms.shape}')
-		lms = F.interpolate(crop.unsqueeze(0), size=self.resize,
+		lms = F.interpolate(crop.unsqueeze(0), size=self.out_size,
 			mode=self.interpolation, align_corners=True).squeeze(0)
 		return lms.to(torch.float)
 
