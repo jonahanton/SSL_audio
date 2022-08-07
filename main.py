@@ -119,8 +119,8 @@ def get_embeddings(model, data_loader, fp16_scaler):
 				emb = utils.encode_vit(
 					model.encoder,
 					data.cuda(non_blocking=True),
+					split_frames=True,
 					use_cls=args.use_cls,
-					flatten=False,
 				)
 			else:
 				emb = model(data.cuda(non_blocking=True))

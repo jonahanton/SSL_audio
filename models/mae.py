@@ -391,17 +391,18 @@ class MaskedAutoencoderViT(nn.Module):
 		patch_pos_embed = patch_pos_embed.permute(0, 2, 3, 1).view(1, -1, dim)
 		return torch.cat((class_pos_embed.unsqueeze(0), patch_pos_embed), dim=1)
 
-	def forward_encoder(self, x, mask_ratio, mean_pool, **kwargs):
+	def forward_encoder(self, x, mask_ratio, mean_pool, return_all, **kwargs):
 		x, mask, ids_restore = self.prepare_tokens(x, mask_ratio, **kwargs)
 		# apply Transformer blocks
 		for blk in self.blocks:
 			x = blk(x)
 		x = self.norm(x)
-		if mean_pool:
-			x = torch.mean(x[:, 1:], dim=1).contiguous()
-		else:
-			x = x[:, 0]
-		return x, mask, ids_restore
+		if return_all:
+			return x, mask, ids_restore
+		elif mean_pool:
+			return torch.mean(x[:, 1:], dim=1).contiguous(), mask, ids_restore
+		return x[:, 0].contiguous(), mask, ids_restore
+
 
 	def get_intermediate_layers(self, x, mask_ratio, **kwargs):
 		x, _, _ = self.prepare_tokens(x, mask_ratio, **kwargs)
@@ -456,8 +457,8 @@ class MaskedAutoencoderViT(nn.Module):
 		loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
 		return loss
 
-	def forward(self, imgs, mask_ratio=0, mean_pool=False, masked_recon=False, **kwargs):
-		latent, mask, ids_restore = self.forward_encoder(imgs, mask_ratio, mean_pool, **kwargs)
+	def forward(self, imgs, mask_ratio=0, mean_pool=False, return_all=False, masked_recon=False, **kwargs):
+		latent, mask, ids_restore = self.forward_encoder(imgs, mask_ratio, mean_pool, return_all, **kwargs)
 		if masked_recon:
 			pred = self.forward_decoder(latent, ids_restore)  # [N, L, p*p*3]
 			loss = self.forward_loss(imgs, pred, mask)

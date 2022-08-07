@@ -123,9 +123,6 @@ class ViTModelWrapper(nn.Module):
 			# [CLS] embeddings only
 			for i in range(x.shape[-1] // unit_frames):
 				emb = self.model(x[..., i*unit_frames:(i+1)*unit_frames])
-				if isinstance(emb, list):
-					emb = emb[-1]
-				assert self.model.use_cls_token, '[CLS] NOT AVAILABLE'
 				emb = emb[:, :1]  # [emb] = [b, 1, d], n.b. emb = emb[:, 0] -> [emb] = [b, d]
 				embeddings.append(emb)
 
@@ -134,11 +131,8 @@ class ViTModelWrapper(nn.Module):
 		else:
 			# stack embeddings
 			for i in range(x.shape[-1] // unit_frames):
-				emb = self.model(x[..., i*unit_frames:(i+1)*unit_frames])
-				if isinstance(emb, list):
-					emb = emb[-1]
-				if self.model.use_cls_token:
-					emb = emb[:, 1:, :]
+				emb = self.model(x[..., i*unit_frames:(i+1)*unit_frames], return_all=True)
+				emb = emb[:, 1:, :]
 				emb = rearrange(emb, ' b (f t) d -> b t (f d)', f=patch_fbins, d=embed_d)
 				embeddings.append(emb)
 			# concat along the 2nd dimension (dim=1)

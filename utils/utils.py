@@ -166,8 +166,6 @@ def eval_knn(net, memory_data_loader, test_data_loader, epoch, epochs, c, k=200,
 		(data, _), target = data_tuple
 		target_bank.append(target)
 		feature = net(data.cuda(non_blocking=True))
-		if isinstance(feature, list):
-			feature = feature[-1]
 		feature_bank.append(feature)
 	# [D, N]
 	feature_bank = torch.cat(feature_bank, dim=0).t().contiguous()
@@ -245,7 +243,7 @@ def eval_linear_low_shot(X_train, y_train, X_val, y_val, X_test, y_test, n):
 	return np.mean(scores), np.std(scores)
 
 
-def encode_vit(model, x, use_cls=True, flatten=False):
+def encode_vit(model, x, split_frames=True, use_cls=True):
 	patch_fbins = model.grid_size()[0]
 	embed_d = model.embed_dim
 	unit_frames = model.img_size[1]  # number of time frames for inputs 
@@ -254,39 +252,33 @@ def encode_vit(model, x, use_cls=True, flatten=False):
 	if pad_frames > 0:
 		x = F.pad(x, (0, pad_frames))
 
-	embeddings = []
-	if use_cls:
-		# [CLS] embeddings only
-		for i in range(x.shape[-1] // unit_frames):
-			emb = model(x[..., i*unit_frames:(i+1)*unit_frames])
-			if isinstance(emb, list):
-				emb = emb[-1]
-			assert model.use_cls_token, '[CLS] NOT AVAILABLE'
-			emb = emb[:, :1]  # [emb] = [b, 1, d], n.b. emb = emb[:, 0] -> [emb] = [b, d]
-			embeddings.append(emb)
+	if split_frames:  # process each unit frame separately
+		embeddings = []
+		if use_cls:
+			# [CLS] embeddings only
+			for i in range(x.shape[-1] // unit_frames):
+				emb = model(x[..., i*unit_frames:(i+1)*unit_frames])
+				emb = emb[:, :1]  # [emb] = [b, 1, d], n.b. emb = emb[:, 0] -> [emb] = [b, d]
+				embeddings.append(emb)
 
-		# concat along the 2nd dimension (dim=1), i.e., concat. [CLS] tokens from the different divided segments
-		x = torch.hstack(embeddings)  # [x] = [b, n_unit_frames, d], n_unit_frames = x.shape[-1] // unit_frames
-	else:
-		# stack embeddings
-		for i in range(x.shape[-1] // unit_frames):
-			emb = model(x[..., i*unit_frames:(i+1)*unit_frames])
-			if isinstance(emb, list):
-				emb = emb[-1]
-			if model.use_cls_token:
+			# concat along the 2nd dimension (dim=1), i.e., concat. [CLS] tokens from the different divided segments
+			x = torch.hstack(embeddings)  # [x] = [b, n_unit_frames, d], n_unit_frames = x.shape[-1] // unit_frames
+		else:
+			# stack embeddings
+			for i in range(x.shape[-1] // unit_frames):
+				emb = model(x[..., i*unit_frames:(i+1)*unit_frames], return_all=True)
 				emb = emb[:, 1:, :]
-			emb = rearrange(emb, ' b (f t) d -> b t (f d)', f=patch_fbins, d=embed_d)
-			embeddings.append(emb)
-		# concat along the 2nd dimension (dim=1)
-		x = torch.hstack(embeddings)  # [x] = [b, n_unit_frames*patch_tbins, patch_fbins*d]
-		pad_emb_frames = int(embeddings[0].shape[1] * pad_frames / unit_frames)
-		if pad_emb_frames > 0:
-			x = x[:, :-pad_emb_frames]  # remove padded tails
-	
-	if flatten:
-		x = torch.flatten(x, start_dim=1)
-	else:
+				emb = rearrange(emb, ' b (f t) d -> b t (f d)', f=patch_fbins, d=embed_d)
+				embeddings.append(emb)
+			# concat along the 2nd dimension (dim=1)
+			x = torch.hstack(embeddings)  # [x] = [b, n_unit_frames*patch_tbins, patch_fbins*d]
+			pad_emb_frames = int(embeddings[0].shape[1] * pad_frames / unit_frames)
+			if pad_emb_frames > 0:
+				x = x[:, :-pad_emb_frames]  # remove padded tails
 		x = torch.mean(x, dim=1)
+	else:
+		x = model(x)  # [x] = [b, d]
+
 	return x 
 				
 
