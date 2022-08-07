@@ -5,6 +5,7 @@ import time
 import datetime
 import wandb
 import math
+import random
 import sys
 import logging
 
@@ -56,11 +57,25 @@ def train_one_epoch(args, epoch, model, barlow_twins_loss, data_loader, optimize
 		# move images to gpu
 		images = [im.cuda(non_blocking=True) for im in images]
 
+		# mask ratio
+		if args.mask:
+			if args.random_mask_ratio:
+				# randomly sample r ~ U(0.02, 0.2) with p = 0.5
+				if random.random() > 0.5:
+					mask_ratio = np.random.uniform(0.02, 0.2)
+				# r = 0 with p = 0.5
+				else:
+					mask_ratio = 0
+			else:
+				mask_ratio = args.mask_ratio
+		else:
+			mask_ratio = 0
+
 		# forward passes + compute barlow twins loss
 		with torch.cuda.amp.autocast(enabled=(fp16_scaler is not None)):
 			teacher_output = model(
 				images[:1],  # only the 1 global crop passed through the teacher 
-				mask_ratio=args.mask_ratio,
+				mask_ratio=mask_ratio,
 				ncrops=1,
 			)
 			student_output = model(
