@@ -58,8 +58,15 @@ def train_one_epoch(args, epoch, model, barlow_twins_loss, data_loader, optimize
 
 		# forward passes + compute barlow twins loss
 		with torch.cuda.amp.autocast(enabled=(fp16_scaler is not None)):
-			teacher_output = model(images[:1], mask_ratio=args.mask_ratio)  # only the 1 global crop passed through the teacher 
-			student_output = model(images[1:])  # 1 global crop + local crops passed through the student
+			teacher_output = model(
+				images[:1],  # only the 1 global crop passed through the teacher 
+				mask_ratio=args.mask_ratio,
+				ncrops=1,
+			)
+			student_output = model(
+				images[1:],  # 1 global crop + all local crops passed through the student
+				ncrops=args.local_crops_number+1,
+			)
 			loss = barlow_twins_loss(student_output, teacher_output)
 		forward_time = time.time() - tflag 
 		tflag = time.time()
@@ -313,7 +320,6 @@ if __name__ == '__main__':
 		head=BarlowTwinsHead(
 			args,
 			in_dim=model.feature_dim,
-			ncrops=args.local_crops_number+2,  # total number of crops = 2 global crops + local_crops_number
 		),
 	)
 	# move network to gpu

@@ -9,10 +9,9 @@ from utils import utils
 
 
 class BarlowTwinsHead(nn.Module):
-	def __init__(self, cfg, in_dim, ncrops):
+	def __init__(self, cfg, in_dim):
 		super().__init__()
 		self.cfg = cfg
-		self.ncrops = ncrops
 
 		sizes = [in_dim] + self.cfg.projector_n_hidden_layers*[self.cfg.projector_hidden_dim] + [self.cfg.projector_out_dim]
 		layers = []
@@ -25,8 +24,8 @@ class BarlowTwinsHead(nn.Module):
 
 		self.bn = nn.BatchNorm1d(sizes[-1], affine=False)
 	
-	def forward(self, x):
-		x_crops = x.chunk(self.ncrops)
+	def forward(self, x, ncrops=1):
+		x_crops = x.chunk(ncrops)
 		z = torch.empty(0).to(x_crops[0].device)
 		for _x in x_crops:
 			_z = self.bn(self.projector(_x))

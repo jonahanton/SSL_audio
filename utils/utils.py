@@ -80,7 +80,7 @@ class MultiCropWrapper(nn.Module):
 		self.backbone = backbone
 		self.head = head
 
-	def forward(self, x, **kwargs):
+	def forward(self, x, ncrops=1, **kwargs):
 		# convert to list
 		if not isinstance(x, list):
 			x = [x]
@@ -98,7 +98,7 @@ class MultiCropWrapper(nn.Module):
 			# accumulate outputs
 			output = torch.cat((output, _out))
 			start_idx = end_idx
-		return self.head(output)
+		return self.head(output, ncrops)
 
 
 def get_param_groups(model):
