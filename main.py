@@ -379,7 +379,7 @@ if __name__ == '__main__':
 				'optimizer': optimizer.state_dict(),
 				'epoch': epoch + 1,
 				'args': args,
-				'dino_loss': barlow_twins_loss.state_dict(),
+				'barlow_twins_loss': barlow_twins_loss.state_dict(),
 			}
 			utils.save_on_master(
 				save_dict,

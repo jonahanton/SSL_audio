@@ -31,7 +31,7 @@ import wandb
 from utils.torch_mlp_clf import TorchMLPClassifier
 from utils import transforms, utils, hyperparameters
 import datasets
-from model import BarlowTwins
+from model import BarlowTwinsHead, ModelWrapper
 
 
 HYPERPARAMETERS = [
@@ -52,6 +52,12 @@ def objective(trial):
 
 	# Generate the model
 	model = define_model(trial).cuda()
+
+	# prepare loss
+	barlow_twins_loss = utils.BarlowTwinsLoss(
+		args,
+		ncrops=args.local_crops_number+2,  # total number of crops = 2 global crops + local_crops_number
+	).cuda()
 
 	# Generate the optimizers
 	if args.optimizer in ['Adam', 'AdamW', 'SGD']:
@@ -102,9 +108,16 @@ def objective(trial):
 	print('Running training...')
 	for epoch in range(1, args.train_epochs+1):
 		model.train()
-		loss = train_one_epoch(epoch, model, train_loader, optimizer, fp16_scaler)
+		loss = train_one_epoch(
+			epoch,
+			model,
+			barlow_twins_loss,
+			train_loader,
+			optimizer,
+			fp16_scaler,
+		)
 		# Report intermediate objective value
-		score = evaluate(model.encoder, eval_train_loader, eval_val_loader, eval_test_loader)
+		score = evaluate(model.backbone.encoder, eval_train_loader, eval_val_loader, eval_test_loader)
 		trial.report(score, epoch)
 
 		# Handle pruning based on the intermediate value.
@@ -118,12 +131,21 @@ def define_model(trial):
 		args.projector_n_hidden_layers = trial.suggest_categorical("projector_n_hidden_layers", [1, 2, 3])
 	if 'projector_out_dim' in args.tune:
 		args.projector_out_dim = trial.suggest_categorical("projector_out_dim", [64, 128, 256, 1024, 4096, 8192, 16384])
-	return BarlowTwins(args)
+	
+	model = ModelWrapper(args)
+	model = utils.MultiCropWrapper(
+		backbone=model,
+		head=BarlowTwinsHead(
+			args,
+			in_dim=model.feature_dim,
+		),
+	)
+	return model
 
 
 def evaluate(model, train_loader, val_loader, test_loader):
 	if args.eval == 'linear':
-		return eval_linear(model, train_loader, val_loader, test_loader)
+		return eval_linear(model, train_loader, val_loader, test_loader, args.use_fp16_eval)
 	elif args.eval == 'knn':
 		return eval_knn(model, train_loader, test_loader)
 
@@ -179,11 +201,20 @@ def eval_knn(model, memory_data_loader, test_data_loader, k=200, temperature=0.5
 
 
 @torch.no_grad()
-def get_embeddings(model, data_loader):
+def get_embeddings(model, data_loader, fp16_scaler):
 	model.eval()
 	embs, targets = [], []
 	for data, target in data_loader:
-		emb = model(data.cuda(non_blocking=True))
+		with torch.cuda.amp.autocast(enabled=(fp16_scaler is not None)):
+			if 'vit' in args.model_type:
+				emb = utils.encode_vit(
+					model.encoder,
+					data.cuda(non_blocking=True),
+					split_frames=True,
+					use_cls=args.use_cls,
+				)
+			else:
+				emb = model(data.cuda(non_blocking=True))
 		if isinstance(emb, list):
 			emb = emb[-1]
 		emb = emb.detach().cpu().numpy()
@@ -193,13 +224,18 @@ def get_embeddings(model, data_loader):
 	return np.array(embs), np.array(targets)
 
 
-def eval_linear(model, train_loader, val_loader, test_loader):
+def eval_linear(model, train_loader, val_loader, test_loader, use_fp16):
+
+	# mixed precision
+	fp16_scaler = None
+	if use_fp16:
+		fp16_scaler = torch.cuda.amp.GradScaler()
 
 	print('Extracting embeddings')
 	start = time.time()
-	X_train, y_train = get_embeddings(model, train_loader)
-	X_val, y_val = get_embeddings(model, val_loader)
-	X_test, y_test = get_embeddings(model, test_loader)
+	X_train, y_train = get_embeddings(model, train_loader, fp16_scaler)
+	X_val, y_val = get_embeddings(model, val_loader, fp16_scaler)
+	X_test, y_test = get_embeddings(model, test_loader, fp16_scaler)
 	print(f'Done\tTime elapsed = {time.time() - start:.2f}s')
 
 	print('Fitting linear classifier')
@@ -219,21 +255,31 @@ def eval_linear(model, train_loader, val_loader, test_loader):
 	return score
 
 
-def train_one_epoch(epoch, model, data_loader, optimizer, fp16_scaler):
+def train_one_epoch(epoch, model, barlow_twins_loss, data_loader, optimizer, fp16_scaler):
 	model.train()
 	total_loss, total_num, train_bar = 0, 0, tqdm(data_loader)
 
 	total_data_time, total_forward_time, total_backward_time = 0, 0, 0
 	tflag = time.time()
-	for data_tuple in train_bar:
+	for images, _ in train_bar:
 		data_time = time.time() - tflag
 		tflag = time.time()
 
-		(pos_1, pos_2), _ = data_tuple
-		pos_1, pos_2 = pos_1.cuda(non_blocking=True), pos_2.cuda(non_blocking=True)
+		# move images to gpu
+		images = [im.cuda(non_blocking=True) for im in images]
 
+		# forward passes + compute barlow twins loss
 		with torch.cuda.amp.autocast(enabled=(fp16_scaler is not None)):
-			loss = model(pos_1, pos_2)
+			teacher_output = model(
+				images[:1],  # only the 1 global crop passed through the teacher 
+				mask_ratio=args.mask_ratio,
+				ncrops=1,
+			)
+			student_output = model(
+				images[1:],  # 1 global crop + all local crops passed through the student
+				ncrops=args.local_crops_number+1,
+			)
+			loss = barlow_twins_loss(student_output, teacher_output)
 		forward_time = time.time() - tflag
 		tflag = time.time()
 
