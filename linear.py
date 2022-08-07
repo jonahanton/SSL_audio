@@ -8,12 +8,11 @@ import time
 import datetime
 import logging
 from tqdm import tqdm
-from itertools import chain
 
 from utils import utils, hyperparameters
 from utils.torch_mlp_clf import TorchMLPClassifier
 import datasets
-from model import BarlowTwins
+from model import ModelWrapper
 
 
 MODELS = [
@@ -113,6 +112,30 @@ def get_fsd50k(args):
 	return eval_train_loader, eval_val_loader, eval_test_loader
 
 
+def load_model(args):
+	model = ModelWrapper(args)
+
+	sd = torch.load(args.model_file_path, map_location='cpu')
+	if 'model' in sd.keys():
+		sd = sd.get('model')
+	while True:
+		clean_sd = {k.replace("backbone.", ""): v for k, v in sd.items() if "backbone." in k}
+		if clean_sd:
+			break
+		clean_sd = {k.replace("encoder.encoder.", "encoder."): v for k, v in sd.items() if "encoder.encoder." in k}
+		if clean_sd:
+			break
+		clean_sd = {k.replace("features.", "encoder.features."): v for k, v in sd.items() if "features." in k}
+		if clean_sd:
+			break
+		clean_sd = sd
+		break
+
+	model.load_state_dict(clean_sd, strict=True)
+	return model
+
+
+
 if __name__ == '__main__':
 
 	parser = argparse.ArgumentParser(description='Linear eval', parents=hyperparameters.get_hyperparameters())
@@ -133,12 +156,7 @@ if __name__ == '__main__':
 	eval_train_loader, eval_val_loader, eval_test_loader = get_data(args)
 
 	# Load model
-	model = BarlowTwins(args).encoder
-	sd = torch.load(args.model_file_path, map_location='cpu')
-	clean_sd = {k.replace("encoder.", "", 1): v for k, v in sd.items() if "encoder." in k}
-	if clean_sd:
-		sd = clean_sd
-	model.load_state_dict(sd, strict=True)
+	model = load_model(args)
 	model = model.cuda()
 	model.eval()
 
