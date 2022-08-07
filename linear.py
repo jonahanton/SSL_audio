@@ -23,8 +23,6 @@ MODELS = [
 ]
 
 
-
-
 @torch.no_grad()
 def get_embeddings(model, data_loader, fp16_scaler):
 	model.eval()
@@ -35,8 +33,8 @@ def get_embeddings(model, data_loader, fp16_scaler):
 				emb = utils.encode_vit(
 					model.encoder,
 					data.cuda(non_blocking=True),
+					split_frames=True,
 					use_cls=args.use_cls,
-					flatten=False,
 				)
 			else:
 				emb = model(data.cuda(non_blocking=True))
@@ -114,18 +112,16 @@ def get_fsd50k(args):
 
 def load_model(args):
 	model = ModelWrapper(args)
+	model = model.encoder
 
 	sd = torch.load(args.model_file_path, map_location='cpu')
 	if 'model' in sd.keys():
 		sd = sd.get('model')
 	while True:
-		clean_sd = {k.replace("backbone.", ""): v for k, v in sd.items() if "backbone." in k}
+		clean_sd = {k.replace("backbone.encoder.", ""): v for k, v in sd.items() if "backbone.encoder." in k}
 		if clean_sd:
 			break
-		clean_sd = {k.replace("encoder.encoder.", "encoder."): v for k, v in sd.items() if "encoder.encoder." in k}
-		if clean_sd:
-			break
-		clean_sd = {k.replace("features.", "encoder.features."): v for k, v in sd.items() if "features." in k}
+		clean_sd = {k.replace("encoder.encoder.", ""): v for k, v in sd.items() if "encoder.encoder." in k}
 		if clean_sd:
 			break
 		clean_sd = sd
