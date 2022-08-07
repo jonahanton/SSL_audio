@@ -312,7 +312,8 @@ if __name__ == '__main__':
 		backbone=model,
 		head=BarlowTwinsHead(
 			args,
-			in_dim=model.feature_dim, 
+			in_dim=model.feature_dim,
+			ncrops=args.local_crops_number+2,  # total number of crops = 2 global crops + local_crops_number
 		),
 	)
 	# move network to gpu
@@ -333,7 +334,7 @@ if __name__ == '__main__':
 	# prepare loss
 	barlow_twins_loss = utils.BarlowTwinsLoss(
 		args,
-		ncrops=args.local_crops_number + 2,  # total number of crops = 2 global crops + local_crops_number
+		ncrops=args.local_crops_number+2,  # total number of crops = 2 global crops + local_crops_number
 	).cuda()
 
 	# optimizer

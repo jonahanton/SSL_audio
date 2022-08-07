@@ -54,7 +54,7 @@ class BarlowTwinsLoss(nn.Module):
 	def forward(self, student_output, teacher_output):
 
 		student_out = student_output.chunk(self.ncrops)
-		teacher_out = teacher_output.detach().chunk(2)
+		teacher_out = teacher_output.chunk(2)
 
 		total_loss = 0
 		n_loss_terms = 0
