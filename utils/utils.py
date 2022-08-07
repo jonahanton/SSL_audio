@@ -53,19 +53,15 @@ class BarlowTwinsLoss(nn.Module):
 
 	def forward(self, student_output, teacher_output):
 
-		student_out = student_output.chunk(self.ncrops)
-		teacher_out = teacher_output.chunk(2)
+		student_out = student_output.chunk(self.ncrops - 1)  # self.ncrops = 2 (global crops) + n local crops, student only gets 1 global crop
+		teacher_out = teacher_output  # teacher only gets 1 global crop
 
 		total_loss = 0
 		n_loss_terms = 0
-		for iq, q in enumerate(teacher_out):
-			for v in range(len(student_out)):
-				if v == iq:
-					# we skip cases where student and teacher operate on the same view
-					continue
-				loss = self.forward_loss(q, student_out[v])
-				total_loss += loss
-				n_loss_terms += 1
+		for v in range(len(student_out)):
+			loss = self.forward_loss(teacher_out, student_out[v])
+			total_loss += loss
+			n_loss_terms += 1
 		total_loss /= n_loss_terms
 		return total_loss
 
