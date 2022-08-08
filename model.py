@@ -63,20 +63,22 @@ class ModelWrapper(nn.Module):
 				c=conv_stem_bool,
 				use_learned_pos_embd=self.cfg.use_learned_pos_embd,
 				use_mean_pool=self.cfg.use_mean_pool,
+				use_decoder=self.cfg.masked_recon,
 			)
 		else:
 			raise NotImplementedError(f'Model type {self.cfg.model_type} is not supported')
 		self.feature_dim = self.encoder.embed_dim
 
-	def forward(self, x, mask_ratio=0):
+	def forward(self, x, mask_ratio=0, masked_recon=False):
 		if 'vit' in self.cfg.model_type:
-			return self.encoder(x, mask_ratio=mask_ratio)
+			return self.encoder(x, mask_ratio=mask_ratio, masked_recon=masked_recon)
 		return self.encoder(x)
 
 
 
 class ViT(nn.Module):
-	def __init__(self, dataset='fsd50k', size='base', patch_size=None, c=True, use_learned_pos_embd=False, use_mean_pool=False):
+	def __init__(self, dataset='fsd50k', size='base', patch_size=None, c=True,
+			use_learned_pos_embd=False, use_mean_pool=False, use_decoder=False):
 		super().__init__()
 		
 		if patch_size is None:
@@ -85,13 +87,15 @@ class ViT(nn.Module):
 			self.encoder = mae.get_mae_vit(size, patch_size, c, use_learned_pos_embd=use_learned_pos_embd,
 										img_size=(32,32), in_chans=3)
 		else:
-			self.encoder = mae.get_mae_vit(size, patch_size, c, use_learned_pos_embd=use_learned_pos_embd)
+			self.encoder = mae.get_mae_vit(size, patch_size, c, use_learned_pos_embd=use_learned_pos_embd,
+										use_decoder=use_decoder)
 		
 		self.embed_dim = self.encoder.embed_dim
 		self.use_mean_pool = use_mean_pool
 
-	def forward(self, x, mask_ratio=0):
-		x = self.encoder(x, mask_ratio=mask_ratio, mean_pool=self.use_mean_pool)
+	def forward(self, x, mask_ratio=0, masked_recon=False):
+		x = self.encoder(x, mask_ratio=mask_ratio, masked_recon=masked_recon,
+					mean_pool=self.use_mean_pool)
 		return x
 
 

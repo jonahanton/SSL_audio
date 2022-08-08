@@ -169,7 +169,7 @@ class MaskedAutoencoderViT(nn.Module):
 	def __init__(self, img_size=(64, 96), patch_size=(16, 16), in_chans=1,
 				 embed_dim=768, depth=12, num_heads=12, conv_stem=False,
 				 use_decoder=False, use_learned_pos_embd=False,
-				 decoder_embed_dim=384, decoder_depth=8, decoder_num_heads=12,
+				 decoder_embed_dim=384, decoder_depth=4, decoder_num_heads=6,
 				 mlp_ratio=4., norm_layer=nn.LayerNorm, norm_pix_loss=False,
 				 block_cls=BlockKBiasZero, use_2d_dec_pos_embd=False,
 				 drop_path_rate=0.):
@@ -230,7 +230,7 @@ class MaskedAutoencoderViT(nn.Module):
 		
 
 	def patch_size(self):
-		return self.patch_embed.proj.kernel_size
+		return self.patch_embed.patch_size
 
 	def grid_size(self):
 		return self.patch_embed.grid_size
@@ -346,7 +346,7 @@ class MaskedAutoencoderViT(nn.Module):
 
 		return x_masked, mask, ids_restore
 	
-	def prepare_tokens(self, x, mask_ratio, **kwargs):
+	def prepare_tokens(self, x, mask_ratio):
 		B, nc, w, h = x.shape
 		# embed patches
 		x = self.patch_embed(x)  
@@ -356,7 +356,7 @@ class MaskedAutoencoderViT(nn.Module):
 		x = x + pos_embed[:, 1:, :]
 
 		# masking: length -> length * mask_ratio
-		x, mask, ids_restore = self.random_masking(x, mask_ratio, **kwargs)
+		x, mask, ids_restore = self.random_masking(x, mask_ratio)
 		# append cls token
 		cls_token = self.cls_token + self.pos_embed[:, :1, :]
 		cls_tokens = cls_token.expand(x.shape[0], -1, -1)
@@ -391,21 +391,16 @@ class MaskedAutoencoderViT(nn.Module):
 		patch_pos_embed = patch_pos_embed.permute(0, 2, 3, 1).view(1, -1, dim)
 		return torch.cat((class_pos_embed.unsqueeze(0), patch_pos_embed), dim=1)
 
-	def forward_encoder(self, x, mask_ratio, mean_pool, return_all, **kwargs):
-		x, mask, ids_restore = self.prepare_tokens(x, mask_ratio, **kwargs)
+	def forward_encoder(self, x, mask_ratio):
+		x, mask, ids_restore = self.prepare_tokens(x, mask_ratio)
 		# apply Transformer blocks
 		for blk in self.blocks:
 			x = blk(x)
 		x = self.norm(x)
-		if return_all:
-			return x, mask, ids_restore
-		elif mean_pool:
-			return torch.mean(x[:, 1:], dim=1).contiguous(), mask, ids_restore
-		return x[:, 0].contiguous(), mask, ids_restore
+		return x, mask, ids_restore
 
-
-	def get_intermediate_layers(self, x, mask_ratio, **kwargs):
-		x, _, _ = self.prepare_tokens(x, mask_ratio, **kwargs)
+	def get_intermediate_layers(self, x, mask_ratio):
+		x, _, _ = self.prepare_tokens(x, mask_ratio)
 		output = []
 		for i, blk in enumerate(self.blocks):
 			x = blk(x)
@@ -457,13 +452,20 @@ class MaskedAutoencoderViT(nn.Module):
 		loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
 		return loss
 
-	def forward(self, imgs, mask_ratio=0, mean_pool=False, return_all=False, masked_recon=False, **kwargs):
-		latent, mask, ids_restore = self.forward_encoder(imgs, mask_ratio, mean_pool, return_all, **kwargs)
+	def forward(self, imgs, mask_ratio=0, mean_pool=False, return_all=False, masked_recon=False):
+		x, mask, ids_restore = self.forward_encoder(imgs, mask_ratio)
+		
+		if return_all:
+			latent = x
+		elif mean_pool:
+			latent = torch.mean(x[:, 1:], dim=1).contiguous()
+		else:
+			latent = x[:, 0].contiguous()
+		
 		if masked_recon:
-			pred = self.forward_decoder(latent, ids_restore)  # [N, L, p*p*3]
+			pred = self.forward_decoder(x, ids_restore)  # [N, L, p*p*3]
 			loss = self.forward_loss(imgs, pred, mask)
-			# return loss, pred, mask
-			return loss, latent
+			return latent, loss
 		return latent
 
 	def forward_viz(self, imgs, mask_ratio=0, **kwargs):
@@ -477,8 +479,8 @@ class MaskedAutoencoderViT(nn.Module):
 		errormap = ((recons - imgs) ** 2).sqrt()
 		return loss, recons, errormap, mask.reshape(mask.shape[0], *self.grid_size())
 
-	def forward_attn(self, imgs, mask_ratio=0, **kwargs):
-		x, mask, ids_restore = self.prepare_tokens(imgs, mask_ratio, **kwargs)
+	def forward_attn(self, imgs, mask_ratio=0):
+		x, mask, ids_restore = self.prepare_tokens(imgs, mask_ratio)
 		attns = []
 		for blk in self.blocks:
 			attn = blk(x, return_attention=True)
@@ -490,7 +492,8 @@ class MaskedAutoencoderViT(nn.Module):
 def mae_vit_base_patchX(patch_size, **kwargs):
 	model = MaskedAutoencoderViT(
 		patch_size=patch_size, embed_dim=768, depth=12, num_heads=12,
-		mlp_ratio=4, norm_layer=partial(nn.LayerNorm, eps=1e-6), 
+		mlp_ratio=4, norm_layer=partial(nn.LayerNorm, eps=1e-6),
+		decoder_embed_dim=384, decoder_depth=4, decoder_num_heads=6,
 		**kwargs)
 	return model
 
@@ -506,7 +509,7 @@ def mae_vit_small_patchX(patch_size, **kwargs):
 def mae_vit_tiny_patchX(patch_size, **kwargs):
 	model = MaskedAutoencoderViT(
 		patch_size=patch_size, embed_dim=192, depth=12, num_heads=3,
-		mlp_ratio=4, norm_layer=partial(nn.LayerNorm, eps=1e-6), 
+		mlp_ratio=4, norm_layer=partial(nn.LayerNorm, eps=1e-6),
 		**kwargs)
 	return model
 
@@ -534,7 +537,8 @@ def mae_vitc_base_patchX(patch_size, **kwargs):
 	model = MaskedAutoencoderViT(
 		patch_size=patch_size, embed_dim=768, depth=11, num_heads=12,
 		mlp_ratio=4, norm_layer=partial(nn.LayerNorm, eps=1e-6), 
-		conv_stem=True, 
+		conv_stem=True,
+		decoder_embed_dim=384, decoder_depth=4, decoder_num_heads=6,
 		**kwargs)
 	return model
 
