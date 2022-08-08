@@ -5,12 +5,12 @@ import time
 import datetime
 import wandb
 import math
-import random
 import sys
 import logging
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader
 import torchvision
@@ -22,6 +22,7 @@ from utils.torch_mlp_clf import TorchMLPClassifier
 import datasets
 from model import ModelWrapper, BarlowTwinsHead
 
+off_diagonal = utils.off_diagonal
 
 CLASSES = dict(
 	fsd50k=200,
@@ -60,12 +61,7 @@ def train_one_epoch(args, epoch, model, barlow_twins_loss, data_loader, optimize
 		# mask ratio
 		if args.mask:
 			if args.random_mask_ratio:
-				# randomly sample r ~ U(0.02, 0.2) with p = 0.5
-				if random.random() > 0.5:
-					mask_ratio = np.random.uniform(0.02, 0.2)
-				# r = 0 with p = 0.5
-				else:
-					mask_ratio = 0
+				mask_ratio = utils.generate_random(low=0.02, high=0.2, p=0.5)
 			else:
 				mask_ratio = args.mask_ratio
 		else:
@@ -73,16 +69,35 @@ def train_one_epoch(args, epoch, model, barlow_twins_loss, data_loader, optimize
 
 		# forward passes + compute barlow twins loss
 		with torch.cuda.amp.autocast(enabled=(fp16_scaler is not None)):
+			# get global views
 			teacher_output = model(
-				images[:1],  # only the 1 global crop passed through the teacher 
-				mask_ratio=mask_ratio,
-				ncrops=1,
+				images[:2],  # global crops passed through the teacher
+				ncrops=2,
 			)
 			student_output = model(
-				images[1:],  # 1 global crop + all local crops passed through the student
-				ncrops=args.local_crops_number+1,
+				images[:2],  # global crops passed through the student
+				ncrops=2,
+				mask_ratio=mask_ratio,
 			)
-			loss = barlow_twins_loss(student_output, teacher_output)
+			student_mask = None
+			if len(student_output) == 3:
+				student_mask = student_output[-1]
+				student_output = student_output[:-1]
+			
+			# get local views
+			model_without_ddp = model
+			if args.distributed:
+				model_without_ddp = model.module
+			model_without_ddp.backbone.masked_im_modeling = False
+			student_local_cls = model(images[2:], n_crops=args.local_crops_number)[0] if len(images) > 2 else None  # local crops passed through the student
+			model_without_ddp.backbone.masked_im_modeling = args.use_masked_im_modeling
+
+			loss_dict = barlow_twins_loss(student_output, teacher_output, student_local_cls, student_mask)
+			loss = loss_dict.get('loss')
+			if args.use_masked_im_modeling:
+				cls_loss = loss_dict.get('cls')
+				patch_loss = loss_dict.get('patch')
+		
 		forward_time = time.time() - tflag 
 		tflag = time.time()
 
@@ -102,6 +117,9 @@ def train_one_epoch(args, epoch, model, barlow_twins_loss, data_loader, optimize
 
 		total_num += args.batch_size_per_gpu
 		total_loss += loss.item() * args.batch_size_per_gpu
+		if args.use_masked_im_modeling:
+			total_cls_loss += cls_loss.item() * args.batch_size_per_gpu
+			total_patch_loss += patch_loss.item() * args.batch_size_per_gpu
 
 		total_data_time += data_time
 		total_forward_time += forward_time 
@@ -118,10 +136,95 @@ def train_one_epoch(args, epoch, model, barlow_twins_loss, data_loader, optimize
 						epoch, iteration, total_loss / total_num))
 		if wandb_run is not None:
 			wandb_run.log({'Loss': total_loss / total_num})
+			if args.use_masked_im_modeling:
+				wandb_run.log({'CLS loss': total_cls_loss / total_num})
+				wandb_run.log({'Patch loss': total_patch_loss / total_num})
+
 
 		tflag = time.time()
 		
 	return total_loss / total_num
+
+
+class BarlowTwinsLoss(nn.Module):
+	def __init__(self, cfg, ncrops, tau=0.1, lambd1=1, lambd2=1.):
+		super().__init__()
+		self.cfg = cfg
+		self.ncrops = ncrops
+		self.tau = tau
+		self.lambd1 = lambd1
+		self.lambd2 = lambd2
+
+	def forward_loss(self, z1, z2):
+		# empirical cross-correlation matrix
+		c = z1.T @ z2
+		# sum the cross-correlation matrix between all gpus
+		c.div_(z1.shape[0])
+		if utils.is_dist_avail_and_initialized():
+			torch.distributed.all_reduce(c)
+		
+		on_diag = torch.diagonal(c).add_(-1).pow_(2).sum()
+		if self.cfg.HSIC:
+			# encouraging off_diag to be negative ones
+			off_diag = off_diagonal(c).add_(1).pow_(2).sum()
+		else:
+			off_diag = off_diagonal(c).pow_(2).sum()
+		loss = self.cfg.alpha * on_diag + self.cfg.lmbda * off_diag
+		return loss
+
+	def forward(self, student_output, teacher_output, student_local_cls, student_mask):
+
+		# student_output = [((N * 2) x projector_out_dim), ((N * 2) x L x projector_out_dim)]
+		# teacher_output = [((N * 2) x projector_out_dim), ((N * 2) x L x projector_out_dim)]
+		# student_local_cls = (N * local_crops_number) x projector_out_dim
+		# student mask = [(N * 2) x L]
+
+		student_cls, student_patch = student_output
+		teacher_cls, teacher_patch = teacher_output
+		if student_local_cls is not None:
+			student_cls = torch.cat([student_cls, student_local_cls])  # student_cls.shape[0] = N * (2 + local_crops_number)
+
+		student_cls_c = student_cls.chunk(self.ncrops)  # 2 global crops + local crops
+		student_patch_c = student_patch.chunk(2)
+		teacher_cls_c = teacher_cls.chunk(2)  # 2 global crops
+
+		teacher_patch_c = F.softmax(teacher_patch / self.tau, dim=-1)
+		teacher_patch_c = teacher_patch.chunk(2)
+
+		if student_mask is not None:
+			student_mask = student_mask.chunk(2)  # 2 global crops
+			total_loss1, n_loss_terms1 = 0, 0
+			total_loss2, n_loss_terms2 = 0, 0
+			for q in range(len(teacher_cls_c)):
+				for v in range(len(student_cls_c)):
+					if v == q:  # same global crop -> MIM loss
+						loss2 = torch.sum(-teacher_patch_c[q] * F.log_softmax(student_patch_c[v] / self.tau, dim=-1), dim=-1)  # loss2 = N x L
+						mask = student_mask[v] # mask = N x L
+						loss2 = torch.sum(loss2 * mask.float(), dim=-1) / mask.sum(dim=-1).clamp(min=1.0)
+						total_loss2 += loss2.mean()
+						n_loss_terms2 += 1
+					else:  # different crop -> Barlow Twins loss
+						loss1 = self.forward_loss(teacher_cls[q], student_cls_c[v])
+						total_loss1 += loss1
+						n_loss_terms1 += 1
+				
+			total_loss1 = total_loss1 / n_loss_terms1 * self.lambd1
+			total_loss2 = total_loss2 / n_loss_terms2 * self.lambd2
+			total_loss = dict(cls=total_loss1, patch=total_loss2, loss=total_loss1 + total_loss2)
+		else:
+			total_loss = 0
+			n_loss_terms = 0
+			for q in range(len(teacher_cls_c)):
+				for v in range(len(student_cls_c)):
+					if v == q:
+						continue	
+					loss = self.forward_loss(teacher_cls[q], student_cls_c[v])
+					total_loss += loss
+					n_loss_terms += 1
+			total_loss /= n_loss_terms
+			total_loss = dict(loss=total_loss)
+
+		return total_loss
 
 
 @torch.no_grad()

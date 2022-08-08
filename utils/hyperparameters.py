@@ -78,7 +78,7 @@ def get_std_parameters():
 	parser.add_argument('--use_cls', action='store_true', default=True)
 	parser.add_argument('--use_mean_pool', action='store_true', default=False)
 	parser.add_argument('--patch_size', nargs='+', type=int, default=[16, 16])
-	parser.add_argument('--ibot', action='store_true', default=False)
+	parser.add_argument('--use_masked_im_modeling', action='store_true', default=False)
 
 	parser.add_argument('--optimizer', type=str, default=None)
 	parser.add_argument('--lr', type=float, default=None)
