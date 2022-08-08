@@ -202,13 +202,11 @@ class BarlowTwinsLoss(nn.Module):
 			for q in range(len(teacher_cls_c)):
 				for v in range(len(student_cls_c)):
 					if v == q:  # same global crop -> MIM Barlow Twins loss
-						loss2 = None
+						loss2 = []
 						for i in range(teacher_patch_c[q].shape[1]):
 							_loss = self.forward_loss(teacher_patch_c[q][:, i], student_patch_c[v][:, i]) 
-							if loss2 is None:
-								loss2 = _loss
-							else:
-								loss2 = torch.cat((loss2, _loss))
+							loss2.append(_loss)
+						loss2 = torch.tensor(loss2, device='cuda')
 						mask = student_mask[v][0] # mask = (N,L), but the same for every batch sample -> mask = (L,)
 						loss2 = torch.sum(loss2 * mask.float(), dim=-1) / mask.sum(dim=-1).clamp(min=1.0)
 						total_loss2 += loss2
@@ -413,16 +411,16 @@ if __name__ == '__main__':
 	timestamp = datetime.datetime.now().strftime('%H:%M_%h%d')
 	save_name = '{}_{}_epochs'.format(args.model_type, args.epochs) if args.name == '' else '{}_{}'.format(args.model_type, args.name)
 	save_name += timestamp
-	# if utils.is_main_process():
-	# 	wandb_run = wandb.init(
-	# 			project='Pre-training {}'.format(args.dataset),
-	# 			config=args,
-	# 			settings=wandb.Settings(start_method="fork"),
-	# 			name=save_name,
-	# 		)
-	# else:
-	# 	wandb_run = None
-	wandb_run = None
+	if utils.is_main_process():
+		wandb_run = wandb.init(
+				project='Pre-training {}'.format(args.dataset),
+				config=args,
+				settings=wandb.Settings(start_method="fork"),
+				name=save_name,
+			)
+	else:
+		wandb_run = None
+
 
 	# logging
 	if utils.is_main_process():
