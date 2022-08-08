@@ -193,7 +193,6 @@ class BarlowTwinsLoss(nn.Module):
 		teacher_cls_c = teacher_cls.chunk(2)  # 2 global crops
 
 		if teacher_patch is not None:
-			teacher_patch_c = F.softmax(teacher_patch / self.tau, dim=-1)
 			teacher_patch_c = teacher_patch.chunk(2)
 
 		if student_mask is not None:
@@ -202,12 +201,17 @@ class BarlowTwinsLoss(nn.Module):
 			total_loss2, n_loss_terms2 = 0, 0
 			for q in range(len(teacher_cls_c)):
 				for v in range(len(student_cls_c)):
-					if v == q:  # same global crop -> MIM loss
-						loss2 = torch.sum(-teacher_patch_c[q] * F.log_softmax(student_patch_c[v] / self.tau, dim=-1), dim=-1)  # loss2 = N x L
-						sys.exit(1)
-						mask = student_mask[v] # mask = N x L
+					if v == q:  # same global crop -> MIM Barlow Twins loss
+						loss2 = None
+						for i in range(teacher_patch_c[q].shape[1]):
+							_loss = self.forward_loss(teacher_patch_c[q][:, i], student_patch_c[v][:, i]) 
+							if loss2 is None:
+								loss2 = _loss
+							else:
+								loss2 = torch.cat((loss2, _loss))
+						mask = student_mask[v][0] # mask = (N,L), but the same for every batch sample -> mask = (L,)
 						loss2 = torch.sum(loss2 * mask.float(), dim=-1) / mask.sum(dim=-1).clamp(min=1.0)
-						total_loss2 += loss2.mean()
+						total_loss2 += loss2
 						n_loss_terms2 += 1
 					else:  # different crop -> Barlow Twins loss
 						loss1 = self.forward_loss(teacher_cls_c[q], student_cls_c[v])

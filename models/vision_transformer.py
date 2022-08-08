@@ -302,7 +302,8 @@ class VisionTransformer(nn.Module):
 		else:
 			len_keep = int(L * (1 - mask_ratio))
 			# Random mask
-			noise = torch.rand(N, L, device=x.device)  # noise in [0, 1]
+			# Same mask for each batch sample
+			noise = torch.rand(1, L, device=x.device).repeat(N, 1)  # noise in [0, 1]
 			# sort noise for each sample
 			ids_shuffle = torch.argsort(noise, dim=1)  # ascend: small is keep, large is remove
 			ids_restore = torch.argsort(ids_shuffle, dim=1)

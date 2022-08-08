@@ -40,8 +40,8 @@ class BarlowTwinsHead(nn.Module):
 		for _x in x_crops:
 			# _x = N x L x D
 			_z_cls = self.bn(self.projector(_x[:, 0]))  # _z_cls = N x projector_out_dim
-			_z_patch = [F.normalize(self.projector(_x[:, i]), dim=-1, p=2).unsqueeze(1) for i in range(_x.shape[1] - 1)]
-			_z_patch = torch.cat(_z_patch, dim=1)  # _z_patch = N x L x projector_out_dim (don't apply final bn)
+			_z_patch = [self.bn(self.projector(_x[:, i])).unsqueeze(1) for i in range(_x.shape[1] - 1)]
+			_z_patch = torch.cat(_z_patch, dim=1)  # _z_patch = N x L x projector_out_dim
 			z_cls = torch.cat((z_cls, _z_cls))
 			z_patch = torch.cat((z_patch, _z_patch))
 		return z_cls, z_patch
