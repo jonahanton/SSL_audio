@@ -44,7 +44,7 @@ class PatchEmbed(nn.Module):
 
 
 class ConvStem(nn.Module):
-	"""
+	""" 
 	ConvStem, from Early Convolutions Help Transformers See Better, Tete et al. https://arxiv.org/abs/2106.14881
 	Copy-paste from https://github.com/facebookresearch/moco-v3/blob/main/vits.py
 	"""
@@ -137,7 +137,7 @@ class AttentionKBiasZero(nn.Module):
 		x = (attn @ v).transpose(1, 2).reshape(B, N, C)
 		x = self.proj(x)
 		x = self.proj_drop(x)
-
+		
 		return x, attn
 
 
@@ -163,22 +163,26 @@ class BlockKBiasZero(nn.Module):
 		return x
 
 
-class VisionTransformer(nn.Module):
-	""" VisionTransformer
+class MaskedAutoencoderViT(nn.Module):
+	""" Masked Autoencoder with VisionTransformer backbone
 	"""
 	def __init__(self, img_size=(64, 96), patch_size=(16, 16), in_chans=1,
 				 embed_dim=768, depth=12, num_heads=12, conv_stem=False,
-				 use_learned_pos_embd=False, masked_im_modeling=False, return_all_tokens=False,
-				 mlp_ratio=4., norm_layer=nn.LayerNorm,
-				 block_cls=BlockKBiasZero, drop_path_rate=0.):
+				 use_decoder=False, use_learned_pos_embd=False,
+				 decoder_embed_dim=384, decoder_depth=8, decoder_num_heads=12,
+				 mlp_ratio=4., norm_layer=nn.LayerNorm, norm_pix_loss=False,
+				 block_cls=BlockKBiasZero, use_2d_dec_pos_embd=False,
+				 drop_path_rate=0.):
 		super().__init__()
 		self.img_size = img_size
 		self.in_chans = in_chans
 		self.embed_dim = embed_dim
 		self.conv_stem = conv_stem
+		self.use_decoder = use_decoder
 		self.use_learned_pos_embd = use_learned_pos_embd
-		self.return_all_tokens = return_all_tokens
 
+		# --------------------------------------------------------------------------
+		# MAE encoder specifics
 		if conv_stem:
 			self.patch_embed = ConvStem(img_size, patch_size, in_chans, embed_dim)
 		else:
@@ -191,6 +195,7 @@ class VisionTransformer(nn.Module):
 		total_patches = num_patches + 1
 		self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
 
+		
 		if use_learned_pos_embd:
 			self.pos_embed = nn.Parameter(torch.zeros(1, total_patches, embed_dim))
 		else:
@@ -201,14 +206,28 @@ class VisionTransformer(nn.Module):
 			block_cls(embed_dim, num_heads, mlp_ratio, qkv_bias=True, norm_layer=norm_layer, drop_path=dpr[i])
 			for i in range(depth)])
 		self.norm = norm_layer(embed_dim)
+		# --------------------------------------------------------------------------
 
-		# masked image modeling
-		self.masked_im_modeling = masked_im_modeling
-		if masked_im_modeling:
-			self.mask_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
+		# --------------------------------------------------------------------------
+		# MAE decoder specifics
+		if use_decoder:
+			self.decoder_embed = nn.Linear(embed_dim, decoder_embed_dim, bias=True)
 
-		self.initialize_weights()
+			self.mask_token = nn.Parameter(torch.zeros(1, 1, decoder_embed_dim))
 
+			self.decoder_pos_embed = nn.Parameter(torch.zeros(1, total_patches, decoder_embed_dim), requires_grad=False)  # fixed sin-cos embedding
+
+			self.decoder_blocks = nn.ModuleList([
+				block_cls(decoder_embed_dim, decoder_num_heads, mlp_ratio, qkv_bias=True, norm_layer=norm_layer)
+				for i in range(decoder_depth)])
+
+			self.decoder_norm = norm_layer(decoder_embed_dim)
+			self.decoder_pred = nn.Linear(decoder_embed_dim, self.img_patch_dim(), bias=True) # decoder to patch
+		# --------------------------------------------------------------------------
+
+		self.norm_pix_loss = norm_pix_loss
+		self.initialize_weights(use_2d_dec_pos_embd)
+		
 
 	def patch_size(self):
 		return self.patch_embed.proj.kernel_size
@@ -220,7 +239,7 @@ class VisionTransformer(nn.Module):
 		patch_size = self.patch_size()
 		return patch_size[0] * patch_size[1] * self.in_chans
 
-	def initialize_weights(self):
+	def initialize_weights(self, use_2d_dec_pos_embd=False):
 		# initialization
 		if self.use_learned_pos_embd:
 			torch.nn.init.normal_(self.pos_embed, std=.02)
@@ -229,6 +248,14 @@ class VisionTransformer(nn.Module):
 			pos_embed = get_2d_sincos_pos_embed(self.pos_embed.shape[-1], self.grid_size())
 			self.pos_embed.data.copy_(torch.from_numpy(pos_embed).float().unsqueeze(0))
 
+		if self.use_decoder:
+			if use_2d_dec_pos_embd:
+				decoder_pos_embed = get_2d_sincos_pos_embed(self.decoder_pos_embed.shape[-1], self.grid_size())
+			else:
+				grid_patches = self.grid_size()[0] * self.grid_size()[1]
+				decoder_pos_embed = get_sinusoid_encoding_table(grid_patches, self.decoder_pos_embed.shape[-1])
+			self.decoder_pos_embed.data.copy_(torch.from_numpy(decoder_pos_embed).float().unsqueeze(0))
+
 		# initialize patch_embed like nn.Linear (instead of nn.Conv2d)
 		if not self.conv_stem:
 			w = self.patch_embed.proj.weight.data # shape=torch.Size([768, 1, 16, 16])
@@ -236,7 +263,7 @@ class VisionTransformer(nn.Module):
 
 		# timm's trunc_normal_(std=.02) is effectively normal_(std=0.02) as cutoff is too big (2.)
 		torch.nn.init.normal_(self.cls_token, std=.02)
-		if self.masked_im_modeling:
+		if self.use_decoder:
 			torch.nn.init.normal_(self.mask_token, std=.02)
 
 		# initialize nn.Linear and nn.LayerNorm
@@ -273,7 +300,7 @@ class VisionTransformer(nn.Module):
 		ph, pw = self.patch_size()
 		h, w = self.grid_size()
 		assert h * w == x.shape[1]
-
+		
 		x = x.reshape(shape=(x.shape[0], h, w, ph, pw, self.in_chans))
 		x = torch.einsum('nhwpqc->nchpwq', x)
 		imgs = x.reshape(shape=(x.shape[0], self.in_chans, h * ph, w * pw))
@@ -309,15 +336,7 @@ class VisionTransformer(nn.Module):
 
 		# keep the first subset
 		ids_keep = ids_shuffle[:, :len_keep]
-
 		x_masked = torch.gather(x, dim=1, index=ids_keep.unsqueeze(-1).repeat(1, 1, D))
-
-		if self.masked_im_modeling:
-			# instead of removing masked patches entirely, replace them with mask tokens
-			mask_tokens = self.mask_token.repeat(N, L - len_keep, 1)
-			x_ = torch.cat([x_masked, mask_tokens], dim=1)
-			x_ = torch.gather(x_, dim=1, index=ids_restore.unsqueeze(-1).repeat(1, 1, D))  # unshuffle
-			x_masked = x_
 
 		# generate the binary mask: 0 is keep, 1 is remove
 		mask = torch.ones([N, L], device=x.device)
@@ -325,30 +344,23 @@ class VisionTransformer(nn.Module):
 		# unshuffle to get the binary mask
 		mask = torch.gather(mask, dim=1, index=ids_restore)
 
-		# [mask] = [N, L] (binary mask)
-		# [ids_restore] = [N, L]
 		return x_masked, mask, ids_restore
-
+	
 	def prepare_tokens(self, x, mask_ratio, **kwargs):
 		B, nc, w, h = x.shape
 		# embed patches
-		x = self.patch_embed(x)
-
-		# masking: 
-		# if masked_im_modeling (replace masked patches with mask token): 
-		# 	length -> length
-		# else:
-		# 	length -> length * mask_ratio
-		x, mask, ids_restore = self.random_masking(x, mask_ratio, **kwargs)
-
-		# add the [CLS] token to the embed patch tokens
-		cls_tokens = self.cls_token.expand(x.shape[0], -1, -1)
-		x = torch.cat((cls_tokens, x), dim=1)
+		x = self.patch_embed(x)  
 
 		# interpolate pos encodings
 		pos_embed = self.interpolate_pos_encoding(x, w, h)
-		# add positional encoding to each token
-		x = x + pos_embed
+		x = x + pos_embed[:, 1:, :]
+
+		# masking: length -> length * mask_ratio
+		x, mask, ids_restore = self.random_masking(x, mask_ratio, **kwargs)
+		# append cls token
+		cls_token = self.cls_token + self.pos_embed[:, :1, :]
+		cls_tokens = cls_token.expand(x.shape[0], -1, -1)
+		x = torch.cat((cls_tokens, x), dim=1)
 
 		return x, mask, ids_restore
 
@@ -379,14 +391,13 @@ class VisionTransformer(nn.Module):
 		patch_pos_embed = patch_pos_embed.permute(0, 2, 3, 1).view(1, -1, dim)
 		return torch.cat((class_pos_embed.unsqueeze(0), patch_pos_embed), dim=1)
 
-	def forward_encoder(self, x, mask_ratio, mean_pool, return_all_tokens, **kwargs):
+	def forward_encoder(self, x, mask_ratio, mean_pool, return_all, **kwargs):
 		x, mask, ids_restore = self.prepare_tokens(x, mask_ratio, **kwargs)
 		# apply Transformer blocks
 		for blk in self.blocks:
 			x = blk(x)
 		x = self.norm(x)
-		return_all_tokens = self.return_all_tokens if return_all_tokens is None else return_all_tokens
-		if return_all_tokens:
+		if return_all:
 			return x, mask, ids_restore
 		elif mean_pool:
 			return torch.mean(x[:, 1:], dim=1).contiguous(), mask, ids_restore
@@ -402,11 +413,69 @@ class VisionTransformer(nn.Module):
 
 		return output
 
-	def forward(self, imgs, mask_ratio=0, mean_pool=False, return_all_tokens=None, **kwargs):
-		latent, mask, ids_restore = self.forward_encoder(imgs, mask_ratio, mean_pool, return_all_tokens, **kwargs)
-		if self.masked_im_modeling and mask_ratio > 0:
-			return latent, mask
+	def forward_decoder(self, x, ids_restore):
+		# embed tokens
+		x = self.decoder_embed(x)
+
+		# append mask tokens to sequence
+		mask_tokens = self.mask_token.repeat(x.shape[0], ids_restore.shape[1] + 1 - x.shape[1], 1)
+		x_ = torch.cat([x[:, 1:, :], mask_tokens], dim=1)  # no cls token
+		x_ = torch.gather(x_, dim=1, index=ids_restore.unsqueeze(-1).repeat(1, 1, x.shape[2]))  # unshuffle
+		x = torch.cat([x[:, :1, :], x_], dim=1)  # append cls token
+
+		# add pos embed
+		x = x + self.decoder_pos_embed
+
+		# apply Transformer blocks
+		for blk in self.decoder_blocks:
+			x = blk(x)
+		x = self.decoder_norm(x)
+
+		# predictor projection
+		x = self.decoder_pred(x)
+
+		# remove cls token
+		x = x[:, 1:, :]
+
+		return x
+
+	def forward_loss(self, imgs, pred, mask):
+		"""
+		imgs: [N, C, H, W]
+		pred: [N, L, ph*pw*C]
+		mask: [N, L], 0 is keep, 1 is remove, 
+		"""
+		target = self.patchify(imgs)
+		if self.norm_pix_loss:
+			mean = target.mean(dim=-1, keepdim=True)
+			var = target.var(dim=-1, keepdim=True)
+			target = (target - mean) / (var + 1.e-6)**.5
+
+		loss = (pred - target) ** 2
+		loss = loss.mean(dim=-1)  # [N, L], mean loss per patch
+
+		loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
+		return loss
+
+	def forward(self, imgs, mask_ratio=0, mean_pool=False, return_all=False, masked_recon=False, **kwargs):
+		latent, mask, ids_restore = self.forward_encoder(imgs, mask_ratio, mean_pool, return_all, **kwargs)
+		if masked_recon:
+			pred = self.forward_decoder(latent, ids_restore)  # [N, L, p*p*3]
+			loss = self.forward_loss(imgs, pred, mask)
+			# return loss, pred, mask
+			return loss, latent
 		return latent
+
+	def forward_viz(self, imgs, mask_ratio=0, **kwargs):
+		loss, pred, mask = self.forward(imgs, mask_ratio, **kwargs)
+		# recons_as_is = self.unpatchify(pred)
+		# overwrite visible patches with original image.
+		pred_org_on_mask = pred.clone()
+		visible = (mask == 0.)
+		pred_org_on_mask[visible] = self.patchify(imgs)[visible]
+		recons = self.unpatchify(pred_org_on_mask)
+		errormap = ((recons - imgs) ** 2).sqrt()
+		return loss, recons, errormap, mask.reshape(mask.shape[0], *self.grid_size())
 
 	def forward_attn(self, imgs, mask_ratio=0, **kwargs):
 		x, mask, ids_restore = self.prepare_tokens(imgs, mask_ratio, **kwargs)
@@ -416,109 +485,109 @@ class VisionTransformer(nn.Module):
 			attns.append(attn)
 		attns = torch.stack(attns, dim=0)
 		return attns
+	
 
-
-def vit_base_patchX(patch_size, **kwargs):
-	model = VisionTransformer(
+def mae_vit_base_patchX(patch_size, **kwargs):
+	model = MaskedAutoencoderViT(
 		patch_size=patch_size, embed_dim=768, depth=12, num_heads=12,
-		mlp_ratio=4, norm_layer=partial(nn.LayerNorm, eps=1e-6),
+		mlp_ratio=4, norm_layer=partial(nn.LayerNorm, eps=1e-6), 
 		**kwargs)
 	return model
 
 
-def vit_small_patchX(patch_size, **kwargs):
-	model = VisionTransformer(
+def mae_vit_small_patchX(patch_size, **kwargs):
+	model = MaskedAutoencoderViT(
 		patch_size=patch_size, embed_dim=384, depth=12, num_heads=6,
-		mlp_ratio=4, norm_layer=partial(nn.LayerNorm, eps=1e-6),
+		mlp_ratio=4, norm_layer=partial(nn.LayerNorm, eps=1e-6), 
 		**kwargs)
 	return model
 
 
-def vit_tiny_patchX(patch_size, **kwargs):
-	model = VisionTransformer(
+def mae_vit_tiny_patchX(patch_size, **kwargs):
+	model = MaskedAutoencoderViT(
 		patch_size=patch_size, embed_dim=192, depth=12, num_heads=3,
-		mlp_ratio=4, norm_layer=partial(nn.LayerNorm, eps=1e-6),
+		mlp_ratio=4, norm_layer=partial(nn.LayerNorm, eps=1e-6), 
 		**kwargs)
 	return model
 
 
-def vit_base_patch16x16(**kwargs):
-	return vit_base_patchX([16, 16], **kwargs)
+def mae_vit_base_patch16x16(**kwargs):
+	return mae_vit_base_patchX([16, 16], **kwargs)
 
-def vit_base_patch8x8(**kwargs):
-	return vit_base_patchX([8, 8], **kwargs)
+def mae_vit_base_patch8x8(**kwargs):
+	return mae_vit_base_patchX([8, 8], **kwargs)
 
-def vit_small_patch16x16(**kwargs):
-	return vit_small_patchX([16, 16], **kwargs)
+def mae_vit_small_patch16x16(**kwargs):
+	return mae_vit_small_patchX([16, 16], **kwargs)
 
-def vit_small_patch8x8(**kwargs):
-	return vit_small_patchX([8, 8], **kwargs)
+def mae_vit_small_patch8x8(**kwargs):
+	return mae_vit_small_patchX([8, 8], **kwargs)
 
-def vit_tiny_patch16x16(**kwargs):
-	return vit_tiny_patchX([16, 16], **kwargs)
+def mae_vit_tiny_patch16x16(**kwargs):
+	return mae_vit_tiny_patchX([16, 16], **kwargs)
 
-def vit_tiny_patch8x8(**kwargs):
-	return vit_tiny_patchX([8, 8], **kwargs)
+def mae_vit_tiny_patch8x8(**kwargs):
+	return mae_vit_tiny_patchX([8, 8], **kwargs)
 
 
-def vitc_base_patchX(patch_size, **kwargs):
-	model = VisionTransformer(
+def mae_vitc_base_patchX(patch_size, **kwargs):
+	model = MaskedAutoencoderViT(
 		patch_size=patch_size, embed_dim=768, depth=11, num_heads=12,
-		mlp_ratio=4, norm_layer=partial(nn.LayerNorm, eps=1e-6),
-		conv_stem=True,
+		mlp_ratio=4, norm_layer=partial(nn.LayerNorm, eps=1e-6), 
+		conv_stem=True, 
 		**kwargs)
 	return model
 
 
-def vitc_small_patchX(patch_size, **kwargs):
-	model = VisionTransformer(
+def mae_vitc_small_patchX(patch_size, **kwargs):
+	model = MaskedAutoencoderViT(
 		patch_size=patch_size, embed_dim=384, depth=11, num_heads=6,
-		mlp_ratio=4, norm_layer=partial(nn.LayerNorm, eps=1e-6),
-		conv_stem=True,
+		mlp_ratio=4, norm_layer=partial(nn.LayerNorm, eps=1e-6), 
+		conv_stem=True, 
 		**kwargs)
 	return model
 
 
-def vitc_tiny_patchX(patch_size, **kwargs):
-	model = VisionTransformer(
+def mae_vitc_tiny_patchX(patch_size, **kwargs):
+	model = MaskedAutoencoderViT(
 		patch_size=patch_size, embed_dim=192, depth=11, num_heads=3,
-		mlp_ratio=4, norm_layer=partial(nn.LayerNorm, eps=1e-6),
-		conv_stem=True,
+		mlp_ratio=4, norm_layer=partial(nn.LayerNorm, eps=1e-6), 
+		conv_stem=True, 
 		**kwargs)
 	return model
 
 
-def vitc_base_patch16x16(**kwargs):
-	return vitc_base_patchX([16, 16], **kwargs)
+def mae_vitc_base_patch16x16(**kwargs):
+	return mae_vitc_base_patchX([16, 16], **kwargs)
 
 
-def vitc_small_patch16x16(**kwargs):
-	return vitc_small_patchX([16, 16], **kwargs)
+def mae_vitc_small_patch16x16(**kwargs):
+	return mae_vitc_small_patchX([16, 16], **kwargs)
 
 
-def vitc_tiny_patch16x16(**kwargs):
-	return vitc_tiny_patchX([16, 16], **kwargs)
+def mae_vitc_tiny_patch16x16(**kwargs):
+	return mae_vitc_tiny_patchX([16, 16], **kwargs)
 
 
-def get_vit(size='base', patch_size=None, c=False, **kwargs):
+def get_mae_vit(size='base', patch_size=None, c=False, **kwargs):
 	if patch_size is None:
 		patch_size = [16, 16]
 	if c:
 		if size == 'base':
-			return vitc_base_patchX(patch_size, **kwargs)
+			return mae_vitc_base_patchX(patch_size, **kwargs)
 		elif size == 'small':
-			return vitc_small_patchX(patch_size, **kwargs)
+			return mae_vitc_small_patchX(patch_size, **kwargs)
 		elif size == 'tiny':
-			return vitc_tiny_patchX(patch_size, **kwargs)
+			return mae_vitc_tiny_patchX(patch_size, **kwargs)
 		else:
 			raise NotImplementedError(f'Size {size} is not supported')
 	else:
 		if size == 'base':
-			return vit_base_patchX(patch_size, **kwargs)
+			return mae_vit_base_patchX(patch_size, **kwargs)
 		elif size == 'small':
-			return vit_small_patchX(patch_size, **kwargs)
+			return mae_vit_small_patchX(patch_size, **kwargs)
 		elif size == 'tiny':
-			return vit_tiny_patchX(patch_size, **kwargs)
+			return mae_vit_tiny_patchX(patch_size, **kwargs)
 		else:
 			raise NotImplementedError(f'Size {size} is not supported')
 
@@ -527,7 +596,7 @@ def get_vit(size='base', patch_size=None, c=False, **kwargs):
 
 if __name__ == "__main__":
 
-	mae = vitc_base_patch16x16()
+	mae = mae_vitc_base_patch16x16()
 	x = torch.randn(128, 1, 64, 96)
 	attns = mae.forward_attn(x)
 	print(attns.shape)

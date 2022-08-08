@@ -10,7 +10,6 @@ import sys
 from tqdm import tqdm
 import numpy as np
 from einops import rearrange
-import random
 
 from utils.torch_mlp_clf import TorchMLPClassifier
 from itertools import chain
@@ -26,16 +25,46 @@ def off_diagonal(x):
 	assert n == m
 	return x.flatten()[:-1].view(n - 1, n + 1)[:, 1:].flatten()
 
-
-def generate_random(low, high, p):
-	assert low < high
-	assert 0 <= p <= 1
-	if random.random() > p:
-		return np.random.uniform(low, high)
-	return 0
-
-
 """------------------------------------Training utils---------------------------------------"""
+
+
+class BarlowTwinsLoss(nn.Module):
+	def __init__(self, cfg, ncrops):
+		super().__init__()
+		self.cfg = cfg
+		self.ncrops = ncrops
+
+	def forward_loss(self, z1, z2):
+		# empirical cross-correlation matrix
+		c = z1.T @ z2
+		# sum the cross-correlation matrix between all gpus
+		c.div_(z1.shape[0])
+		if is_dist_avail_and_initialized():
+			torch.distributed.all_reduce(c)
+		
+		on_diag = torch.diagonal(c).add_(-1).pow_(2).sum()
+		if self.cfg.HSIC:
+			# encouraging off_diag to be negative ones
+			off_diag = off_diagonal(c).add_(1).pow_(2).sum()
+		else:
+			off_diag = off_diagonal(c).pow_(2).sum()
+		loss = self.cfg.alpha * on_diag + self.cfg.lmbda * off_diag
+		return loss
+
+	def forward(self, student_output, teacher_output):
+
+		student_out = student_output.chunk(self.ncrops - 1)  # self.ncrops = 2 (global crops) + n local crops, student only gets 1 global crop
+		teacher_out = teacher_output  # teacher only gets 1 global crop
+
+		total_loss = 0
+		n_loss_terms = 0
+		for v in range(len(student_out)):
+			loss = self.forward_loss(teacher_out, student_out[v])
+			total_loss += loss
+			n_loss_terms += 1
+		total_loss /= n_loss_terms
+		return total_loss
+
 
 class MultiCropWrapper(nn.Module):
 	"""
@@ -51,8 +80,7 @@ class MultiCropWrapper(nn.Module):
 		self.backbone = backbone
 		self.head = head
 
-	def forward(self, x, ncrops=2, **kwargs):
-		mask = None
+	def forward(self, x, ncrops=1, **kwargs):
 		# convert to list
 		if not isinstance(x, list):
 			x = [x]
@@ -60,25 +88,16 @@ class MultiCropWrapper(nn.Module):
 			torch.tensor([inp.shape[-1] for inp in x]),
 			return_counts=True,
 		)[1], 0)
-		start_idx = 0
+		start_idx, output = 0, torch.empty(0).to(x[0].device)
 		for end_idx in idx_crops:
 			_out = self.backbone(torch.cat(x[start_idx: end_idx]), **kwargs)
-			# The output is a tuple if returning a mask
-			_mask = None
-			if isinstance(_out, tuple):
-				_out, _mask = _out
+			# The output is a tuple with XCiT model. See:
+			# https://github.com/facebookresearch/xcit/blob/master/xcit.py#L404-L405
+			if isinstance(_out, (tuple, list)):
+				_out = _out[0]
 			# accumulate outputs
-			if start_idx == 0:
-				output = _out
-				if _mask is not None:
-					mask = _mask
-			else:
-				output = torch.cat((output, _out))
-				if _mask is not None:
-					mask = torch.cat((mask, _mask))
+			output = torch.cat((output, _out))
 			start_idx = end_idx
-		if mask is not None:
-			return self.head(output, ncrops), mask
 		return self.head(output, ncrops)
 
 
@@ -238,7 +257,7 @@ def encode_vit(model, x, split_frames=True, use_cls=True):
 		if use_cls:
 			# [CLS] embeddings only
 			for i in range(x.shape[-1] // unit_frames):
-				emb = model(x[..., i*unit_frames:(i+1)*unit_frames], return_all_tokens=False)
+				emb = model(x[..., i*unit_frames:(i+1)*unit_frames])
 				emb = emb.unsqueeze(1)  # [emb] = [b, 1, d]
 				embeddings.append(emb)
 
@@ -247,7 +266,7 @@ def encode_vit(model, x, split_frames=True, use_cls=True):
 		else:
 			# stack embeddings
 			for i in range(x.shape[-1] // unit_frames):
-				emb = model(x[..., i*unit_frames:(i+1)*unit_frames], return_all_tokens=True)
+				emb = model(x[..., i*unit_frames:(i+1)*unit_frames], return_all=True)
 				emb = emb[:, 1:, :]
 				emb = rearrange(emb, ' b (f t) d -> b t (f d)', f=patch_fbins, d=embed_d)
 				embeddings.append(emb)

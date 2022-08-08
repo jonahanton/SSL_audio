@@ -122,7 +122,7 @@ class ViTModelWrapper(nn.Module):
 		if cls_only:
 			# [CLS] embeddings only
 			for i in range(x.shape[-1] // unit_frames):
-				emb = self.model(x[..., i*unit_frames:(i+1)*unit_frames], return_all_tokens=False)
+				emb = self.model(x[..., i*unit_frames:(i+1)*unit_frames])
 				emb = emb[:, :1]  # [emb] = [b, 1, d], n.b. emb = emb[:, 0] -> [emb] = [b, d]
 				embeddings.append(emb)
 
@@ -131,7 +131,7 @@ class ViTModelWrapper(nn.Module):
 		else:
 			# stack embeddings
 			for i in range(x.shape[-1] // unit_frames):
-				emb = self.model(x[..., i*unit_frames:(i+1)*unit_frames], return_all_tokens=True)
+				emb = self.model(x[..., i*unit_frames:(i+1)*unit_frames], return_all=True)
 				emb = emb[:, 1:, :]
 				emb = rearrange(emb, ' b (f t) d -> b t (f d)', f=patch_fbins, d=embed_d)
 				embeddings.append(emb)

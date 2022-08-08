@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 import copy
 
-from models import resnet, vision_transformer
+from models import resnet, mae
 from utils import utils
 
 off_diagonal = utils.off_diagonal
@@ -25,28 +25,14 @@ class BarlowTwinsHead(nn.Module):
 
 		self.bn = nn.BatchNorm1d(sizes[-1], affine=False)
 	
-	def forward(self, x, ncrops=2):
+	def forward(self, x, ncrops=1):
 		x_crops = x.chunk(ncrops)
-
-		if len(x.shape) == 2:  # x = (N * ncrops) x D 
-			z = torch.empty(0).to(x_crops[0].device)
-			for _x in x_crops:
-				_z = self.bn(self.projector(_x))
-				z = torch.cat((z, _z))
-			return z, None
-
-		z_cls = torch.empty(0).to(x_crops[0].device)
-		z_patch = torch.empty(0).to(x_crops[0].device)
+		z = torch.empty(0).to(x_crops[0].device)
 		for _x in x_crops:
-			# _x = N x L x D
-			_z_cls = self.bn(self.projector(_x[:, 0]))  # _z_cls = N x projector_out_dim
-			_z_patch = [F.normalize(self.projector(_x[:, i]), dim=-1, p=2).unsqueeze(1) for i in range(_x.shape[1] - 1)]
-			_z_patch = torch.cat(_z_patch, dim=1)  # _z_patch = N x L x projector_out_dim (don't apply final bn)
-			z_cls = torch.cat((z_cls, _z_cls))
-			z_patch = torch.cat((z_patch, _z_patch))
-		return z_cls, z_patch
-
-
+			_z = self.bn(self.projector(_x))
+			z = torch.cat((z, _z))
+		return z
+		
 
 class ModelWrapper(nn.Module):
 	
@@ -77,39 +63,35 @@ class ModelWrapper(nn.Module):
 				c=conv_stem_bool,
 				use_learned_pos_embd=self.cfg.use_learned_pos_embd,
 				use_mean_pool=self.cfg.use_mean_pool,
-				masked_im_modeling=self.cfg.use_masked_im_modeling,
-				return_all_tokens=True,
 			)
 		else:
 			raise NotImplementedError(f'Model type {self.cfg.model_type} is not supported')
 		self.feature_dim = self.encoder.embed_dim
 
-	def forward(self, x, mask_ratio=0,**kwargs):
+	def forward(self, x, mask_ratio=0):
 		if 'vit' in self.cfg.model_type:
-			return self.encoder(x, mask_ratio=mask_ratio, **kwargs)
-		return self.encoder(x, **kwargs)
+			return self.encoder(x, mask_ratio=mask_ratio)
+		return self.encoder(x)
 
 
 
 class ViT(nn.Module):
-	def __init__(self, dataset='fsd50k', size='base', patch_size=None, c=True, use_learned_pos_embd=False,
-			use_mean_pool=False, masked_im_modeling=False, return_all_tokens=True):
+	def __init__(self, dataset='fsd50k', size='base', patch_size=None, c=True, use_learned_pos_embd=False, use_mean_pool=False):
 		super().__init__()
 		
 		if patch_size is None:
 			patch_size = [16, 16]
 		if dataset == 'cifar10':
-			self.encoder = vision_transformer.get_vit(size, patch_size, c, use_learned_pos_embd=use_learned_pos_embd,
+			self.encoder = mae.get_mae_vit(size, patch_size, c, use_learned_pos_embd=use_learned_pos_embd,
 										img_size=(32,32), in_chans=3)
 		else:
-			self.encoder = vision_transformer.get_vit(size, patch_size, c, use_learned_pos_embd=use_learned_pos_embd,
-										masked_im_modeling=masked_im_modeling, return_all_tokens=return_all_tokens)
+			self.encoder = mae.get_mae_vit(size, patch_size, c, use_learned_pos_embd=use_learned_pos_embd)
 		
 		self.embed_dim = self.encoder.embed_dim
 		self.use_mean_pool = use_mean_pool
 
-	def forward(self, x, mask_ratio=0, **kwargs):
-		x = self.encoder(x, mask_ratio=mask_ratio, mean_pool=self.use_mean_pool, **kwargs)
+	def forward(self, x, mask_ratio=0):
+		x = self.encoder(x, mask_ratio=mask_ratio, mean_pool=self.use_mean_pool)
 		return x
 
 
@@ -163,7 +145,7 @@ class AudioNTT2022(AudioNTT2022Encoder):
 		super().__init__(n_mels=n_mels, d=d, mlp_hidden_d=mlp_hidden_d, squeeze_excitation=squeeze_excitation)
 		self.embed_dim = d
 
-	def forward(self, x, **kwargs):
+	def forward(self, x):
 		x = super().forward(x)
 		x = mean_max_pooling(x)
 		return x
