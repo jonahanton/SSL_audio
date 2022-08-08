@@ -38,6 +38,7 @@ if torch.cuda.is_available():
 def train_one_epoch(args, epoch, model, barlow_twins_loss, data_loader, optimizer, fp16_scaler, logger, wandb_run):
 	model.train()
 	total_loss, total_num, train_bar = 0, 0, tqdm(data_loader)
+	total_cls_loss, total_patch_loss = 0, 0 # For MIM
 	
 	total_data_time, total_forward_time, total_backward_time = 0, 0, 0
 	tflag = time.time()
@@ -80,9 +81,9 @@ def train_one_epoch(args, epoch, model, barlow_twins_loss, data_loader, optimize
 				mask_ratio=mask_ratio,
 			)
 			student_mask = None
-			if len(student_output) == 3:
-				student_mask = student_output[-1]
-				student_output = student_output[:-1]
+			if args.use_masked_im_modeling and mask_ratio > 0:
+				student_mask = student_output[1]
+				student_output = student_output[0]
 			
 			# get local views
 			model_without_ddp = model
@@ -94,9 +95,9 @@ def train_one_epoch(args, epoch, model, barlow_twins_loss, data_loader, optimize
 
 			loss_dict = barlow_twins_loss(student_output, teacher_output, student_local_cls, student_mask)
 			loss = loss_dict.get('loss')
-			if args.use_masked_im_modeling:
-				cls_loss = loss_dict.get('cls')
-				patch_loss = loss_dict.get('patch')
+			
+			cls_loss = loss_dict.get('cls')
+			patch_loss = loss_dict.get('patch')
 		
 		forward_time = time.time() - tflag 
 		tflag = time.time()
@@ -117,8 +118,9 @@ def train_one_epoch(args, epoch, model, barlow_twins_loss, data_loader, optimize
 
 		total_num += args.batch_size_per_gpu
 		total_loss += loss.item() * args.batch_size_per_gpu
-		if args.use_masked_im_modeling:
+		if cls_loss is not None:
 			total_cls_loss += cls_loss.item() * args.batch_size_per_gpu
+		if patch_loss is not None:
 			total_patch_loss += patch_loss.item() * args.batch_size_per_gpu
 
 		total_data_time += data_time
@@ -136,9 +138,10 @@ def train_one_epoch(args, epoch, model, barlow_twins_loss, data_loader, optimize
 						epoch, iteration, total_loss / total_num))
 		if wandb_run is not None:
 			wandb_run.log({'Loss': total_loss / total_num})
-			if args.use_masked_im_modeling:
-				wandb_run.log({'CLS loss': total_cls_loss / total_num})
-				wandb_run.log({'Patch loss': total_patch_loss / total_num})
+			if cls_loss is not None:
+				wandb_run.log({'cls loss': total_cls_loss / total_num})
+			if patch_loss is not None:
+				wandb_run.log({'patch loss': total_patch_loss / total_num})
 
 
 		tflag = time.time()
@@ -185,11 +188,13 @@ class BarlowTwinsLoss(nn.Module):
 			student_cls = torch.cat([student_cls, student_local_cls])  # student_cls.shape[0] = N * (2 + local_crops_number)
 
 		student_cls_c = student_cls.chunk(self.ncrops)  # 2 global crops + local crops
-		student_patch_c = student_patch.chunk(2)
+		if student_patch is not None:
+			student_patch_c = student_patch.chunk(2)
 		teacher_cls_c = teacher_cls.chunk(2)  # 2 global crops
 
-		teacher_patch_c = F.softmax(teacher_patch / self.tau, dim=-1)
-		teacher_patch_c = teacher_patch.chunk(2)
+		if teacher_patch is not None:
+			teacher_patch_c = F.softmax(teacher_patch / self.tau, dim=-1)
+			teacher_patch_c = teacher_patch.chunk(2)
 
 		if student_mask is not None:
 			student_mask = student_mask.chunk(2)  # 2 global crops
@@ -199,12 +204,13 @@ class BarlowTwinsLoss(nn.Module):
 				for v in range(len(student_cls_c)):
 					if v == q:  # same global crop -> MIM loss
 						loss2 = torch.sum(-teacher_patch_c[q] * F.log_softmax(student_patch_c[v] / self.tau, dim=-1), dim=-1)  # loss2 = N x L
+						sys.exit(1)
 						mask = student_mask[v] # mask = N x L
 						loss2 = torch.sum(loss2 * mask.float(), dim=-1) / mask.sum(dim=-1).clamp(min=1.0)
 						total_loss2 += loss2.mean()
 						n_loss_terms2 += 1
 					else:  # different crop -> Barlow Twins loss
-						loss1 = self.forward_loss(teacher_cls[q], student_cls_c[v])
+						loss1 = self.forward_loss(teacher_cls_c[q], student_cls_c[v])
 						total_loss1 += loss1
 						n_loss_terms1 += 1
 				
@@ -212,13 +218,14 @@ class BarlowTwinsLoss(nn.Module):
 			total_loss2 = total_loss2 / n_loss_terms2 * self.lambd2
 			total_loss = dict(cls=total_loss1, patch=total_loss2, loss=total_loss1 + total_loss2)
 		else:
+			# No MIM loss
 			total_loss = 0
 			n_loss_terms = 0
 			for q in range(len(teacher_cls_c)):
 				for v in range(len(student_cls_c)):
 					if v == q:
 						continue	
-					loss = self.forward_loss(teacher_cls[q], student_cls_c[v])
+					loss = self.forward_loss(teacher_cls_c[q], student_cls_c[v])
 					total_loss += loss
 					n_loss_terms += 1
 			total_loss /= n_loss_terms
@@ -402,15 +409,16 @@ if __name__ == '__main__':
 	timestamp = datetime.datetime.now().strftime('%H:%M_%h%d')
 	save_name = '{}_{}_epochs'.format(args.model_type, args.epochs) if args.name == '' else '{}_{}'.format(args.model_type, args.name)
 	save_name += timestamp
-	if utils.is_main_process():
-		wandb_run = wandb.init(
-				project='Pre-training {}'.format(args.dataset),
-				config=args,
-				settings=wandb.Settings(start_method="fork"),
-				name=save_name,
-			)
-	else:
-		wandb_run = None
+	# if utils.is_main_process():
+	# 	wandb_run = wandb.init(
+	# 			project='Pre-training {}'.format(args.dataset),
+	# 			config=args,
+	# 			settings=wandb.Settings(start_method="fork"),
+	# 			name=save_name,
+	# 		)
+	# else:
+	# 	wandb_run = None
+	wandb_run = None
 
 	# logging
 	if utils.is_main_process():
@@ -456,7 +464,7 @@ if __name__ == '__main__':
 		model_without_ddp = model
 
 	# prepare loss
-	barlow_twins_loss = utils.BarlowTwinsLoss(
+	barlow_twins_loss = BarlowTwinsLoss(
 		args,
 		ncrops=args.local_crops_number+2,  # total number of crops = 2 global crops + local_crops_number
 	).cuda()

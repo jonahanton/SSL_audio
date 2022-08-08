@@ -51,7 +51,7 @@ class MultiCropWrapper(nn.Module):
 		self.backbone = backbone
 		self.head = head
 
-	def forward(self, x, ncrops=1, **kwargs):
+	def forward(self, x, ncrops=2, **kwargs):
 		mask = None
 		# convert to list
 		if not isinstance(x, list):
@@ -64,16 +64,17 @@ class MultiCropWrapper(nn.Module):
 		for end_idx in idx_crops:
 			_out = self.backbone(torch.cat(x[start_idx: end_idx]), **kwargs)
 			# The output is a tuple if returning a mask
+			_mask = None
 			if isinstance(_out, tuple):
 				_out, _mask = _out
 			# accumulate outputs
 			if start_idx == 0:
 				output = _out
-				if mask is not None:
+				if _mask is not None:
 					mask = _mask
 			else:
 				output = torch.cat((output, _out))
-				if mask is not None:
+				if _mask is not None:
 					mask = torch.cat((mask, _mask))
 			start_idx = end_idx
 		if mask is not None:
