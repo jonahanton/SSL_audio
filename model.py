@@ -15,7 +15,7 @@ class BarlowTwinsHead(nn.Module):
 		self.cfg = cfg
 
 		sizes = [in_dim] + self.cfg.projector_n_hidden_layers*[self.cfg.projector_hidden_dim] + [self.cfg.projector_out_dim]
-		zlayers = []
+		layers = []
 		for i in range(len(sizes) - 2):
 			layers.append(nn.Linear(sizes[i], sizes[i + 1], bias=False))
 			layers.append(nn.BatchNorm1d(sizes[i + 1]))
