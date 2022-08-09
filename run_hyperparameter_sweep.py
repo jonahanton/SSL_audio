@@ -42,7 +42,7 @@ HYPERPARAMETERS = [
 	'projector_out_dim',
 	'mixup_ratio',
 	'virtual_crop_scale',
-	'random_mask_beta',
+	'mask_beta',
 ]
 
 CLASSES = dict(
@@ -100,13 +100,23 @@ def objective(trial):
 			weight_decay_filter=True, lars_adaptation_filter=True)
 
 	# Random masking ratio
-	if 'random_mask_beta' in args.tune:
+	if 'mask_beta' in args.tune:
 		assert args.mask
-		assert args.random_mask_ratio
-		args.random_mask_beta = trial.suggest_float("random_mask_beta", 0.05, 0.5)
+		assert args.sine_mask_ratio
+		args.mask_beta = trial.suggest_float("mask_beta", 0.05, 0.5)
 
 	# Get data
 	train_loader, eval_train_loader, eval_val_loader, eval_test_loader = get_data(trial)
+
+	mask_ratio_scheduler = None
+	if args.sine_mask_ratio:
+		mask_ratio_scheduler = utils.sine_scheduler_increase(
+			final_value=args.mask_beta,
+			epochs=args.train_epochs,
+			niter_per_ep=len(train_loader),
+			warmup_epochs=int(args.train_epochs / 5),
+			warmup_value=0,
+		)
 
 	# mixed precision
 	fp16_scaler = None
@@ -124,6 +134,7 @@ def objective(trial):
 			train_loader,
 			optimizer,
 			fp16_scaler,
+			mask_ratio_scheduler,
 		)
 		# Report intermediate objective value
 		score = evaluate(model.backbone.encoder, eval_train_loader, eval_val_loader, eval_test_loader)
@@ -264,34 +275,36 @@ def eval_linear(model, train_loader, val_loader, test_loader, use_fp16):
 	return score
 
 
-def train_one_epoch(epoch, model, barlow_twins_loss, data_loader, optimizer, fp16_scaler):
+def train_one_epoch(epoch, model, barlow_twins_loss, data_loader, optimizer, 
+					fp16_scaler, mask_ratio_scheduler):
 	model.train()
 	total_loss, total_num, train_bar = 0, 0, tqdm(data_loader)
 
 	total_data_time, total_forward_time, total_backward_time = 0, 0, 0
 	tflag = time.time()
-	for images, _ in train_bar:
+	for it, (images, _) in enumerate(train_bar):
 		data_time = time.time() - tflag
-		tflag = time.time()
+
+		it = it + (epoch - 1) * len(data_loader)  # global training iteration
 
 		# move images to gpu
 		images = [im.cuda(non_blocking=True) for im in images]
 
 		# mask ratio
 		if args.mask:
-			if args.random_mask_ratio:
-				# randomly sample r ~ U(0.05, beta) with p = 0.5
-				mask_ratio = utils.generate_random(l=0.05, h=args.random_mask_beta, p=0.5)
+			if mask_ratio_scheduler is not None:
+				mask_ratio = mask_ratio_scheduler[it]
 			else:
 				mask_ratio = args.mask_ratio
 		else:
 			mask_ratio = 0
 
+		tflag = time.time()
 		# forward passes + compute barlow twins loss
 		with torch.cuda.amp.autocast(enabled=(fp16_scaler is not None)):
 			teacher_output = model(
 				images[:1],  # only the 1 global crop passed through the teacher 
-				mask_ratio=args.mask_ratio,
+				mask_ratio=mask_ratio,
 				ncrops=1,
 			)
 			# masked recon
