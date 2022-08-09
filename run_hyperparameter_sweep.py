@@ -103,7 +103,7 @@ def objective(trial):
 	if 'random_mask_beta' in args.tune:
 		assert args.mask
 		assert args.random_mask_ratio
-		args.random_mask_beta = trial.suggest_float("random_mask_beta", 0.02, 0.5)
+		args.random_mask_beta = trial.suggest_float("random_mask_beta", 0.05, 0.5)
 
 	# Get data
 	train_loader, eval_train_loader, eval_val_loader, eval_test_loader = get_data(trial)
@@ -280,8 +280,8 @@ def train_one_epoch(epoch, model, barlow_twins_loss, data_loader, optimizer, fp1
 		# mask ratio
 		if args.mask:
 			if args.random_mask_ratio:
-				# randomly sample r ~ U(0.02, beta) with p = 0.5
-				mask_ratio = utils.generate_random(l=0.02, h=args.random_mask_beta, p=0.5)
+				# randomly sample r ~ U(0.05, beta) with p = 0.5
+				mask_ratio = utils.generate_random(l=0.05, h=args.random_mask_beta, p=0.5)
 			else:
 				mask_ratio = args.mask_ratio
 		else:
@@ -370,7 +370,6 @@ def get_nsynth_50h(trial):
 							args,
 							train_transform=True,
 							mixup_ratio=args.mixup_ratio,
-							virtual_crop_scale=args.virtual_crop_scale,
 						),
 						norm_stats=norm_stats),
 		batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=True,
@@ -407,7 +406,6 @@ def get_fsd50k(trial):
 							args,
 							train_transform=True,
 							mixup_ratio=args.mixup_ratio,
-							virtual_crop_scale=args.virtual_crop_scale,
 						),
 						norm_stats=norm_stats),
 		batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=True,
