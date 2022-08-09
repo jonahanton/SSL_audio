@@ -10,10 +10,11 @@ class BarlowTwinsLoss(nn.Module):
 		super().__init__()
 		self.cfg = cfg
 		self.ncrops = ncrops
+		self.bn = nn.BatchNorm1d(cfg.projector_out_dim, affine=False)
 
 	def forward_loss(self, z1, z2):
 		# empirical cross-correlation matrix
-		c = z1.T @ z2
+		c = self.bn(z1).T @ self.bn(z2)
 		# sum the cross-correlation matrix between all gpus
 		c.div_(z1.shape[0])
 		if utils.is_dist_avail_and_initialized():

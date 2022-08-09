@@ -11,7 +11,7 @@ off_diagonal = utils.off_diagonal
 
 
 class BarlowTwinsHead(nn.Module):
-	def __init__(self, cfg, in_dim, predictor=False):
+	def __init__(self, cfg, in_dim):
 		super().__init__()
 		self.cfg = cfg
 
@@ -23,31 +23,39 @@ class BarlowTwinsHead(nn.Module):
 			layers.append(nn.ReLU(inplace=True))
 		layers.append(nn.Linear(sizes[-2], sizes[-1], bias=False))
 		self.projector = nn.Sequential(*layers)
-
-		self.predictor = None
-		if predictor:
-			self.predictor = nn.Sequential(
-				nn.Linear(sizes[-1], sizes[-1], bias=False),
-				nn.BatchNorm1d(sizes[-1]),
-				nn.ReLU(inplace=True),
-				nn.Linear(sizes[-1], sizes[-1], bias=False),
-			)
-
-		self.bn = nn.BatchNorm1d(sizes[-1], affine=False)
-
 	
-	def forward(self, x, ncrops=1):
+	def forward(self, x, ncrops=2):
 		x_crops = x.chunk(ncrops)
 		z = torch.empty(0).to(x_crops[0].device)
 		for _x in x_crops:
 			_z = self.projector(_x)
-			if self.predictor is not None:
-				_z = self.predictor(_z)
-			_z = self.bn(_z)
 			z = torch.cat((z, _z))
 		return z
-		
 
+
+class BarlowTwinsPredictor(nn.Module):
+	def __init__(self, in_dim, use=True):
+		super().__init__()
+
+		self.predictor = nn.Identity()
+		if use:
+			self.predictor = nn.Sequential(
+				nn.Linear(in_dim, in_dim, bias=False),
+				nn.BatchNorm1d(in_dim),
+				nn.ReLU(inplace=True),
+				nn.Linear(in_dim, in_dim, bias=False),
+			)
+	
+	def forward(self, x, ncrops=2):
+		x_crops = x.chunk(ncrops)
+		z = torch.empty(0).to(x_crops[0].device)
+		for _x in x_crops:
+			_z = self.predictor(_x)
+			z = torch.cat((z, _z))
+		return z
+
+	
+	
 class ModelWrapper(nn.Module):
 	
 	def __init__(self, cfg):

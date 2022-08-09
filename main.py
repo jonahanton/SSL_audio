@@ -89,7 +89,11 @@ def train_one_epoch(args, epoch, model, barlow_twins_loss, data_loader, optimize
 				ncrops=args.local_crops_number+1,
 			)
 
-			bt_loss = barlow_twins_loss(student_output, teacher_output)
+			bt_loss = barlow_twins_loss(
+				student_output,
+				teacher_output,
+				ngcrops_each=1,
+				)
 
 		forward_time = time.time() - tflag 
 		tflag = time.time()
@@ -362,13 +366,7 @@ if __name__ == '__main__':
 	
 	# set up model for distributed training
 	if args.distributed:
-		model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
-		model = nn.parallel.DistributedDataParallel(
-			model,
-			device_ids=[args.gpu],
-			output_device=args.gpu,
-			)
-		model_without_ddp = model.module
+		model = utils.model_setup_ddp(args.gpu, model)
 	else:
 		model_without_ddp = model
 

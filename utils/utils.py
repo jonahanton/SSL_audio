@@ -350,3 +350,12 @@ def get_rank():
 	return dist.get_rank()
 
 
+def model_setup_ddp(gpu, model):
+	model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
+	model = nn.parallel.DistributedDataParallel(
+		model,
+		device_ids=[gpu],
+		output_device=gpu,
+	)
+	return model.module
+

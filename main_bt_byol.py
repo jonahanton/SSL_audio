@@ -8,6 +8,7 @@ import math
 import random
 import sys
 import logging
+from pprint import pprint
 
 import torch
 import torch.nn as nn
@@ -21,7 +22,7 @@ from utils.loss import BarlowTwinsLoss
 from utils import utils, transforms, hyperparameters
 from utils.torch_mlp_clf import TorchMLPClassifier
 import datasets
-from model import ModelWrapper, BarlowTwinsHead
+from model import ModelWrapper, BarlowTwinsHead, BarlowTwinsPredictor
 
 off_diagonal = utils.off_diagonal
 
@@ -77,20 +78,25 @@ def train_one_epoch(args, epoch, online_encoder, online_encoder_without_ddp,
 		# forward passes + compute barlow twins loss
 		with torch.cuda.amp.autocast(enabled=(fp16_scaler is not None)):
 			
+			# online encoder
 			online_output = online_encoder(
 				images[:2],
 				mask_ratio=mask_ratio,
 				masked_recon=args.masked_recon,
 				ncrops=2, # 2 global crops both passed through the online encoder 
 			)
-
+			# masked recon
 			if args.masked_recon:
 				online_output, recon_loss = online_output
+			# predictor
+			online_output = online_predictor(online_output)
 
+			# target encoder
 			target_output = target_encoder(
 				images,
 				ncrops=args.local_crops_number+2, # 2 global crops + all local crops passed through the target encoder
 			)
+
 
 			bt_loss = barlow_twins_loss(
 				online_output,
@@ -291,9 +297,10 @@ def get_data(args):
 	return train_loader
 
 
-def get_optimizer(args, online_encoder_without_ddp, target_encoder_without_ddp):
+def get_optimizer(args, online_encoder_without_ddp, online_predictor_without_ddp, target_encoder_without_ddp):
 
-	params = utils.get_param_groups(online_encoder_without_ddp) 
+	params = utils.get_param_groups(online_encoder_without_ddp)
+	params.extend(utils.get_param_groups(online_predictor_without_ddp))
 	if not args.stop_gradient:
 		params.extend(utils.get_param_groups(target_encoder_without_ddp))
 	
@@ -307,27 +314,30 @@ def get_optimizer(args, online_encoder_without_ddp, target_encoder_without_ddp):
 		optimizer = optim.SGD(params, lr=args.lr, weight_decay=args.wd)
 	elif args.optimizer == 'LARS':
 		# separate lr for weights and biases using LARS optimizer
-		online_param_weights, target_param_weights = [], []
-		online_param_biases, target_param_biases = [], []
+		param_weights, param_weights = [], []
+		# online encoder params
 		for param in online_encoder_without_ddp.parameters():
 			if param.ndim == 1:
 				online_param_biases.append(param)
 			else:
 				online_param_weights.append(param)
-		parameters = [
-			{'params': online_param_weights, 'lr': args.lr_weights},
-			{'params': online_param_biases, 'lr': args.lr_biases},
-		]
+		# online predictor params
+		for param in online_predictor_without_ddp.parameters():
+			if param.ndim == 1:
+				param_biases.append(param)
+			else:
+				param_weights.append(param)
+		# target encoder
 		if not args.stop_gradient:
 			for param in target_encoder_without_ddp.parameters():
 				if param.ndim == 1:
 					target_param_biases.append(param)
 				else:
 					target_param_weights.append(param)
-			parameters.extend(
-				{'params': target_param_weights, 'lr': args.lr_weights},
-				{'params': target_param_biases, 'lr': args.lr_biases},
-			)
+		parameters = [
+			{'params': param_weights, 'lr': args.lr_weights},
+			{'params': param_biases, 'lr': args.lr_biases},
+		]
 
 		optimizer = utils.LARS(parameters, lr=0, weight_decay=args.wd,
 			weight_decay_filter=True, lars_adaptation_filter=True)
@@ -390,11 +400,18 @@ if __name__ == '__main__':
 		head=BarlowTwinsHead(
 			args,
 			in_dim=online_encoder.feature_dim,
-			predictor=args.predictor,
 		),
 	)
 	# move network to gpu
 	online_encoder = online_encoder.cuda()
+
+	# predictor network
+	online_predictor = BarlowTwinsPredictor(
+		in_dim=args.projector_out_dim,
+		use=args.predictor,
+	)
+	# move network to gpu
+	online_predictor = online_predictor.cuda()
 
 	# target encoder
 	target_encoder = ModelWrapper(args)
@@ -410,7 +427,7 @@ if __name__ == '__main__':
 	target_encoder = target_encoder.cuda()
 
 	# initialise target encoder weights from online encoder
-	target_encoder.load_state_dict(online_encoder.state_dict(), map_location='cuda', strict=True)
+	target_encoder.load_state_dict(online_encoder.state_dict(), strict=True)
 	# stop gradient for target encoder
 	if args.stop_gradient:
 		for p in target_encoder.parameters():
@@ -418,25 +435,16 @@ if __name__ == '__main__':
 	target_ema_updater = utils.EMA(args.moving_average_decay)
 
 	
-	# set up model for distributed training
+	set up model for distributed training
 	if args.distributed:
-		online_encoder = nn.SyncBatchNorm.convert_sync_batchnorm(online_encoder)
-		online_encoder = nn.parallel.DistributedDataParallel(
-			online_encoder,
-			device_ids=[args.gpu],
-			output_device=args.gpu,
-			)
-		online_encoder_without_ddp = online_encoder.module
-		target_encoder = nn.SyncBatchNorm.convert_sync_batchnorm(target_encoder)
-		target_encoder = nn.parallel.DistributedDataParallel(
-			target_encoder,
-			device_ids=[args.gpu],
-			output_device=args.gpu,
-			)
-		target_encoder_without_ddp = online_encoder.module
+		online_encoder_without_ddp = utils.model_setup_ddp(args.gpu, online_encoder)
+		online_predictor_without_ddp = utils.model_setup_ddp(args.gpu, online_predictor)
+		target_encoder_without_ddp = utils.model_setup_ddp(args.gpu, target_encoder)
 	else:
 		online_encoder_without_ddp = online_encoder
+		online_predictor_without_ddp = online_predictor
 		target_encoder_without_ddp = target_encoder
+
 
 	# prepare loss
 	barlow_twins_loss = BarlowTwinsLoss(
