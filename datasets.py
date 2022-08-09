@@ -310,6 +310,9 @@ class AudioSet(Dataset):
 		self.index_dict = make_index_dict(os.path.join(self.base_dir, "class_labels_indices.csv"))
 		self.label_num = len(self.index_dict)
 
+		# also read in FSD50K csv files (in case of ValueErrors for incorrectly downloaded AS samples)
+		df_fsd50k = pd.read_csv("data/FSD50K/FSD50K.ground_truth/dev.csv", header=None)
+		self.files_fsd50k = np.asarray(df_fsd50k.iloc[:, 0], dtype=str)
 
 	def __len__(self):
 		return len(self.audio_fnames)
@@ -328,7 +331,12 @@ class AudioSet(Dataset):
 		label_indices = torch.FloatTensor(label_indices)
 		# load .npy spectrograms 
 		audio_fpath = os.path.join(os.path.join(*[self.base_dir, "unbalanced_train_segments", f"{audio_fname}.npy"]))
-		lms = torch.tensor(np.load(audio_fpath)).unsqueeze(0)
+		try:
+			lms = torch.tensor(np.load(audio_fpath)).unsqueeze(0)
+		except ValueError:
+			fname = np.random.choice(self.files_fsd50k)
+			audio_fpath = "data/FSD50K_lms/FSD50K.dev_audio/" + fname + ".npy"
+			lms = torch.tensor(np.load(audio_fpath)).unsqueeze(0)
 		# Trim or pad
 		l = lms.shape[-1]
 		if l > self.cfg.crop_frames:
