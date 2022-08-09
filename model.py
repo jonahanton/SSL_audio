@@ -2,8 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-import copy
-
 from models import resnet, mae
 from utils import utils
 

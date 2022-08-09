@@ -97,7 +97,6 @@ def train_one_epoch(args, epoch, online_encoder, online_encoder_without_ddp,
 				ncrops=args.local_crops_number+2, # 2 global crops + all local crops passed through the target encoder
 			)
 
-
 			bt_loss = barlow_twins_loss(
 				online_output,
 				target_output,
@@ -314,13 +313,13 @@ def get_optimizer(args, online_encoder_without_ddp, online_predictor_without_ddp
 		optimizer = optim.SGD(params, lr=args.lr, weight_decay=args.wd)
 	elif args.optimizer == 'LARS':
 		# separate lr for weights and biases using LARS optimizer
-		param_weights, param_weights = [], []
+		param_weights, param_biases = [], []
 		# online encoder params
 		for param in online_encoder_without_ddp.parameters():
 			if param.ndim == 1:
-				online_param_biases.append(param)
+				param_biases.append(param)
 			else:
-				online_param_weights.append(param)
+				param_weights.append(param)
 		# online predictor params
 		for param in online_predictor_without_ddp.parameters():
 			if param.ndim == 1:
@@ -331,9 +330,9 @@ def get_optimizer(args, online_encoder_without_ddp, online_predictor_without_ddp
 		if not args.stop_gradient:
 			for param in target_encoder_without_ddp.parameters():
 				if param.ndim == 1:
-					target_param_biases.append(param)
+					param_biases.append(param)
 				else:
-					target_param_weights.append(param)
+					param_weights.append(param)
 		parameters = [
 			{'params': param_weights, 'lr': args.lr_weights},
 			{'params': param_biases, 'lr': args.lr_biases},
@@ -435,7 +434,7 @@ if __name__ == '__main__':
 	target_ema_updater = utils.EMA(args.moving_average_decay)
 
 	
-	set up model for distributed training
+	# set up model for distributed training
 	if args.distributed:
 		online_encoder_without_ddp = utils.model_setup_ddp(args.gpu, online_encoder)
 		online_predictor_without_ddp = utils.model_setup_ddp(args.gpu, online_predictor)
