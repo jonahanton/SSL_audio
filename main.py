@@ -277,7 +277,7 @@ def get_data(args):
 	return train_loader
 
 
-def get_optimizer(args):
+def get_optimizer(args, model):
 
 	if args.optimizer == 'Adam':
 		args.wd = 0
@@ -379,7 +379,10 @@ if __name__ == '__main__':
 	).cuda()
 
 	# optimizer
-	optimizer = get_optimizer(args)
+	optimizer = get_optimizer(
+		args,
+		model_without_ddp,
+	)
 	
 	# mixed precision
 	fp16_scaler = None 
@@ -426,7 +429,13 @@ if __name__ == '__main__':
 					pass
 				else:
 					eval_train_loader, eval_val_loader, eval_test_loader = get_fsd50k(args)
-					scores = eval_linear(model_without_ddp.backbone.encoder, eval_train_loader, eval_val_loader, eval_test_loader, args.use_fp16_eval)
+					scores = eval_linear(
+						model_without_ddp.backbone.encoder,
+						eval_train_loader,
+						eval_val_loader,
+						eval_test_loader,
+						args.use_fp16_eval,
+					)
 					score_all = scores.get('score_all')
 					score_5 = scores.get('score_5')
 					if logger is not None:

@@ -36,7 +36,8 @@ if torch.cuda.is_available():
 	torch.backends.cudnn.benchmark = True
 
 
-def train_one_epoch(args, epoch, online_encoder, target_encoder, target_ema_updater,
+def train_one_epoch(args, epoch, online_encoder, online_encoder_without_ddp, 
+					target_encoder, target_encoder_without_ddp, target_ema_updater,
 					barlow_twins_loss, data_loader, optimizer, fp16_scaler, logger, 
 					wandb_run):
 	online_encoder.train()
@@ -110,7 +111,11 @@ def train_one_epoch(args, epoch, online_encoder, target_encoder, target_ema_upda
 
 		# update target encoder moving average
 		if args.stop_gradient:
-			utils.update_moving_average(target_ema_updater, target_encoder, online_encoder)
+			utils.update_moving_average(
+				target_ema_updater,
+				target_encoder_without_ddp,
+				online_encoder_without_ddp,
+			)
 
 		optimizer.zero_grad()
 		if fp16_scaler is None:
@@ -440,7 +445,11 @@ if __name__ == '__main__':
 	).cuda()
 
 	# optimizer
-	optimizer = get_optimizer(args, online_encoder_without_ddp, target_encoder_without_ddp)
+	optimizer = get_optimizer(
+		args,
+		online_encoder_without_ddp,
+		target_encoder_without_ddp,
+	)
 	
 	# mixed precision
 	fp16_scaler = None 
@@ -457,6 +466,7 @@ if __name__ == '__main__':
 			args,
 			epoch,
 			online_encoder,
+			online_encoder_without_ddp,
 			target_encoder,
 			target_ema_updater,
 			barlow_twins_loss, 
@@ -468,7 +478,7 @@ if __name__ == '__main__':
 		)
 		if args.dataset == 'cifar10':
 			if utils.is_main_process():
-				test_acc_1, test_acc_5 = utils.eval_knn(online_encoder.backbone.encoder, memory_loader, test_loader, epoch, args.epochs, 10)
+				test_acc_1, test_acc_5 = utils.eval_knn(online_encoder_without_ddp.backbone.encoder, memory_loader, test_loader, epoch, args.epochs, 10)
 				if wandb_run is not None:
 					wandb_run.log({'knn_test_acc_1': test_acc_1, 'knn_test_acc_5': test_acc_5})
 		if epoch % args.epoch_save_f == 0 or epoch == args.epochs:
@@ -489,14 +499,26 @@ if __name__ == '__main__':
 					pass
 				else:
 					eval_train_loader, eval_val_loader, eval_test_loader = get_fsd50k(args)
-					scores = eval_linear(online_encoder.backbone.encoder, eval_train_loader, eval_val_loader, eval_test_loader, args.use_fp16_eval)
+					scores = eval_linear(
+						online_encoder_without_ddp.backbone.encoder,
+						eval_train_loader,
+						eval_val_loader,
+						eval_test_loader, 
+						args.use_fp16_eval,
+					)
 					score_all = scores.get('score_all')
 					score_5 = scores.get('score_5')
-					scores_teacher = eval_linear(target_encoder.backbone.encoder, eval_train_loader, eval_val_loader, eval_test_loader, args.use_fp16_eval)
+					scores_teacher = eval_linear(
+						target_encoder_without_ddp.backbone.encoder,
+						eval_train_loader,
+						eval_val_loader,
+						eval_test_loader,
+						args.use_fp16_eval,
+					)
 					score_all_teacher = scores_teacher.get('score_all')
 					score_5_teacher = scores_teacher.get('score_5')
 					if logger is not None:
-						logger.info('epoch,{},step,{},linear_score,{},linear_score_5_mean,{},linear_score_5_std,{},linear_score_teacher,{},linear_score_teacher_5_mean,{}, linear_score_teacher_5_std,{}'.format(
+						logger.info('epoch,{},step,{},linear_score,{},linear_score_5_mean,{},linear_score_5_std,{},linear_score_teacher,{},linear_score_teacher_5_mean,{},linear_score_teacher_5_std,{}'.format(
 									epoch,len(train_loader)*epoch,score_all,score_5[0],score_5[1],
 									score_all_teacher,score_5_teacher[0],score_5_teacher[1]))
 					wandb_run.log({
