@@ -74,6 +74,7 @@ def get_std_parameters():
 	parser.add_argument('--mask', action='store_true', default=False)
 	parser.add_argument('--mask_ratio', type=float, default=0)
 	parser.add_argument('--random_mask_ratio', action='store_true', default=False)
+	parser.add_argument('--random_mask_beta', type=float, default=0.5)
 	parser.add_argument('--use_learned_pos_embd', action='store_true', default=False)
 	parser.add_argument('--use_cls', action='store_true', default=True)
 	parser.add_argument('--use_mean_pool', action='store_true', default=False)

@@ -23,8 +23,6 @@ from utils.torch_mlp_clf import TorchMLPClassifier
 import datasets
 from model import ModelWrapper, BarlowTwinsHead, BarlowTwinsPredictor
 
-off_diagonal = utils.off_diagonal
-
 CLASSES = dict(
 	fsd50k=200,
 	nsynth=88,

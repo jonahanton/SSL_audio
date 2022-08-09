@@ -17,6 +17,7 @@ import numpy as np
 import time
 import datetime
 import csv
+import math
 import logging
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -41,6 +42,7 @@ HYPERPARAMETERS = [
 	'projector_out_dim',
 	'mixup_ratio',
 	'virtual_crop_scale',
+	'random_mask_beta',
 ]
 
 CLASSES = dict(
@@ -96,6 +98,12 @@ def objective(trial):
 		]
 		optimizer = utils.LARS(parameters, lr=0, weight_decay=args.wd,
 			weight_decay_filter=True, lars_adaptation_filter=True)
+
+	# Random masking ratio
+	if 'random_mask_beta' in args.tune:
+		assert args.mask
+		assert args.random_mask_ratio
+		args.random_mask_beta = trial.suggest_float("random_mask_beta", 0.02, 0.5)
 
 	# Get data
 	train_loader, eval_train_loader, eval_val_loader, eval_test_loader = get_data(trial)
@@ -269,6 +277,16 @@ def train_one_epoch(epoch, model, barlow_twins_loss, data_loader, optimizer, fp1
 		# move images to gpu
 		images = [im.cuda(non_blocking=True) for im in images]
 
+		# mask ratio
+		if args.mask:
+			if args.random_mask_ratio:
+				# randomly sample r ~ U(0.02, beta) with p = 0.5
+				mask_ratio = utils.generate_random(l=0.02, h=args.random_mask_beta, p=0.5)
+			else:
+				mask_ratio = args.mask_ratio
+		else:
+			mask_ratio = 0
+
 		# forward passes + compute barlow twins loss
 		with torch.cuda.amp.autocast(enabled=(fp16_scaler is not None)):
 			teacher_output = model(
@@ -276,13 +294,29 @@ def train_one_epoch(epoch, model, barlow_twins_loss, data_loader, optimizer, fp1
 				mask_ratio=args.mask_ratio,
 				ncrops=1,
 			)
+			# masked recon
+			if args.masked_recon:
+				teacher_output, recon_loss = teacher_output
 			student_output = model(
 				images[1:],  # 1 global crop + all local crops passed through the student
 				ncrops=args.local_crops_number+1,
 			)
-			loss = barlow_twins_loss(student_output, teacher_output)
+			bt_loss = barlow_twins_loss(
+				student_output,
+				teacher_output,
+				ngcrops_each=1,
+			)
 		forward_time = time.time() - tflag
 		tflag = time.time()
+
+		loss = bt_loss
+		if args.masked_recon:
+			loss += recon_loss
+
+
+		if not math.isfinite(loss.item()):
+			print(f'Loss is {loss.item()}. Stopping training')
+			sys.exit(1)
 
 		optimizer.zero_grad()
 		if fp16_scaler is None:
