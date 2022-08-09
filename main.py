@@ -21,7 +21,7 @@ from utils.loss import BarlowTwinsLoss
 from utils import utils, transforms, hyperparameters
 from utils.torch_mlp_clf import TorchMLPClassifier
 import datasets
-from model import ModelWrapper, BarlowTwinsHead
+from model import ModelWrapper, BarlowTwinsHead, BarlowTwinsPredictor
 
 off_diagonal = utils.off_diagonal
 
@@ -80,20 +80,34 @@ def train_one_epoch(args, epoch, model, barlow_twins_loss, data_loader, optimize
 				masked_recon=args.masked_recon,
 				ncrops=1,
 			)
-
+			# masked recon
 			if args.masked_recon:
 				teacher_output, recon_loss = teacher_output
-
-			student_output = model(
-				images[1:],  # 1 global crop + all local crops passed through the student
-				ncrops=args.local_crops_number+1,
+			# predictor 
+			teacher_output = predictor(
+				teacher_output,
+				ncrops=1,
 			)
+
+			if args.stop_gradient:
+				with torch.no_grad():
+					student_output = model(
+						images[1:],  # 1 global crop + all local crops passed through the student
+						ncrops=args.local_crops_number+1,
+					)
+					student_output.detach()
+			else:
+				student_output = model(
+					images[1:],  # 1 global crop + all local crops passed through the student
+					ncrops=args.local_crops_number+1,
+				)
+					
 
 			bt_loss = barlow_twins_loss(
 				student_output,
 				teacher_output,
 				ngcrops_each=1,
-				)
+			)
 
 		forward_time = time.time() - tflag 
 		tflag = time.time()
@@ -281,21 +295,28 @@ def get_data(args):
 	return train_loader
 
 
-def get_optimizer(args, model):
+def get_optimizer(args, model, predictor):
 
+	params = utils.get_param_groups(model)
+	params.extend(utils.get_param_groups(predictor))
 	if args.optimizer == 'Adam':
 		args.wd = 0
-		optimizer = optim.Adam(utils.get_param_groups(model), lr=args.lr, weight_decay=args.wd)
+		optimizer = optim.Adam(params, lr=args.lr, weight_decay=args.wd)
 	elif args.optimizer == 'AdamW':
-		optimizer = optim.AdamW(utils.get_param_groups(model), lr=args.lr, weight_decay=args.wd)
+		optimizer = optim.AdamW(params, lr=args.lr, weight_decay=args.wd)
 	elif args.optimizer == 'SGD':
 		args.wd = 0
-		optimizer = optim.SGD(utils.get_param_groups(model), lr=args.lr, weight_decay=args.wd)
+		optimizer = optim.SGD(params, lr=args.lr, weight_decay=args.wd)
 	elif args.optimizer == 'LARS':
 		# separate lr for weights and biases using LARS optimizer
 		param_weights = []
 		param_biases = []
 		for param in model.parameters():
+			if param.ndim == 1:
+				param_biases.append(param)
+			else:
+				param_weights.append(param)
+		for param in predictor.parameters():
 			if param.ndim == 1:
 				param_biases.append(param)
 			else:
@@ -363,12 +384,22 @@ if __name__ == '__main__':
 	)
 	# move network to gpu
 	model = model.cuda()
+
+	# predictor network
+	predictor = BarlowTwinsPredictor(
+		in_dim=args.projector_out_dim,
+		use=args.predictor,
+	)
+	# move network to gpu
+	predictor = predictor.cuda()
 	
 	# set up model for distributed training
 	if args.distributed:
-		model = utils.model_setup_ddp(args.gpu, model)
+		model, model_without_ddp = utils.model_setup_ddp(args.gpu, model)
+		predictor, predictor_without_ddp = utils.model_setup_ddp(args.gpu, predictor)
 	else:
 		model_without_ddp = model
+		predictor_without_ddp = predictor
 
 	# prepare loss
 	barlow_twins_loss = BarlowTwinsLoss(
@@ -380,6 +411,7 @@ if __name__ == '__main__':
 	optimizer = get_optimizer(
 		args,
 		model_without_ddp,
+		predictor_without_ddp,
 	)
 	
 	# mixed precision
@@ -397,6 +429,7 @@ if __name__ == '__main__':
 			args,
 			epoch,
 			model,
+			predictor,
 			barlow_twins_loss, 
 			train_loader,
 			optimizer,
@@ -412,6 +445,7 @@ if __name__ == '__main__':
 		if epoch % args.epoch_save_f == 0 or epoch == args.epochs:
 			save_dict = {
 				'model': model.state_dict(),
+				'predictor': predictor.state_dict(),
 				'optimizer': optimizer.state_dict(),
 				'epoch': epoch + 1,
 				'args': args,

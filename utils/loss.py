@@ -38,8 +38,9 @@ class BarlowTwinsLoss(nn.Module):
 		n_loss_terms = 0
 		for q in range(len(teacher_out)):
 			for v in range(len(student_out)):
-				if q == v:
-					continue
+				if len(teacher_out) > 1:
+					if q == v:
+						continue
 				loss = self.forward_loss(teacher_out[q], student_out[v])
 				total_loss += loss
 				n_loss_terms += 1

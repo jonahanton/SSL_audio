@@ -79,6 +79,8 @@ def get_std_parameters():
 	parser.add_argument('--use_mean_pool', action='store_true', default=False)
 	parser.add_argument('--patch_size', nargs='+', type=int, default=[16, 16])
 	parser.add_argument('--masked_recon', action='store_true', default=False)
+	parser.add_argument('--stop_gradient', action='store_true', default=False)
+	parser.add_argument('--predictor', action='store_true', default=False)
 
 	parser.add_argument('--optimizer', type=str, default=None)
 	parser.add_argument('--lr', type=float, default=None)

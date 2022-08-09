@@ -89,7 +89,10 @@ def train_one_epoch(args, epoch, online_encoder, online_encoder_without_ddp,
 			if args.masked_recon:
 				online_output, recon_loss = online_output
 			# predictor
-			online_output = online_predictor(online_output)
+			online_output = online_predictor(
+				online_output,
+				ncrops=1,
+			)
 
 			# target encoder
 			target_output = target_encoder(
@@ -346,10 +349,6 @@ def get_optimizer(args, online_encoder_without_ddp, online_predictor_without_ddp
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='Training args', parents=hyperparameters.get_hyperparameters())
-	parser.add_argument('--stop_gradient', action='store_true', default=True)
-	parser.add_argument('--no_stop_gradient', action='store_false', dest='stop_gradient')
-	parser.add_argument('--predictor', action='store_true', default=True)
-	parser.add_argument('--no_predictor', action='store_false', dest='predictor')
 	parser.add_argument('--moving_average_decay', type=float, default=0.99)
 	args = parser.parse_args()
 	hyperparameters.setup_hyperparameters(args)
@@ -436,9 +435,9 @@ if __name__ == '__main__':
 	
 	# set up model for distributed training
 	if args.distributed:
-		online_encoder_without_ddp = utils.model_setup_ddp(args.gpu, online_encoder)
-		online_predictor_without_ddp = utils.model_setup_ddp(args.gpu, online_predictor)
-		target_encoder_without_ddp = utils.model_setup_ddp(args.gpu, target_encoder)
+		online_encoder, online_encoder_without_ddp = utils.model_setup_ddp(args.gpu, online_encoder)
+		online_predictor, online_predictor_without_ddp = utils.model_setup_ddp(args.gpu, online_predictor)
+		target_encoder, target_encoder_without_ddp = utils.model_setup_ddp(args.gpu, target_encoder)
 	else:
 		online_encoder_without_ddp = online_encoder
 		online_predictor_without_ddp = online_predictor

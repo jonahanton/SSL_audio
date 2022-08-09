@@ -357,5 +357,5 @@ def model_setup_ddp(gpu, model):
 		device_ids=[gpu],
 		output_device=gpu,
 	)
-	return model.module
+	return model, model.module
 
