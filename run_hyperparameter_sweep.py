@@ -29,6 +29,7 @@ from optuna.trial import TrialState
 import wandb
 
 from utils.torch_mlp_clf import TorchMLPClassifier
+from utils.loss import BarlowTwinsLoss
 from utils import transforms, utils, hyperparameters
 import datasets
 from model import BarlowTwinsHead, ModelWrapper
@@ -54,7 +55,7 @@ def objective(trial):
 	model = define_model(trial).cuda()
 
 	# prepare loss
-	barlow_twins_loss = utils.BarlowTwinsLoss(
+	barlow_twins_loss = BarlowTwinsLoss(
 		args,
 		ncrops=args.local_crops_number+2,  # total number of crops = 2 global crops + local_crops_number
 	).cuda()

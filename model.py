@@ -9,8 +9,9 @@ from utils import utils
 
 off_diagonal = utils.off_diagonal
 
+
 class BarlowTwinsHead(nn.Module):
-	def __init__(self, cfg, in_dim):
+	def __init__(self, cfg, in_dim, predictor=False):
 		super().__init__()
 		self.cfg = cfg
 
@@ -23,13 +24,26 @@ class BarlowTwinsHead(nn.Module):
 		layers.append(nn.Linear(sizes[-2], sizes[-1], bias=False))
 		self.projector = nn.Sequential(*layers)
 
+		self.predictor = None
+		if predictor:
+			self.predictor = nn.Sequential(
+				nn.Linear(sizes[-1], sizes[-1], bias=False),
+				nn.BatchNorm1d(sizes[-1]),
+				nn.ReLU(inplace=True),
+				nn.Linear(sizes[-1], sizes[-1], bias=False),
+			)
+
 		self.bn = nn.BatchNorm1d(sizes[-1], affine=False)
+
 	
 	def forward(self, x, ncrops=1):
 		x_crops = x.chunk(ncrops)
 		z = torch.empty(0).to(x_crops[0].device)
 		for _x in x_crops:
-			_z = self.bn(self.projector(_x))
+			_z = self.projector(_x)
+			if self.predictor is not None:
+				_z = self.predictor(_z)
+			_z = self.bn(_z)
 			z = torch.cat((z, _z))
 		return z
 		
@@ -180,29 +194,6 @@ class SE_Block(nn.Module):
         y = self.squeeze(x).view(bs, c)
         y = self.excitation(y).view(bs, c, 1, 1)
         return x * y.expand_as(x)
-
-
-
-"""
-BYOL-like asymmetric learning updates (with Barlow Twins loss)
-Ref: https://github.com/lucidrains/byol-pytorch/
-"""
-
-class EMA():
-	def __init__(self, beta):
-		super().__init__()
-		self.beta = beta
-
-	def update_average(self, old, new):
-		if old is None:
-			return new
-		return old * self.beta + (1 - self.beta) * new
-
-
-def update_moving_average(ema_updater, ma_model, current_model):
-	for current_params, ma_params in zip(current_model.parameters(), ma_model.parameters()):
-		old_weight, up_weight = ma_params.data, current_params.data
-		ma_params.data = ema_updater.update_average(old_weight, up_weight)
 
 
 class BarlowTwinsBYOL(nn.Module):

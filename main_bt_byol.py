@@ -36,8 +36,10 @@ if torch.cuda.is_available():
 	torch.backends.cudnn.benchmark = True
 
 
-def train_one_epoch(args, epoch, model, barlow_twins_loss, data_loader, optimizer, fp16_scaler, logger, wandb_run):
-	model.train()
+def train_one_epoch(args, epoch, online_encoder, target_encoder, target_ema_updater,
+					barlow_twins_loss, data_loader, optimizer, fp16_scaler, logger, 
+					wandb_run):
+	online_encoder.train()
 	total_loss, total_num, train_bar = 0, 0, tqdm(data_loader)
 	if args.masked_recon:
 		total_bt_loss, total_recon_loss = 0, 0
@@ -74,22 +76,26 @@ def train_one_epoch(args, epoch, model, barlow_twins_loss, data_loader, optimize
 		# forward passes + compute barlow twins loss
 		with torch.cuda.amp.autocast(enabled=(fp16_scaler is not None)):
 			
-			teacher_output = model(
-				images[:1],  # only the 1 global crop passed through the teacher 
+			online_output = online_encoder(
+				images[:2],
 				mask_ratio=mask_ratio,
 				masked_recon=args.masked_recon,
-				ncrops=1,
+				ncrops=2, # 2 global crops both passed through the online encoder 
 			)
 
 			if args.masked_recon:
-				teacher_output, recon_loss = teacher_output
+				online_output, recon_loss = online_output
 
-			student_output = model(
-				images[1:],  # 1 global crop + all local crops passed through the student
-				ncrops=args.local_crops_number+1,
+			target_output = target_encoder(
+				images,
+				ncrops=args.local_crops_number+2, # 2 global crops + all local crops passed through the target encoder
 			)
 
-			bt_loss = barlow_twins_loss(student_output, teacher_output)
+			bt_loss = barlow_twins_loss(
+				online_output,
+				target_output,
+				ngcrops_each=2,
+			)
 
 		forward_time = time.time() - tflag 
 		tflag = time.time()
@@ -101,6 +107,10 @@ def train_one_epoch(args, epoch, model, barlow_twins_loss, data_loader, optimize
 		if not math.isfinite(loss.item()):
 			print(f'Loss is {loss.item()}. Stopping training')
 			sys.exit(1)
+
+		# update target encoder moving average
+		if args.stop_gradient:
+			utils.update_moving_average(target_ema_updater, target_encoder, online_encoder)
 
 		optimizer.zero_grad()
 		if fp16_scaler is None:
@@ -132,12 +142,11 @@ def train_one_epoch(args, epoch, model, barlow_twins_loss, data_loader, optimize
 			logger.info('epoch,{},step,{},loss,{}'.format(
 						epoch, iteration, total_loss / total_num))
 		if wandb_run is not None:
-			wandb_run.log({'Loss': total_loss / total_num})
+			to_log = {'Loss': total_loss / total_num}
 			if args.masked_recon:
-				wandb_run.log({
-					'barlow twins loss': total_bt_loss / total_num,
-					'masked recon loss': total_recon_loss / total_num,
-				})
+				to_log['barlow twins loss'] = total_bt_loss / total_num
+				to_log['masked recon loss'] = total_recon_loss / total_num
+			wandb_run.log(to_log)
 
 		tflag = time.time()
 		
@@ -277,29 +286,44 @@ def get_data(args):
 	return train_loader
 
 
-def get_optimizer(args):
+def get_optimizer(args, online_encoder_without_ddp, target_encoder_without_ddp):
 
+	params = utils.get_param_groups(online_encoder_without_ddp) 
+	if not args.stop_gradient:
+		params.extend(utils.get_param_groups(target_encoder_without_ddp))
+	
 	if args.optimizer == 'Adam':
 		args.wd = 0
-		optimizer = optim.Adam(utils.get_param_groups(model), lr=args.lr, weight_decay=args.wd)
+		optimizer = optim.Adam(params, lr=args.lr, weight_decay=args.wd)
 	elif args.optimizer == 'AdamW':
-		optimizer = optim.AdamW(utils.get_param_groups(model), lr=args.lr, weight_decay=args.wd)
+		optimizer = optim.AdamW(params, lr=args.lr, weight_decay=args.wd)
 	elif args.optimizer == 'SGD':
 		args.wd = 0
-		optimizer = optim.SGD(utils.get_param_groups(model), lr=args.lr, weight_decay=args.wd)
+		optimizer = optim.SGD(params, lr=args.lr, weight_decay=args.wd)
 	elif args.optimizer == 'LARS':
 		# separate lr for weights and biases using LARS optimizer
-		param_weights = []
-		param_biases = []
-		for param in model.parameters():
+		online_param_weights, target_param_weights = [], []
+		online_param_biases, target_param_biases = [], []
+		for param in online_encoder_without_ddp.parameters():
 			if param.ndim == 1:
-				param_biases.append(param)
+				online_param_biases.append(param)
 			else:
-				param_weights.append(param)
+				online_param_weights.append(param)
 		parameters = [
-			{'params': param_weights, 'lr': args.lr_weights},
-			{'params': param_biases, 'lr': args.lr_biases},
+			{'params': online_param_weights, 'lr': args.lr_weights},
+			{'params': online_param_biases, 'lr': args.lr_biases},
 		]
+		if not args.stop_gradient:
+			for param in target_encoder_without_ddp.parameters():
+				if param.ndim == 1:
+					target_param_biases.append(param)
+				else:
+					target_param_weights.append(param)
+			parameters.extend(
+				{'params': target_param_weights, 'lr': args.lr_weights},
+				{'params': target_param_biases, 'lr': args.lr_biases},
+			)
+
 		optimizer = utils.LARS(parameters, lr=0, weight_decay=args.wd,
 			weight_decay_filter=True, lars_adaptation_filter=True)
 	
@@ -308,8 +332,14 @@ def get_optimizer(args):
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='Training args', parents=hyperparameters.get_hyperparameters())
+	parser.add_argument('--stop_gradient', action='store_true', default=True)
+	parser.add_argument('--no_stop_gradient', action='store_false', dest='stop_gradient')
+	parser.add_argument('--predictor', action='store_true', default=True)
+	parser.add_argument('--no_predictor', action='store_false', dest='predictor')
+	parser.add_argument('--moving_average_decay', type=float, default=0.99)
 	args = parser.parse_args()
 	hyperparameters.setup_hyperparameters(args)
+
 
 	# distributed training 
 	utils.init_distributed_mode(args)
@@ -317,7 +347,7 @@ if __name__ == '__main__':
 
 	# wandb init
 	timestamp = datetime.datetime.now().strftime('%H:%M_%h%d')
-	save_name = '{}_{}_epochs'.format(args.model_type, args.epochs) if args.name == '' else '{}_{}'.format(args.model_type, args.name)
+	save_name = '(byol-ish)_{}_{}_epochs'.format(args.model_type, args.epochs) if args.name == '' else '{}_{}'.format(args.model_type, args.name)
 	save_name += timestamp
 	if utils.is_main_process():
 		wandb_run = wandb.init(
@@ -347,30 +377,61 @@ if __name__ == '__main__':
 	else:
 		train_loader = get_data(args)
 
-	# model 
-	model = ModelWrapper(args)
+	# online encoder
+	online_encoder = ModelWrapper(args)
 	# multi-crop wrapper handles forward with inputs of different resolutions
-	model = utils.MultiCropWrapper(
-		backbone=model,
+	online_encoder = utils.MultiCropWrapper(
+		backbone=online_encoder,
 		head=BarlowTwinsHead(
 			args,
-			in_dim=model.feature_dim,
+			in_dim=online_encoder.feature_dim,
+			predictor=args.predictor,
 		),
 	)
 	# move network to gpu
-	model = model.cuda()
+	online_encoder = online_encoder.cuda()
+
+	# target encoder
+	target_encoder = ModelWrapper(args)
+	# multi-crop wrapper handles forward with inputs of different resolutions
+	target_encoder = utils.MultiCropWrapper(
+		backbone=target_encoder,
+		head=BarlowTwinsHead(
+			args,
+			in_dim=target_encoder.feature_dim,
+		),
+	)
+	# move network to gpu
+	target_encoder = target_encoder.cuda()
+
+	# initialise target encoder weights from online encoder
+	target_encoder.load_state_dict(online_encoder.state_dict(), map_location='cuda', strict=True)
+	# stop gradient for target encoder
+	if args.stop_gradient:
+		for p in target_encoder.parameters():
+			p.requires_grad = False
+	target_ema_updater = utils.EMA(args.moving_average_decay)
+
 	
 	# set up model for distributed training
 	if args.distributed:
-		model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
-		model = nn.parallel.DistributedDataParallel(
-			model,
+		online_encoder = nn.SyncBatchNorm.convert_sync_batchnorm(online_encoder)
+		online_encoder = nn.parallel.DistributedDataParallel(
+			online_encoder,
 			device_ids=[args.gpu],
 			output_device=args.gpu,
 			)
-		model_without_ddp = model.module
+		online_encoder_without_ddp = online_encoder.module
+		target_encoder = nn.SyncBatchNorm.convert_sync_batchnorm(target_encoder)
+		target_encoder = nn.parallel.DistributedDataParallel(
+			target_encoder,
+			device_ids=[args.gpu],
+			output_device=args.gpu,
+			)
+		target_encoder_without_ddp = online_encoder.module
 	else:
-		model_without_ddp = model
+		online_encoder_without_ddp = online_encoder
+		target_encoder_without_ddp = target_encoder
 
 	# prepare loss
 	barlow_twins_loss = BarlowTwinsLoss(
@@ -379,7 +440,7 @@ if __name__ == '__main__':
 	).cuda()
 
 	# optimizer
-	optimizer = get_optimizer(args)
+	optimizer = get_optimizer(args, online_encoder_without_ddp, target_encoder_without_ddp)
 	
 	# mixed precision
 	fp16_scaler = None 
@@ -395,7 +456,9 @@ if __name__ == '__main__':
 		train_loss = train_one_epoch(
 			args,
 			epoch,
-			model,
+			online_encoder,
+			target_encoder,
+			target_ema_updater,
 			barlow_twins_loss, 
 			train_loader,
 			optimizer,
@@ -405,12 +468,12 @@ if __name__ == '__main__':
 		)
 		if args.dataset == 'cifar10':
 			if utils.is_main_process():
-				test_acc_1, test_acc_5 = utils.eval_knn(model_without_ddp.backbone.encoder, memory_loader, test_loader, epoch, args.epochs, 10)
+				test_acc_1, test_acc_5 = utils.eval_knn(online_encoder.backbone.encoder, memory_loader, test_loader, epoch, args.epochs, 10)
 				if wandb_run is not None:
 					wandb_run.log({'knn_test_acc_1': test_acc_1, 'knn_test_acc_5': test_acc_5})
 		if epoch % args.epoch_save_f == 0 or epoch == args.epochs:
 			save_dict = {
-				'model': model.state_dict(),
+				'model': online_encoder.state_dict(),
 				'optimizer': optimizer.state_dict(),
 				'epoch': epoch + 1,
 				'args': args,
@@ -426,15 +489,22 @@ if __name__ == '__main__':
 					pass
 				else:
 					eval_train_loader, eval_val_loader, eval_test_loader = get_fsd50k(args)
-					scores = eval_linear(model_without_ddp.backbone.encoder, eval_train_loader, eval_val_loader, eval_test_loader, args.use_fp16_eval)
+					scores = eval_linear(online_encoder.backbone.encoder, eval_train_loader, eval_val_loader, eval_test_loader, args.use_fp16_eval)
 					score_all = scores.get('score_all')
 					score_5 = scores.get('score_5')
+					scores_teacher = eval_linear(target_encoder.backbone.encoder, eval_train_loader, eval_val_loader, eval_test_loader, args.use_fp16_eval)
+					score_all_teacher = scores_teacher.get('score_all')
+					score_5_teacher = scores_teacher.get('score_5')
 					if logger is not None:
-						logger.info('epoch,{},step,{},linear_score,{},linear_score_5_mean,{},linear_score_5_std,{}'.format(
-									epoch,len(train_loader)*epoch,score_all,score_5[0],score_5[1]))
+						logger.info('epoch,{},step,{},linear_score,{},linear_score_5_mean,{},linear_score_5_std,{},linear_score_teacher,{},linear_score_teacher_5_mean,{}, linear_score_teacher_5_std,{}'.format(
+									epoch,len(train_loader)*epoch,score_all,score_5[0],score_5[1],
+									score_all_teacher,score_5_teacher[0],score_5_teacher[1]))
 					wandb_run.log({
 						'FSD50K score (100%)': score_all,
 						'FSD50K score (5pC) (mean)': score_5[0],
+						'FSD50K score (teacher) (100%)': score_all_teacher,
+						'FSD50K score (teacher) (5pC) (mean)': score_5_teacher[0],
 					})
+					
 	
 
