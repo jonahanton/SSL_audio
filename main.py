@@ -36,7 +36,8 @@ if torch.cuda.is_available():
 	torch.backends.cudnn.benchmark = True
 
 
-def train_one_epoch(args, epoch, model, barlow_twins_loss, data_loader, optimizer, fp16_scaler, logger, wandb_run):
+def train_one_epoch(args, epoch, model, predictor, barlow_twins_loss, data_loader,
+					optimizer, fp16_scaler, logger, wandb_run):
 	model.train()
 	total_loss, total_num, train_bar = 0, 0, tqdm(data_loader)
 	if args.masked_recon:
