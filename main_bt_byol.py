@@ -37,10 +37,10 @@ if torch.cuda.is_available():
 	torch.backends.cudnn.benchmark = True
 
 
-def train_one_epoch(args, epoch, online_encoder, online_encoder_without_ddp, 
-					target_encoder, target_encoder_without_ddp, target_ema_updater,
-					barlow_twins_loss, data_loader, optimizer, fp16_scaler, logger, 
-					wandb_run):
+def train_one_epoch(args, epoch, online_encoder, online_encoder_without_ddp,
+					online_predictor, target_encoder, target_encoder_without_ddp,
+					target_ema_updater, barlow_twins_loss, data_loader, optimizer,
+					fp16_scaler, logger, wandb_run):
 	online_encoder.train()
 	total_loss, total_num, train_bar = 0, 0, tqdm(data_loader)
 	if args.masked_recon:
@@ -455,6 +455,7 @@ if __name__ == '__main__':
 	optimizer = get_optimizer(
 		args,
 		online_encoder_without_ddp,
+		online_predictor_without_ddp,
 		target_encoder_without_ddp,
 	)
 	
@@ -474,7 +475,9 @@ if __name__ == '__main__':
 			epoch,
 			online_encoder,
 			online_encoder_without_ddp,
+			online_predictor,
 			target_encoder,
+			target_encoder_without_ddp,
 			target_ema_updater,
 			barlow_twins_loss, 
 			train_loader,
