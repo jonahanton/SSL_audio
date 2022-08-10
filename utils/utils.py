@@ -47,8 +47,8 @@ def adjust_learning_rate(args, optimizer, loader, step):
 		end_lr = base_lr * 0.001
 		lr = base_lr * q + end_lr * (1 - q)
 	if args.optimizer == 'LARS':
-		optimizer.param_groups[0]['lr'] = lr * args.learning_rate_weights
-		optimizer.param_groups[1]['lr'] = lr * args.learning_rate_biases
+		optimizer.param_groups[0]['lr'] = lr * args.lr_weights
+		optimizer.param_groups[1]['lr'] = lr * args.lr_biases
 	else:
 		for i, param_group in enumerate(optimizer.param_groups):
 				param_group['lr'] = lr * args.lr
