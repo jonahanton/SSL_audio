@@ -102,14 +102,14 @@ def objective(trial):
 	# Random masking ratio
 	if 'mask_beta' in args.tune:
 		assert args.mask
-		assert args.sine_mask_ratio
+		assert args.mask_ratio_schedule
 		args.mask_beta = trial.suggest_float("mask_beta", 0.05, 0.5)
 
 	# Get data
 	train_loader, eval_train_loader, eval_val_loader, eval_test_loader = get_data(trial)
 
 	mask_ratio_scheduler = None
-	if args.sine_mask_ratio:
+	if args.mask_ratio_schedule:
 		mask_ratio_scheduler = utils.sine_scheduler_increase(
 			final_value=args.mask_beta,
 			epochs=args.train_epochs,
@@ -282,10 +282,10 @@ def train_one_epoch(epoch, model, barlow_twins_loss, data_loader, optimizer,
 
 	total_data_time, total_forward_time, total_backward_time = 0, 0, 0
 	tflag = time.time()
-	for it, (images, _) in enumerate(train_bar):
+	for iteration, (images, _) in enumerate(train_bar):
 		data_time = time.time() - tflag
 
-		it = it + (epoch - 1) * len(data_loader)  # global training iteration
+		iteration += (epoch - 1) * len(data_loader)  # global training iteration
 
 		# move images to gpu
 		images = [im.cuda(non_blocking=True) for im in images]
@@ -293,7 +293,7 @@ def train_one_epoch(epoch, model, barlow_twins_loss, data_loader, optimizer,
 		# mask ratio
 		if args.mask:
 			if mask_ratio_scheduler is not None:
-				mask_ratio = mask_ratio_scheduler[it]
+				mask_ratio = mask_ratio_scheduler[iteration]
 			else:
 				mask_ratio = args.mask_ratio
 		else:

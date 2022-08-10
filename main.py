@@ -35,7 +35,7 @@ if torch.cuda.is_available():
 
 
 def train_one_epoch(args, epoch, model, predictor, barlow_twins_loss, data_loader,
-					optimizer, fp16_scaler, logger, wandb_run):
+					optimizer, lr_schedule, fp16_scaler, logger, wandb_run):
 	model.train()
 	total_loss, total_num, train_bar = 0, 0, tqdm(data_loader)
 	if args.masked_recon:
@@ -47,6 +47,10 @@ def train_one_epoch(args, epoch, model, predictor, barlow_twins_loss, data_loade
 		data_time = time.time() - tflag
 
 		iteration += len(data_loader) * (epoch - 1)  # global training iteration
+		
+		if lr_schedule is not None:
+			for i, param_group in enumerate(optimizer.param_groups):
+				param_group['lr'] = lr_schedule[iteration]
 
 		tflag = time.time()
 
@@ -412,6 +416,18 @@ if __name__ == '__main__':
 		model_without_ddp,
 		predictor_without_ddp,
 	)
+
+	# lr scheduler
+	lr_schedule = None
+	if args.lr_schedule:
+		lr_schedule = utils.cosine_scheduler(
+			base_value=args.lr,
+			final_value=args.lr/1e3,
+			epochs=args.epochs,
+			niter_per_ep=len(train_loader),
+			warmup_epochs=int(args.epochs/1e2),
+			warmup_value=0,
+		)
 	
 	# mixed precision
 	fp16_scaler = None 
@@ -432,6 +448,7 @@ if __name__ == '__main__':
 			barlow_twins_loss, 
 			train_loader,
 			optimizer,
+			lr_schedule,
 			fp16_scaler,
 			logger, 
 			wandb_run,
