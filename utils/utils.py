@@ -34,6 +34,26 @@ def generate_random(l, h, p):
 
 """------------------------------------Training utils---------------------------------------"""
 
+def adjust_learning_rate(args, optimizer, loader, step):
+	max_steps = args.epochs * len(loader)
+	warmup_steps = int(args.epochs/100) * len(loader)
+	base_lr = args.batch_size / 128
+	if step < warmup_steps:
+		lr = base_lr * step / warmup_steps
+	else:
+		step -= warmup_steps
+		max_steps -= warmup_steps
+		q = 0.5 * (1 + np.cos(np.pi * step / max_steps))
+		end_lr = base_lr * 0.001
+		lr = base_lr * q + end_lr * (1 - q)
+	if args.optimizer == 'LARS':
+		optimizer.param_groups[0]['lr'] = lr * args.learning_rate_weights
+		optimizer.param_groups[1]['lr'] = lr * args.learning_rate_biases
+	else:
+		for i, param_group in enumerate(optimizer.param_groups):
+				param_group['lr'] = lr * args.lr
+
+
 def cosine_scheduler(base_value, final_value, epochs, niter_per_ep, warmup_epochs=0, start_warmup_value=0):
 	warmup_schedule = np.array([])
 	warmup_iters = warmup_epochs * niter_per_ep

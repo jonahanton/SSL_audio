@@ -108,9 +108,9 @@ def objective(trial):
 	# Get data
 	train_loader, eval_train_loader, eval_val_loader, eval_test_loader = get_data(trial)
 
-	mask_ratio_scheduler = None
+	mask_ratio_schedule = None
 	if args.mask_ratio_schedule:
-		mask_ratio_scheduler = utils.sine_scheduler_increase(
+		mask_ratio_schedule = utils.sine_scheduler_increase(
 			final_value=args.mask_beta,
 			epochs=args.train_epochs,
 			niter_per_ep=len(train_loader),
@@ -134,7 +134,7 @@ def objective(trial):
 			train_loader,
 			optimizer,
 			fp16_scaler,
-			mask_ratio_scheduler,
+			mask_ratio_schedule,
 		)
 		# Report intermediate objective value
 		score = evaluate(model.backbone.encoder, eval_train_loader, eval_val_loader, eval_test_loader)
@@ -276,7 +276,7 @@ def eval_linear(model, train_loader, val_loader, test_loader, use_fp16):
 
 
 def train_one_epoch(epoch, model, barlow_twins_loss, data_loader, optimizer, 
-					fp16_scaler, mask_ratio_scheduler):
+					fp16_scaler, mask_ratio_schedule):
 	model.train()
 	total_loss, total_num, train_bar = 0, 0, tqdm(data_loader)
 
@@ -292,8 +292,8 @@ def train_one_epoch(epoch, model, barlow_twins_loss, data_loader, optimizer,
 
 		# mask ratio
 		if args.mask:
-			if mask_ratio_scheduler is not None:
-				mask_ratio = mask_ratio_scheduler[iteration]
+			if mask_ratio_schedule is not None:
+				mask_ratio = mask_ratio_schedule[iteration]
 			else:
 				mask_ratio = args.mask_ratio
 		else:
