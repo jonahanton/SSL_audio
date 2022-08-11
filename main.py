@@ -400,13 +400,14 @@ if __name__ == '__main__':
 	# move network to gpu
 	predictor = predictor.cuda()
 	
+	model_without_ddp = model
+	predictor_without_ddp = predictor
 	# set up model for distributed training
 	if args.distributed:
 		model, model_without_ddp = utils.model_setup_ddp(args.gpu, model)
-		predictor, predictor_without_ddp = utils.model_setup_ddp(args.gpu, predictor)
-	else:
-		model_without_ddp = model
-		predictor_without_ddp = predictor
+		if args.predictor:
+			predictor, predictor_without_ddp = utils.model_setup_ddp(args.gpu, predictor)
+	
 
 	# prepare loss
 	barlow_twins_loss = BarlowTwinsLoss(

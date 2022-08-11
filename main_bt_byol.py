@@ -433,16 +433,15 @@ if __name__ == '__main__':
 	target_ema_updater = utils.EMA(args.moving_average_decay)
 
 	
+	online_encoder_without_ddp = online_encoder
+	online_predictor_without_ddp = online_predictor
+	target_encoder_without_ddp = target_encoder
 	# set up model for distributed training
 	if args.distributed:
 		online_encoder, online_encoder_without_ddp = utils.model_setup_ddp(args.gpu, online_encoder)
 		online_predictor, online_predictor_without_ddp = utils.model_setup_ddp(args.gpu, online_predictor)
-		target_encoder, target_encoder_without_ddp = utils.model_setup_ddp(args.gpu, target_encoder)
-	else:
-		online_encoder_without_ddp = online_encoder
-		online_predictor_without_ddp = online_predictor
-		target_encoder_without_ddp = target_encoder
-
+		if not args.stop_gradient:
+			target_encoder, target_encoder_without_ddp = utils.model_setup_ddp(args.gpu, target_encoder)
 
 	# prepare loss
 	barlow_twins_loss = BarlowTwinsLoss(
