@@ -36,6 +36,7 @@ def get_std_parameters():
 	parser.add_argument('--lr_schedule', action='store_true', default=False)
 	parser.add_argument('--epoch_save_f', default=20, type=int)
 	parser.add_argument('--epoch_eval_f', default=5, type=int)
+	parser.add_argument('--no_eval', action='store_true', default=False)
 	parser.add_argument('--batch_size', type=int, default=128)
 	parser.add_argument('--lmbda', type=float, default=0.005)
 	parser.add_argument('--alpha', type=float, default=1)

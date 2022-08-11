@@ -468,22 +468,23 @@ if __name__ == '__main__':
 				if args.dataset == 'cifar10':
 					pass
 				else:
-					eval_train_loader, eval_val_loader, eval_test_loader = get_fsd50k(args)
-					scores = eval_linear(
-						model_without_ddp.backbone.encoder,
-						eval_train_loader,
-						eval_val_loader,
-						eval_test_loader,
-						args.use_fp16_eval,
-					)
-					score_all = scores.get('score_all')
-					score_5 = scores.get('score_5')
-					if logger is not None:
-						logger.info('epoch,{},step,{},linear_score,{},linear_score_5_mean,{},linear_score_5_std,{}'.format(
-									epoch,len(train_loader)*epoch,score_all,score_5[0],score_5[1]))
-					wandb_run.log({
-						'FSD50K score (100%)': score_all,
-						'FSD50K score (5pC) (mean)': score_5[0],
-					})
-	
+					if not args.no_eval:
+						eval_train_loader, eval_val_loader, eval_test_loader = get_fsd50k(args)
+						scores = eval_linear(
+							model_without_ddp.backbone.encoder,
+							eval_train_loader,
+							eval_val_loader,
+							eval_test_loader,
+							args.use_fp16_eval,
+						)
+						score_all = scores.get('score_all')
+						score_5 = scores.get('score_5')
+						if logger is not None:
+							logger.info('epoch,{},step,{},linear_score,{},linear_score_5_mean,{},linear_score_5_std,{}'.format(
+										epoch,len(train_loader)*epoch,score_all,score_5[0],score_5[1]))
+						wandb_run.log({
+							'FSD50K score (100%)': score_all,
+							'FSD50K score (5pC) (mean)': score_5[0],
+						})
+		
 
