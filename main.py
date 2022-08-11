@@ -428,7 +428,7 @@ if __name__ == '__main__':
 		fp16_scaler = torch.cuda.amp.GradScaler()	
 
 	# model checkpoint path
-	ckpt_path = f'results/{args.dataset}/{save_name}'
+	ckpt_path = os.path.join(args.save_base_dir, f'results/{args.dataset}/{save_name}')
 	os.makedirs(ckpt_path, exist_ok=True)
 
 	# training

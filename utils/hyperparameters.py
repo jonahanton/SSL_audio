@@ -84,6 +84,7 @@ def get_std_parameters():
 	parser.add_argument('--masked_recon', action='store_true', default=False)
 	parser.add_argument('--stop_gradient', action='store_true', default=False)
 	parser.add_argument('--predictor', action='store_true', default=False)
+	parser.add_argument('--save_base_dir', type=str, default='')
 
 	parser.add_argument('--optimizer', type=str, default=None)
 	parser.add_argument('--lr', type=float, default=None)
