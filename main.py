@@ -35,7 +35,7 @@ if torch.cuda.is_available():
 
 
 def train_one_epoch(args, epoch, model, predictor, barlow_twins_loss, data_loader,
-					optimizer, fp16_scaler, logger, wandb_run):
+					optimizer, fp16_scaler, mask_ratio_schedule, logger, wandb_run):
 	model.train()
 	total_loss, total_num, train_bar = 0, 0, tqdm(data_loader)
 	if args.masked_recon:
@@ -70,9 +70,11 @@ def train_one_epoch(args, epoch, model, predictor, barlow_twins_loss, data_loade
 
 		# mask ratio
 		if args.mask:
-			if args.random_mask_ratio:
-				# randomly sample r ~ U(0.02, 0.2) with p = 0.5
-				mask_ratio = utils.generate_random(l=0.02, h=0.2, p=0.5)
+			if mask_ratio_schedule is not None:
+				mask_ratio = mask_ratio_schedule[iteration]
+			elif args.random_mask_ratio:
+				# randomly sample r ~ U(0.05, beta) with p = 0.5
+				mask_ratio = utils.generate_random(l=0.05, h=args.mask_beta, p=0.5)
 			else:
 				mask_ratio = args.mask_ratio
 		else:
@@ -425,7 +427,18 @@ if __name__ == '__main__':
 	# mixed precision
 	fp16_scaler = None 
 	if args.use_fp16:
-		fp16_scaler = torch.cuda.amp.GradScaler()	
+		fp16_scaler = torch.cuda.amp.GradScaler()
+
+	# schedule for mask ratio
+	mask_ratio_schedule = None
+	if args.mask_ratio_schedule:
+		mask_ratio_schedule = utils.sine_scheduler_increase(
+			final_value=args.mask_beta,
+			epochs=args.epochs,
+			niter_per_ep=len(train_loader),
+			warmup_epochs=int(args.epochs / 5),
+			warmup_value=0,
+		)
 
 	# model checkpoint path
 	ckpt_path = os.path.join(args.save_base_dir, f'results/{args.dataset}/{save_name}')
@@ -442,6 +455,7 @@ if __name__ == '__main__':
 			train_loader,
 			optimizer,
 			fp16_scaler,
+			mask_ratio_schedule,
 			logger, 
 			wandb_run,
 		)
