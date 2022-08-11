@@ -103,6 +103,6 @@ def setup_hyperparameters(args):
 		args.wd = 0.06 if args.wd is None else args.wd
 	else:
 		args.optimizer = 'LARS' if args.optimizer is None else args.optimizer
-		args.lr_weights = 0.4 if args.lr_weights is None else args.lr_weights
-		args.lr_biases = 0.0048 if args.lr_biases is None else args.lr_biases
+		args.lr_weights = 0.4 * args.batch_size / 128 if args.lr_weights is None else args.lr_weights
+		args.lr_biases = 0.0048 * args.batch_size / 128 if args.lr_biases is None else args.lr_biases
 		args.wd = 1e-5 if args.wd is None else args.wd
