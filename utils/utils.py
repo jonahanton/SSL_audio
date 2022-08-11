@@ -35,7 +35,7 @@ def generate_random(l, h, p):
 """------------------------------------Training utils---------------------------------------"""
 
 def adjust_learning_rate(args, optimizer, loader, step):
-	max_steps = args.epochs * len(loader)
+	max_steps = args.epochs * len(loader) * 1.25
 	warmup_steps = int(args.epochs/100) * len(loader)
 	base_lr = args.batch_size / 128
 	if step < warmup_steps:
