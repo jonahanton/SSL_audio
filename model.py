@@ -71,6 +71,14 @@ class ModelWrapper(nn.Module):
 			self.encoder = resnet.resnet50_ReGP_NRF()
 			self.encoder.fc = nn.Identity()
 			self.encoder.embed_dim = 16384
+		elif self.cfg.model_type == 'resnet18':
+			self.encoder = resnet.resnet18()
+			self.encoder.fc = nn.Identity()
+			self.encoder.embed_dim = 512
+		elif self.cfg.model_type == 'resnet50_ReGP_NRF':
+			self.encoder = resnet.resnet18_ReGP_NRF()
+			self.encoder.fc = nn.Identity()
+			self.encoder.embed_dim = 4096
 		elif self.cfg.model_type == 'audiontt':
 			assert self.cfg.n_mels == 64, f'n_mels must be 64 to use AudioNTT encoder (n_mels set to {self.cfg.n_mels})'
 			self.encoder = AudioNTT2022(squeeze_excitation=self.cfg.squeeze_excitation)
