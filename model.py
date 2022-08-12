@@ -75,7 +75,7 @@ class ModelWrapper(nn.Module):
 			self.encoder = resnet.resnet18()
 			self.encoder.fc = nn.Identity()
 			self.encoder.embed_dim = 512
-		elif self.cfg.model_type == 'resnet50_ReGP_NRF':
+		elif self.cfg.model_type == 'resnet18_ReGP_NRF':
 			self.encoder = resnet.resnet18_ReGP_NRF()
 			self.encoder.fc = nn.Identity()
 			self.encoder.embed_dim = 4096
