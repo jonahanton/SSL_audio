@@ -147,7 +147,7 @@ class ResNet(nn.Module):
 		strides: List[int],
 		ReGP: bool = False,
 		C: bool = True,
-		D: bool = True,
+		D: bool = False,
 		num_classes: int = 1000,
 		zero_init_residual: bool = False,
 		groups: int = 1,
