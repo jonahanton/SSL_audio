@@ -45,7 +45,14 @@ def load_checkpoint(ckpt_path, model, predictor, optimizer, barlow_twins_loss):
 	model.load_state_dict(ckpt.get('model'))
 	predictor.load_state_dict(ckpt.get('predictor'))
 	barlow_twins_loss.load_state_dict(ckpt.get('barlow_twins_loss'))
+
 	optimizer.load_state_dict(ckpt.get('optimizer'))
+	for state in optimizer.state.values():
+		for k, v in state.items():
+			if isinstance(v, torch.Tensor):
+				state[k] = v.cuda()
+	
+	
 	resume_epoch = ckpt.get('epoch')
 
 	model = model.cuda()
