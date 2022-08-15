@@ -44,7 +44,7 @@ def load_checkpoint(ckpt_path, model, predictor, optimizer, loss):
 	loss.load_state_dict(ckpt.get('loss').to('cuda'), strict=True)
 	resume_epoch = ckpt.get('epoch')
 
-	return model, predictor, optimizer, loss, resume_epoch
+	return resume_epoch
 
 def adjust_learning_rate(args, optimizer, loader, step):
 	max_steps = args.epochs * len(loader) * 1.25

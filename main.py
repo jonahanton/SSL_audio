@@ -447,12 +447,12 @@ if __name__ == '__main__':
 	# resume training from checkpoint
 	resume_epoch = 1
 	if args.resume_path is not None:
-		model, predictor, optimizer, barlow_twins_loss, resume_epoch = utils.load_checkpoint(
-			args.resume_path,
-			model,
-			optimizer,
-			predictor,
-			barlow_twins_loss,
+		resume_epoch = utils.load_checkpoint(
+			ckpt_path=args.resume_path,
+			model=model,
+			predictor=predictor,
+			optimizer=optimizer,
+			loss=barlow_twins_loss,
 		)
 
 	# training
