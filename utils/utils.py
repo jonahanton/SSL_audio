@@ -36,17 +36,21 @@ def generate_random(l, h, p):
 
 def load_checkpoint(ckpt_path, model, predictor, optimizer, barlow_twins_loss):
 
-	ckpt = torch.load(ckpt_path, map_location='cuda')
+	model = model.to('cpu')
+	predictor = predictor.to('cpu')
+	barlow_twins_loss = barlow_twins_loss.to('cpu')
+
+	ckpt = torch.load(ckpt_path, map_location='cpu')
 
 	model.load_state_dict(ckpt.get('model'))
 	predictor.load_state_dict(ckpt.get('predictor'))
 	barlow_twins_loss.load_state_dict(ckpt.get('barlow_twins_loss'))
-	
-	opt_sd = ckpt.get('optimizer')
-	opt_sd = opt_sd.to('cpu')
-	optimizer.load_state_dict(opt_sd)
-
+	optimizer.load_state_dict(ckpt.get('optimizer'))
 	resume_epoch = ckpt.get('epoch')
+
+	model = model.cuda()
+	predictor = predictor.cuda()
+	barlow_twins_loss = barlow_twins_loss.cuda()
 
 	return resume_epoch
 
