@@ -34,14 +34,14 @@ def generate_random(l, h, p):
 
 """------------------------------------Training utils---------------------------------------"""
 
-def load_checkpoint(ckpt_path, model, predictor, optimizer, loss):
+def load_checkpoint(ckpt_path, model, predictor, optimizer, barlow_twins_loss):
 
 	ckpt = torch.load(ckpt_path, map_location='cuda')
 
 	model.load_state_dict(ckpt.get('model'), strict=True)
 	predictor.load_state_dict(ckpt.get('predictor'), strict=True)
 	optimizer.load_state_dict(ckpt.get('optimizer'), strict=True)
-	loss.load_state_dict(ckpt.get('loss'), strict=True)
+	barlow_twins_loss.load_state_dict(ckpt.get('barlow_twins_loss'), strict=True)
 	resume_epoch = ckpt.get('epoch')
 
 	return resume_epoch
