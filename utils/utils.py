@@ -40,8 +40,12 @@ def load_checkpoint(ckpt_path, model, predictor, optimizer, barlow_twins_loss):
 
 	model.load_state_dict(ckpt.get('model'))
 	predictor.load_state_dict(ckpt.get('predictor'))
-	optimizer.load_state_dict(ckpt.get('optimizer'))
 	barlow_twins_loss.load_state_dict(ckpt.get('barlow_twins_loss'))
+	
+	opt_sd = ckpt.get('optimizer')
+	opt_sd = opt_sd.to('cpu')
+	optimizer.load_state_dict(opt_sd)
+
 	resume_epoch = ckpt.get('epoch')
 
 	return resume_epoch
