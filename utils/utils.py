@@ -34,30 +34,22 @@ def generate_random(l, h, p):
 
 """------------------------------------Training utils---------------------------------------"""
 
-def load_checkpoint(ckpt_path, model, predictor, optimizer, barlow_twins_loss):
+def load_checkpoint(ckpt_path, model, predictor, optimizer):
 
-	model = model.to('cpu')
-	predictor = predictor.to('cpu')
-	barlow_twins_loss = barlow_twins_loss.to('cpu')
+	# model = model.to('cpu')
+	# predictor = predictor.to('cpu')
+	# barlow_twins_loss = barlow_twins_loss.to('cpu')
 
-	ckpt = torch.load(ckpt_path, map_location='cpu')
+	ckpt = torch.load(ckpt_path, map_location=torch.device('cpu'))
 
-	model.load_state_dict(ckpt.get('model'))
-	predictor.load_state_dict(ckpt.get('predictor'))
-	barlow_twins_loss.load_state_dict(ckpt.get('barlow_twins_loss'))
+	model.load_state_dict(ckpt['model'])
+	predictor.load_state_dict(ckpt['predictor'])
+	optimizer.load_state_dict(ckpt['optimizer'])	
+	resume_epoch = ckpt['epoch']
 
-	optimizer.load_state_dict(ckpt.get('optimizer'))
-	for state in optimizer.state.values():
-		for k, v in state.items():
-			if isinstance(v, torch.Tensor):
-				state[k] = v.cuda()
-	
-	
-	resume_epoch = ckpt.get('epoch')
-
-	model = model.cuda()
-	predictor = predictor.cuda()
-	barlow_twins_loss = barlow_twins_loss.cuda()
+	# model = model.cuda()
+	# predictor = predictor.cuda()
+	# barlow_twins_loss = barlow_twins_loss.cuda()
 
 	return resume_epoch
 
