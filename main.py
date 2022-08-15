@@ -452,7 +452,6 @@ if __name__ == '__main__':
 			model=model,
 			predictor=predictor,
 			optimizer=optimizer,
-			barlow_twins_loss=barlow_twins_loss,
 		)
 
 	# training
