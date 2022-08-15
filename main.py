@@ -370,7 +370,7 @@ if __name__ == '__main__':
 		log_path = os.path.join(log_dir, f"log.csv")
 		logger = logging.getLogger()
 		logger.setLevel(logging.INFO)  # Setup the root logger
-		logger.addHandler(logging.FileHandler(log_path, mode="w"))
+		logger.addHandler(logging.FileHandler(log_path, mode="a"))
 	else:
 		logger = None
 		
@@ -444,8 +444,19 @@ if __name__ == '__main__':
 	ckpt_path = os.path.join(args.save_base_dir, f'results/{args.dataset}/{save_name}')
 	os.makedirs(ckpt_path, exist_ok=True)
 
+	# resume training from checkpoint
+	resume_epoch = 1
+	if args.resume_path is not None:
+		model, predictor, optimizer, barlow_twins_loss, resume_epoch = utils.load_checkpoint(
+			args.resume_path,
+			model,
+			optimizer,
+			predictor,
+			barlow_twins_loss,
+		)
+
 	# training
-	for epoch in range(1, args.epochs+1):
+	for epoch in range(resume_epoch, args.epochs+1):
 		train_loss = train_one_epoch(
 			args,
 			epoch,

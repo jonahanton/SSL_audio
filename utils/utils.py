@@ -34,6 +34,18 @@ def generate_random(l, h, p):
 
 """------------------------------------Training utils---------------------------------------"""
 
+def load_checkpoint(ckpt_path, model, predictor, optimizer, loss):
+
+	ckpt = torch.load(ckpt_path, map_location='cpu')
+
+	model.load_state_dict(ckpt.get('model').to('cuda'), strict=True)
+	predictor.load_state_dict(ckpt.get('predictor').to('cuda'), strict=True)
+	optimizer.load_state_dict(ckpt.get('optimizer'), strict=True)
+	loss.load_state_dict(ckpt.get('loss').to('cuda'), strict=True)
+	resume_epoch = ckpt.get('epoch')
+
+	return model, predictor, optimizer, loss, resume_epoch
+
 def adjust_learning_rate(args, optimizer, loader, step):
 	max_steps = args.epochs * len(loader) * 1.25
 	warmup_steps = int(args.epochs/100) * len(loader)

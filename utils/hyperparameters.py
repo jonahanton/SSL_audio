@@ -34,7 +34,7 @@ def get_std_parameters():
 	parser.add_argument('--dataset', default='fsd50k', type=str, choices=DATASETS)
 	parser.add_argument('--epochs', default=100, type=int)
 	parser.add_argument('--lr_schedule', action='store_true', default=False)
-	parser.add_argument('--epoch_save_f', default=20, type=int)
+	parser.add_argument('--epoch_save_f', default=5, type=int)
 	parser.add_argument('--epoch_eval_f', default=5, type=int)
 	parser.add_argument('--no_eval', action='store_true', default=False)
 	parser.add_argument('--batch_size', type=int, default=128)
@@ -87,6 +87,7 @@ def get_std_parameters():
 	parser.add_argument('--stop_gradient', action='store_true', default=False)
 	parser.add_argument('--predictor', action='store_true', default=False)
 	parser.add_argument('--save_base_dir', type=str, default='')
+	parser.add_argument('--resume_path', type=str, default=None)
 
 	parser.add_argument('--optimizer', type=str, default=None)
 	parser.add_argument('--lr', type=float, default=None)
