@@ -51,7 +51,7 @@ class ModelWrapper(nn.Module):
 		return self.model.embed_dim
 
 	def _load_weights(self, model_file_path):
-		sd = torch.load(args.model_file_path, map_location='cpu')
+		sd = torch.load(model_file_path, map_location='cpu')
 		sd = sd.get('model')
 		sd = {k.replace("backbone.encoder.", ""): v for k, v in sd.items() if "backbone.encoder." in k}
 		self.model.load_state_dict(sd, strict=True)
