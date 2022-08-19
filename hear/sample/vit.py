@@ -55,6 +55,7 @@ class ViTModelWrapper(nn.Module):
 
 	def _load_weights(self, model_file_path):
 		sd = torch.load(model_file_path, map_location='cpu')
+		sd = sd.get('model')
 		sd = {k.replace("backbone.encoder.encoder.", ""): v for k, v in sd.items() if "backbone.encoder.encoder." in k}
 		self.model.load_state_dict(sd, strict=True)
 
