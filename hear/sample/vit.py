@@ -32,41 +32,24 @@ def get_to_melspec(cfg):
 
 
 class ViTModelWrapper(nn.Module):
-	def __init__(self, cfg, model_type, model_file_path):
+	def __init__(self, cfg, model_type, model_file_path, patch_size):
 		super().__init__()
 		# needed for HEAR API
 		self.cfg = cfg
 		self.use_cls = True if self.cfg.use_cls is None else self.cfg.use_cls
 		self.sample_rate = cfg.sample_rate
-		embed_size = self._get_model(model_type)
+		embed_size = self._get_model(model_type, patch_size)
 		self._load_weights(model_file_path)
 		self.scene_embedding_size = embed_size
 		self.timestamp_embedding_size = embed_size * self.model.grid_size()[0]
 		self.to_melspec = get_to_melspec(cfg)
 
 
-	def _get_model(self, model_type):
+	def _get_model(self, model_type, patch_size):
 
 		c = "vitc" in model_type
 		size = model_type.split('_')[-1]
-		if c:
-			if size == 'base':
-				self.model = mae.mae_vitc_base_patch16x16()
-			elif size == 'small':
-				self.model = mae.mae_vitc_small_patch16x16()
-			elif size == 'tiny':
-				self.model = mae.mae_vitc_tiny_patch16x16()
-			else:
-				raise NotImplementedError(f'ViTc size {size} is not supported')
-		else:
-			if size == 'base':
-				self.model = mae.mae_vit_base_patch16x16()
-			elif size == 'small':
-				self.model = mae.mae_vit_small_patch16x16()
-			elif size == 'tiny':
-				self.model = mae.mae_vit_tiny_patch16x16()
-			else:
-				raise NotImplementedError(f'ViT size {size} is not supported')
+		self.model = mae.get_mae_vit(size, patch_size, c)
 		return self.model.embed_dim
 
 
@@ -123,7 +106,7 @@ class ViTModelWrapper(nn.Module):
 			# [CLS] embeddings only
 			for i in range(x.shape[-1] // unit_frames):
 				emb = self.model(x[..., i*unit_frames:(i+1)*unit_frames])
-				emb = emb[:, :1]  # [emb] = [b, 1, d], n.b. emb = emb[:, 0] -> [emb] = [b, d]
+				emb = emb.unsqueeze(1)  # [emb] = [b, 1, d]
 				embeddings.append(emb)
 
 			# concat along the 2nd dimension (dim=1), i.e., concat. [CLS] tokens from the different divided segments
@@ -171,7 +154,7 @@ class ViTModelWrapper(nn.Module):
 		return x, ts 
 
 
-def load_model(model_file_path: str = "", model_type: str = "vitc_base", cfg_path: str = "hear/config.yaml") -> torch.nn.Module:
+def load_model(model_file_path: str = "", model_type: str = "vitc_base", patch_size: str = "16x8", cfg_path: str = "hear/config.yaml") -> torch.nn.Module:
 	"""Load pre-trained model
 	Parameters
 	----------
@@ -185,8 +168,10 @@ def load_model(model_file_path: str = "", model_type: str = "vitc_base", cfg_pat
 	"""
 	# Load config file
 	cfg = utils.load_yaml_config(cfg_path)
+	# Convert patch size string to list
+	patch_size = [int(patch_size.split("x")[0]), int(patch_size.split("x")[-1])]
 	# Load pretrained weights
-	model = ViTModelWrapper(cfg, model_type, model_file_path)
+	model = ViTModelWrapper(cfg, model_type, model_file_path, patch_size)
 	if torch.cuda.is_available():
 		model.cuda()
 	return model
