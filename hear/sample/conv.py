@@ -60,9 +60,22 @@ class ModelWrapper(nn.Module):
 
 	def _load_weights(self, model_file_path):
 		sd = torch.load(model_file_path, map_location='cpu')
-		sd = sd.get('model')
-		sd = {k.replace("backbone.encoder.", ""): v for k, v in sd.items() if "backbone.encoder." in k}
-		self.model.load_state_dict(sd, strict=True)
+		if 'model' in sd.keys():
+			sd = sd.get('model')
+		while True:
+			clean_sd = {k.replace("backbone.encoder.", ""): v for k, v in sd.items() if "backbone.encoder." in k}
+			if clean_sd:
+				break
+			clean_sd = {k.replace("encoder.encoder.", ""): v for k, v in sd.items() if "encoder.encoder." in k}
+			if clean_sd:
+				break
+			clean_sd = {k.replace("encoder.", "", 1): v for k, v in sd.items() if "encoder." in k}
+			if clean_sd:
+				break
+			clean_sd = sd
+			break
+
+		self.model.load_state_dict(clean_sd, strict=True)
 
 
 def load_model(model_file_path: str = "", model_type: str = "audiontt", cfg_path: str = "hear/config.yaml") -> torch.nn.Module:
