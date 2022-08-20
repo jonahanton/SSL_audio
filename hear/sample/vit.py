@@ -127,9 +127,9 @@ class ViTModelWrapper(nn.Module):
 		return x 
 	
 	
-	def _encode(self, batch_audio):
+	def _encode(self, batch_audio, cls_only=None):
 		x = self._to_normalized_spec(batch_audio)
-		return self._encode_lms(x)
+		return self._encode_lms(x, cls_only)
 	
 
 	def get_scene_embeddings(self, audio):

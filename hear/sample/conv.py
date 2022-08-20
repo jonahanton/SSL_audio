@@ -44,6 +44,14 @@ class ModelWrapper(nn.Module):
 			self.model = resnet.resnet50_ReGP_NRF()
 			self.model.fc = nn.Identity()
 			self.model.embed_dim = 16384
+		elif model_type == 'resnet18':
+			self.model = resnet.resnet18()
+			self.model.fc = nn.Identity()
+			self.model.embed_dim = 512
+		elif model_type == 'resnet18_ReGP_NRF':
+			self.model = resnet.resnet18_ReGP_NRF()
+			self.model.fc = nn.Identity()
+			self.model.embed_dim = 4096
 		elif model_type == 'audiontt':
 			self.model = AudioNTT2022()
 		else:
