@@ -28,7 +28,8 @@ class ModelWrapper(nn.Module):
 		# needed for HEAR API
 		self.sample_rate = cfg.sample_rate
 		embed_size = self._get_model(model_type)
-		self._load_weights(model_file_path)
+		if model_file_path != "":
+			self._load_weights(model_file_path)
 		self.scene_embedding_size = embed_size
 		self.timestamp_embedding_size = embed_size
 

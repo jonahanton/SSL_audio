@@ -39,7 +39,8 @@ class ViTModelWrapper(nn.Module):
 		self.use_cls = True if self.cfg.use_cls is None else self.cfg.use_cls
 		self.sample_rate = cfg.sample_rate
 		embed_size = self._get_model(model_type, patch_size)
-		self._load_weights(model_file_path)
+		if model_file_path != "":
+			self._load_weights(model_file_path)
 		self.scene_embedding_size = embed_size
 		self.timestamp_embedding_size = embed_size * self.model.grid_size()[0]
 		self.to_melspec = get_to_melspec(cfg)

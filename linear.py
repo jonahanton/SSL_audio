@@ -115,20 +115,21 @@ def load_model(args):
 	model = ModelWrapper(args)
 	model = model.encoder
 
-	sd = torch.load(args.model_file_path, map_location='cpu')
-	if 'model' in sd.keys():
-		sd = sd.get('model')
-	while True:
-		clean_sd = {k.replace("backbone.encoder.", ""): v for k, v in sd.items() if "backbone.encoder." in k}
-		if clean_sd:
+	if args.model_file_path != ""
+		sd = torch.load(args.model_file_path, map_location='cpu')
+		if 'model' in sd.keys():
+			sd = sd.get('model')
+		while True:
+			clean_sd = {k.replace("backbone.encoder.", ""): v for k, v in sd.items() if "backbone.encoder." in k}
+			if clean_sd:
+				break
+			clean_sd = {k.replace("encoder.encoder.", ""): v for k, v in sd.items() if "encoder.encoder." in k}
+			if clean_sd:
+				break
+			clean_sd = sd
 			break
-		clean_sd = {k.replace("encoder.encoder.", ""): v for k, v in sd.items() if "encoder.encoder." in k}
-		if clean_sd:
-			break
-		clean_sd = sd
-		break
 
-	model.load_state_dict(clean_sd, strict=True)
+		model.load_state_dict(clean_sd, strict=True)
 	return model
 
 
@@ -136,8 +137,8 @@ def load_model(args):
 if __name__ == '__main__':
 
 	parser = argparse.ArgumentParser(description='Linear eval', parents=hyperparameters.get_hyperparameters())
-	parser.add_argument('--model_file_path', type=str, required=True)
-	parser.add_argument('--model_name', type=str, required=True)
+	parser.add_argument('--model_file_path', type=str, default="")
+	parser.add_argument('--model_name', type=str, default="")
 	parser.add_argument('--model_epoch', type=int, default=100)
 	args = parser.parse_args()
 
