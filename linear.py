@@ -115,7 +115,7 @@ def load_model(args):
 	model = ModelWrapper(args)
 	model = model.encoder
 
-	if args.model_file_path != ""
+	if args.model_file_path != "":
 		sd = torch.load(args.model_file_path, map_location='cpu')
 		if 'model' in sd.keys():
 			sd = sd.get('model')
