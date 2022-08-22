@@ -126,7 +126,7 @@ class FSD50K(Dataset):
 
 class LibriSpeech(Dataset):
 	
-	def __init__(self, cfg, train=True, transform=None, norm_stats=None):
+	def __init__(self, cfg, train=True, transform=None, norm_stats=None, n_dummy=200):
 		super().__init__()
 		
 		# initializations
@@ -134,6 +134,7 @@ class LibriSpeech(Dataset):
 		self.train = train
 		self.transform = transform
 		self.norm_stats = norm_stats
+		self.n_dummy = n_dummy
 		if self.cfg.load_lms:
 			self.base_path= "data/LibriSpeech_lms/"
 		else:
@@ -164,7 +165,7 @@ class LibriSpeech(Dataset):
 	def __getitem__(self, idx):
 		datum = self.data[idx]
 		fname = datum.get('wav')
-		dummy_label = torch.zeros(200)
+		dummy_label = torch.zeros(self.n_dummy)
 
 		if self.cfg.load_lms:
 			# load lms

@@ -297,7 +297,7 @@ def get_data(args):
 		norm_stats_librispeech = [-3.332, 4.205]
 		train_data = torch.utils.data.dataset.ConcatDataset([
 			datasets.AudioSet(args, transform=transforms.AudioPairTransform(args), norm_stats=norm_stats_audioset),
-			datasets.LibriSpeech(args, train=True, transform=transforms.AudioPairTransform(args), norm_stats=norm_stats_librispeech),
+			datasets.LibriSpeech(args, train=True, transform=transforms.AudioPairTransform(args), norm_stats=norm_stats_librispeech, n_dummy=527),
 		])
 	
 	if args.distributed:
