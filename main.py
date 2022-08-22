@@ -292,6 +292,13 @@ def get_data(args):
 	elif args.dataset == 'audioset':
 		norm_stats = [-0.8294, 4.6230]
 		train_data = datasets.AudioSet(args, transform=transforms.AudioPairTransform(args), norm_stats=norm_stats)
+	elif args.dataset == 'audioset+librispeech':
+		norm_stats_audioset = [-0.8294, 4.6230]
+		norm_stats_librispeech = [-3.332, 4.205]
+		train_data = torch.utils.data.dataset.ConcatDataset([
+			datasets.AudioSet(args, transform=transforms.AudioPairTransform(args), norm_stats=norm_stats_audioset),
+			datasets.LibriSpeech(args, train=True, transform=transforms.AudioPairTransform(args), norm_stats=norm_stats_librispeech),
+		])
 	
 	if args.distributed:
 		train_sampler = torch.utils.data.distributed.DistributedSampler(train_data)

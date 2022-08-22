@@ -13,7 +13,8 @@ DATASETS = [
 	'audioset',
 	'librispeech',
 	'fsd50k+librispeech',
-	'cifar10'
+	'audioset+librispeech',
+	'cifar10',
 ]
 
 OPTIMIZERS = [
