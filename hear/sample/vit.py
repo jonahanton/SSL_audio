@@ -216,7 +216,7 @@ def get_timestamp_embeddings(
 	# Disable parameter tuning
 	model.eval()
 	with torch.no_grad():
-		embeddings_list = [model.encode_lms(batch[0]) for batch in loader]
+		embeddings_list = [torch.mean(model.encode_lms(batch[0]), dim=1) for batch in loader]
 
 	# Concatenate mini-batches back together and unflatten the frames
 	# to reconstruct the audio batches
