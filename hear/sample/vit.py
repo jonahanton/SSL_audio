@@ -16,6 +16,13 @@ from torchaudio.transforms import MelSpectrogram
 from models import mae
 import hear.utils as utils
 
+# Default frame duration in milliseconds
+TIMESTAMP_FRAME_DUR = 950
+# Default hop_size in milliseconds
+TIMESTAMP_HOP_SIZE = 50
+# Number of frames to batch process for timestamp embeddings
+BATCH_SIZE = 512
+
 
 def get_to_melspec(cfg):
 	to_melspec = MelSpectrogram(
@@ -99,13 +106,8 @@ class ViTModelWrapper(nn.Module):
 		return x 
 
 	
-	def _encode_lms(self, x, cls_only=None):
+	def encode_lms(self, x):
 
-		if cls_only is None:
-			cls_only = self.use_cls
-
-		patch_fbins = self.model.grid_size()[0]
-		embed_d = self.model.embed_dim
 		unit_frames = self.model.img_size[1]  # number of time frames for inputs 
 		# pad input's (x's) number of frames so that it's an integer multiple of unit_frames
 		pad_frames = unit_frames - (x.shape[-1] % unit_frames)
@@ -113,57 +115,21 @@ class ViTModelWrapper(nn.Module):
 			x = F.pad(x, (0, pad_frames))
 
 		embeddings = []
-		if cls_only:
-			# [CLS] embeddings only
-			for i in range(x.shape[-1] // unit_frames):
-				emb = self.model(x[..., i*unit_frames:(i+1)*unit_frames])
-				emb = emb.unsqueeze(1)  # [emb] = [b, 1, d]
-				embeddings.append(emb)
+		# [CLS] embeddings only
+		for i in range(x.shape[-1] // unit_frames):
+			emb = self.model(x[..., i*unit_frames:(i+1)*unit_frames])
+			emb = emb.unsqueeze(1)  # [emb] = [b, 1, d]
+			embeddings.append(emb)
 
-			# concat along the 2nd dimension (dim=1), i.e., concat. [CLS] tokens from the different divided segments
-			x = torch.hstack(embeddings)  # [x] = [b, n_unit_frames, d], n_unit_frames = x.shape[-1] // unit_frames
-		else:
-			# stack embeddings
-			for i in range(x.shape[-1] // unit_frames):
-				emb = self.model(x[..., i*unit_frames:(i+1)*unit_frames], return_all=True)
-				emb = emb[:, 1:, :]
-				emb = rearrange(emb, ' b (f t) d -> b t (f d)', f=patch_fbins, d=embed_d)
-				embeddings.append(emb)
-			# concat along the 2nd dimension (dim=1)
-			x = torch.hstack(embeddings)  # [x] = [b, n_unit_frames*patch_tbins, patch_fbins*d]
-			pad_emb_frames = int(embeddings[0].shape[1] * pad_frames / unit_frames)
-			if pad_emb_frames > 0:
-				x = x[:, :-pad_emb_frames]  # remove padded tails
+		# concat along the 2nd dimension (dim=1), i.e., concat. [CLS] tokens from the different divided segments
+		x = torch.hstack(embeddings)  # [x] = [b, n_unit_frames, d], n_unit_frames = x.shape[-1] // unit_frames
 		return x 
 	
 	
-	def _encode(self, batch_audio, cls_only=None):
+	def encode(self, batch_audio):
 		x = self._to_normalized_spec(batch_audio)
-		return self._encode_lms(x, cls_only)
+		return self.encode_lms(x)
 	
-
-	def get_scene_embeddings(self, audio):
-		"""
-		audio: n_sounds x n_samples of mono audio in the range [-1, 1]. All sounds in a batch will be padded/trimmed to the same length.
-		Returns:
-			embedding: A float32 Tensor with shape (n_sounds, model.scene_embedding_size).
-		"""
-		x = self._encode(audio)
-		x = torch.mean(x, dim=1)  # average [CLS] tokens from different audio segments (orig. clip split into lengths of cfg.input_size[1] = 96) 
-		return x
-
-
-	def get_timestamp_embeddings(self, audio):
-		"""
-		audio: n_sounds x n_samples of mono audio in the range [-1, 1]. All sounds in a batch will be padded/trimmed to the same length.
-		Returns:
-			embedding: A float32 Tensor with shape (n_sounds, n_timestamps, model.timestamp_embedding_size).
-			timestamps: A float32 Tensor with shape (n_sounds, n_timestamps). Centered timestamps in milliseconds corresponding to each embedding in the output.
-		"""
-		x = self._encode(audio, cls_only=False)
-		ts = self._get_timestamps(audio, x)
-		return x, ts 
-
 
 def load_model(model_file_path: str = "", model_type: str = "vitc_base", patch_size: str = "16x8", cfg_path: str = "hear/config.yaml") -> torch.nn.Module:
 	"""Load pre-trained model
@@ -191,6 +157,9 @@ def load_model(model_file_path: str = "", model_type: str = "vitc_base", patch_s
 def get_timestamp_embeddings(
 	audio_list: List,
 	model: torch.nn.Module,
+	frame_duration: float = TIMESTAMP_FRAME_DUR,
+	hop_size: float = TIMESTAMP_HOP_SIZE,
+	cfg_path: str = 'hear/config.yaml'
 ) -> Tuple[Tensor, Tensor]:
 	"""
 	This function returns embeddings at regular intervals centered at timestamps. Both
@@ -205,11 +174,56 @@ def get_timestamp_embeddings(
 			to each embedding in the output. Shape: (n_sounds, n_timestamps).
 	"""
 
+	# Load config file
+	cfg = utils.load_yaml_config(cfg_path)
+	to_melspec = MelSpectrogram(
+						sample_rate=cfg.sample_rate,
+						n_fft=cfg.n_fft,
+						win_length=cfg.win_length,
+						hop_length=cfg.hop_length,
+						n_mels=cfg.n_mels,
+						f_min=cfg.f_min,
+						f_max=cfg.f_max,
+						).to(audio_list[0].device)
+
 	# Send the model to the same device that the audio tensor is on.
 	model = model.to(audio_list[0].device)
+
+	# Split the input audio signals into frames and then flatten to create a tensor
+	# of audio frames that can be batch processed.
+	frames, timestamps = utils.frame_audio(
+		audio_list,
+		frame_size=int((frame_duration/1000)*cfg.sample_rate),
+		hop_size=hop_size,
+		sample_rate=cfg.sample_rate,
+	)
+	audio_batches, num_frames, _ = frames.shape
+	frames = frames.flatten(end_dim=1)
+
+	# Convert audio frames to spectrograms
+	melspec_frames = ((to_melspec(frames) + torch.finfo(torch.float).eps).log())
+	# Normalize 
+	mean, std = utils.compute_timestamp_stats(melspec_frames)
+	melspec_frames = ((melspec_frames - mean) / std).unsqueeze(0)
+	melspec_frames = melspec_frames.permute(1, 0, 2, 3)
+	
+	# We're using a DataLoader to help with batching of frames
+	dataset = torch.utils.data.TensorDataset(melspec_frames)
+	loader = torch.utils.data.DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=False, drop_last=False)
+
+	# Put the model into eval mode, and not computing gradients while in inference.
+	# Iterate over all batches and accumulate the embeddings for each frame.
+	# Disable parameter tuning
 	model.eval()
 	with torch.no_grad():
-		return model.get_timestamp_embeddings(audio_list)
+		embeddings_list = [model.encode_lms(batch[0]) for batch in loader]
+
+	# Concatenate mini-batches back together and unflatten the frames
+	# to reconstruct the audio batches
+	embeddings = torch.cat(embeddings_list, dim=0)
+	embeddings = embeddings.unflatten(0, (audio_batches, num_frames))
+
+	return embeddings, timestamps
 
 
 def get_scene_embeddings(
@@ -230,4 +244,4 @@ def get_scene_embeddings(
 	model = model.to(device)
 	model.eval()
 	with torch.no_grad():
-		return model.get_scene_embeddings(audio_list)
+		return torch.mean(model.encode(audio_list), dim=1)

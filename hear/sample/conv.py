@@ -10,8 +10,8 @@ import torch.nn as nn
 from torch import Tensor
 from torchaudio.transforms import MelSpectrogram
 
-from models import mae, resnet
-from model import AudioNTT2022, ViT
+from models import resnet
+from model import AudioNTT2022
 import hear.utils as utils
 
 # Default frame duration in milliseconds
