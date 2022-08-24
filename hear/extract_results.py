@@ -11,8 +11,6 @@ BASE_DIR = "/rds/general/user/jla21/ephemeral/hear/embeddings"
 OUTPATH = "/rds/general/user/jla21/home/SSL_audio/hear/results.json"
 TASKS = dict(
 	environmental=[
-		"beehive_states_fold0-v2-full",
-		"beehive_states_fold1-v2-full",
 		"esc50-v2.0.0-full",
 		"fsd50k-v1.0-full",
 		"gunshot_triangulation-v1.0-full",
