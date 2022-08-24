@@ -1,12 +1,10 @@
 {
     "vitc_tiny_16x8_audioset_fp16_default_lr_wd05:09_Aug14_model_100": {
         "environmental": {
-            "beehive_states_fold0-v2-full": 0.5947145061728394,
-            "beehive_states_fold1-v2-full": 0.552903163580247,
             "esc50-v2.0.0-full": 0.6589999914169311,
             "fsd50k-v1.0-full": 0.39728816320541666,
             "gunshot_triangulation-v1.0-full": 0.714285705770765,
-            "AVERAGE": 0.5836383060292398
+            "AVERAGE": 0.5901912867977043
         },
         "speech": {
             "speech_commands-v0.0.2-5h": 0.6094069480895996,
@@ -102,12 +100,10 @@
     },
     "vitc_small_16x8_random": {
         "environmental": {
-            "beehive_states_fold0-v2-full": 0.5823929398148149,
-            "beehive_states_fold1-v2-full": 0.8738908179012346,
             "esc50-v2.0.0-full": 0.18600000143051149,
             "fsd50k-v1.0-full": 0.21887483300883662,
             "gunshot_triangulation-v1.0-full": 0.75,
-            "AVERAGE": 0.5222317184310794
+            "AVERAGE": 0.3849582781464494
         },
         "speech": {
             "speech_commands-v0.0.2-5h": 0.2666666805744171,
@@ -187,12 +183,10 @@
     },
     "vitc_tiny_16x8_random": {
         "environmental": {
-            "beehive_states_fold0-v2-full": 0.8195408950617284,
-            "beehive_states_fold1-v2-full": 0.8732759452160493,
             "esc50-v2.0.0-full": 0.2110000044107437,
             "fsd50k-v1.0-full": 0.183464072754545,
             "gunshot_triangulation-v1.0-full": 0.9404761961528233,
-            "AVERAGE": 0.6055514227191778
+            "AVERAGE": 0.4449800911060373
         },
         "speech": {
             "speech_commands-v0.0.2-5h": 0.18548057973384857,
@@ -299,12 +293,10 @@
     },
     "audiontt_audioset_lrschedule03:00_Aug12_model_100": {
         "environmental": {
-            "beehive_states_fold0-v2-full": 0.32343508873456794,
-            "beehive_states_fold1-v2-full": 0.28247974537037035,
             "esc50-v2.0.0-full": 0.7864999890327453,
             "fsd50k-v1.0-full": 0.47414403027389845,
             "gunshot_triangulation-v1.0-full": 0.9047619019235883,
-            "AVERAGE": 0.5542641510670341
+            "AVERAGE": 0.7218019737434106
         },
         "speech": {
             "speech_commands-v0.0.2-5h": 0.8820040822029114,
@@ -418,12 +410,10 @@
     },
     "resnet18_ReGP_NRF_random": {
         "environmental": {
-            "beehive_states_fold0-v2-full": 0.4390914351851852,
-            "beehive_states_fold1-v2-full": 0.519555362654321,
             "esc50-v2.0.0-full": 0.38449999690055847,
             "fsd50k-v1.0-full": 0.18419103328062122,
             "gunshot_triangulation-v1.0-full": 0.8690476162093026,
-            "AVERAGE": 0.4792770888459977
+            "AVERAGE": 0.47924621546349416
         },
         "speech": {
             "speech_commands-v0.0.2-5h": 0.4433537721633911,
@@ -452,12 +442,10 @@
     },
     "vitc_base_16x8_audioset_fp16_default_lr_wd09:54_Aug15_model_100": {
         "environmental": {
-            "beehive_states_fold0-v2-full": 0.6713927469135803,
-            "beehive_states_fold1-v2-full": 0.6500771604938271,
             "esc50-v2.0.0-full": 0.7054999947547913,
             "fsd50k-v1.0-full": 0.44643908163170465,
             "gunshot_triangulation-v1.0-full": 0.8452380980764117,
-            "AVERAGE": 0.663729416374063
+            "AVERAGE": 0.6657257248209691
         },
         "speech": {
             "speech_commands-v0.0.2-5h": 0.7235173583030701,
@@ -689,12 +677,10 @@
     },
     "resnet18_audioset_lrschedule08:33_Aug12_model_100": {
         "environmental": {
-            "beehive_states_fold0-v2-full": 0.44012827932098764,
-            "beehive_states_fold1-v2-full": 0.6789158950617284,
             "esc50-v2.0.0-full": 0.5370000004768372,
             "fsd50k-v1.0-full": 0.2732227728051474,
             "gunshot_triangulation-v1.0-full": 0.7648809381893703,
-            "AVERAGE": 0.5388295771708143
+            "AVERAGE": 0.5250345704904517
         },
         "speech": {
             "speech_commands-v0.0.2-5h": 0.3364008069038391,
@@ -723,12 +709,10 @@
     },
     "resnet18_ReGP_NRF_audioset_lrschedule12:23_Aug17_model_100": {
         "environmental": {
-            "beehive_states_fold0-v2-full": 0.5446325231481481,
-            "beehive_states_fold1-v2-full": 0.7993224344135803,
             "esc50-v2.0.0-full": 0.6790000081062317,
             "fsd50k-v1.0-full": 0.3584452404448007,
             "gunshot_triangulation-v1.0-full": 0.7857142899717603,
-            "AVERAGE": 0.6334228992169042
+            "AVERAGE": 0.6077198461742642
         },
         "speech": {
             "speech_commands-v0.0.2-5h": 0.5447852611541748,
@@ -865,12 +849,10 @@
     },
     "vitc_small_16x8_audioset_fp16_default_lr_wd03:48_Aug14_model_100": {
         "environmental": {
-            "beehive_states_fold0-v2-full": 0.49541859567901236,
-            "beehive_states_fold1-v2-full": 0.46664014274691357,
             "esc50-v2.0.0-full": 0.7029999852180481,
             "fsd50k-v1.0-full": 0.4307164220310608,
             "gunshot_triangulation-v1.0-full": 0.8601190447807312,
-            "AVERAGE": 0.5911788380911532
+            "AVERAGE": 0.66461181734328
         },
         "speech": {
             "speech_commands-v0.0.2-5h": 0.6838445663452148,
@@ -915,12 +897,10 @@
     },
     "vitc_base_16x8_audioset_fp16_default_lr_wd08:12_Aug12_model_20": {
         "environmental": {
-            "beehive_states_fold0-v2-full": 0.4604552469135802,
-            "beehive_states_fold1-v2-full": 0.6466411072530864,
             "esc50-v2.0.0-full": 0.6875,
             "fsd50k-v1.0-full": 0.44557950497043763,
             "gunshot_triangulation-v1.0-full": 0.9404761876378741,
-            "AVERAGE": 0.6361304093549957
+            "AVERAGE": 0.6911852308694373
         },
         "speech": {
             "speech_commands-v0.0.2-5h": 0.7541922330856323,
@@ -1067,12 +1047,10 @@
     },
     "audiontt_audioset_lrschedule03:00_Aug12_model_20": {
         "environmental": {
-            "beehive_states_fold0-v2-full": 0.3874541859567901,
-            "beehive_states_fold1-v2-full": 0.5210382908950617,
             "esc50-v2.0.0-full": 0.7839999914169311,
             "fsd50k-v1.0-full": 0.46879282450589727,
             "gunshot_triangulation-v1.0-full": 0.9345238123621259,
-            "AVERAGE": 0.6191618210273613
+            "AVERAGE": 0.7291055427616514
         },
         "speech": {
             "speech_commands-v0.0.2-5h": 0.8762781023979187,
@@ -1359,12 +1337,10 @@
     },
     "audiontt_random": {
         "environmental": {
-            "beehive_states_fold0-v2-full": 0.5952932098765432,
-            "beehive_states_fold1-v2-full": 0.4916329089506173,
             "esc50-v2.0.0-full": 0.5564999878406525,
             "fsd50k-v1.0-full": 0.3136433632577415,
             "gunshot_triangulation-v1.0-full": 0.8809523752757481,
-            "AVERAGE": 0.5676043690402606
+            "AVERAGE": 0.5836985754580474
         },
         "speech": {
             "speech_commands-v0.0.2-5h": 0.8073619604110718,
@@ -1393,12 +1369,10 @@
     },
     "vitc_base_16x8_random": {
         "environmental": {
-            "beehive_states_fold0-v2-full": 0.7524112654320987,
-            "beehive_states_fold1-v2-full": 0.82445987654321,
             "esc50-v2.0.0-full": 0.14449999928474427,
             "fsd50k-v1.0-full": 0.24003750576249566,
             "gunshot_triangulation-v1.0-full": 0.9523809552192688,
-            "AVERAGE": 0.5827579204483635
+            "AVERAGE": 0.4456394867555029
         },
         "speech": {
             "speech_commands-v0.0.2-5h": 0.3047034740447998,
@@ -1461,12 +1435,10 @@
     },
     "resnet18_random": {
         "environmental": {
-            "beehive_states_fold0-v2-full": 0.7913049768518519,
-            "beehive_states_fold1-v2-full": 0.7758728780864197,
             "esc50-v2.0.0-full": 0.30600000321865084,
             "fsd50k-v1.0-full": 0.17933141411614376,
             "gunshot_triangulation-v1.0-full": 0.6547619008592197,
-            "AVERAGE": 0.5414542346264573
+            "AVERAGE": 0.38003110606467144
         },
         "speech": {
             "speech_commands-v0.0.2-5h": 0.18957054615020752,
