@@ -52,16 +52,18 @@ def run(model_type='audiontt', mask_ratio=0, patch_size=(16, 16), outpath=None):
 
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser(add_help=False)
-	parser.add_argument('--model_type', default='audiontt', type=str, choices=MODELS)
+	parser.add_argument('--model_type', default='audiontt', nargs='+', type=str, choices=MODELS)
 	parser.add_argument('--mask_ratio', type=float, default=0)
 	parser.add_argument('--patch_size', nargs='+', type=int, default=[16, 16])
 	args = parser.parse_args()
 
-	save_name = args.model_type
-	if 'vit' in args.model_type:
-		save_name += f'_mask_ratio={args.mask_ratio}_patch_size={args.patch_size[0]}x{args.patch_size[1]}'
-	log_dir = f'logs/flops/{args.model_type}'
-	os.makedirs(log_dir, exist_ok=True)
-	out_path = os.path.join(log_dir, f'{save_name}.log')
+	for model_type in args.model_type:
+		
+		save_name = model_type
+		if 'vit' in model_type:
+			save_name += f'_mask_ratio={args.mask_ratio}_patch_size={args.patch_size[0]}x{args.patch_size[1]}'
+		log_dir = f'logs/flops/{model_type}'
+		os.makedirs(log_dir, exist_ok=True)
+		out_path = os.path.join(log_dir, f'{save_name}.log')
 
-	run(args.model_type, args.mask_ratio, args.patch_size, out_path)
+		run(model_type, args.mask_ratio, args.patch_size, out_path)
