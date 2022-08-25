@@ -1,31 +1,19 @@
-import torch 
-import torch.nn as nn
-from fvcore.nn import FlopCountAnalysis
+import torch
+from deepspeed.profiling.flops_profiler import get_model_profile
+from models import mae
 
-from models import resnet, mae
-from model import ViT, AudioNTT2022
-
-# resnet50
-r50 = resnet.resnet50()
-r50.fc = nn.Identity()
-# resnet50 (ReGP+N.RF)
-r50_ReGP_NRF = resnet.resnet50_ReGP_NRF()
-r50_ReGP_NRF.fc = nn.Identity()
-# audiontt
-audiontt = AudioNTT2022()
-# vit[tiny, small, base]
-vit_tiny = ViT('tiny')
-vit_small = ViT('small')
-vit_base = ViT('base')
-
-archs = {
-    'resnet50':r50, 'resnet50_ReGP_NRF':r50_ReGP_NRF,
-    'audiontt':audiontt,
-    'vit_tiny':vit_tiny, 'vit_small':vit_small, 'vit_base':vit_base,
-}
-
-x = torch.randn((1, 1, 64, 96))
-for k, v in archs.items():
-    print(k)
-    flops = FlopCountAnalysis(v, x)
-    print(f"{flops.total():,}")
+with torch.cuda.device(0):
+    model = mae.get_mae_vit('base', [16,16], False)
+    batch_size = 128
+    flops, macs, params = get_model_profile(model=model, # model
+                                    input_shape=(batch_size, 1, 64, 96), # input shape to the model. If specified, the model takes a tensor with this shape as the only positional argument.
+                                    args=None, # list of positional arguments to the model.
+                                    kwargs=None, # dictionary of keyword arguments to the model.
+                                    print_profile=True, # prints the model graph with the measured profile attached to each module
+                                    detailed=True, # print the detailed profile
+                                    module_depth=-1, # depth into the nested modules, with -1 being the inner most modules
+                                    top_modules=1, # the number of top modules to print aggregated profile
+                                    warm_up=10, # the number of warm-ups before measuring the time of each module
+                                    as_string=True, # print raw numbers (e.g. 1000) or as human-readable strings (e.g. 1k)
+                                    output_file=None, # path to the output file. If None, the profiler prints to stdout.
+                                    ignore_modules=None) # the list of modules to ignore in the profiling
