@@ -60,7 +60,7 @@ if __name__ == "__main__":
 	save_name = args.model_type
 	if 'vit' in args.model_type:
 		save_name += f'_mask_ratio={args.mask_ratio}_patch_size={args.patch_size[0]}x{args.patch_size[1]}'
-	log_dir = 'logs/flops'
+	log_dir = f'logs/flops/{args.model_type}'
 	os.makedirs(log_dir, exist_ok=True)
 	out_path = os.path.join(log_dir, f'{save_name}.log')
 
