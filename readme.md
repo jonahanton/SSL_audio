@@ -8,3 +8,6 @@ This report presents Audio Barlow Twins, a novel self-supervised audio represent
 <br />
 
 This work has been adapted to a paper [Audio Barlow Twins: Self-Supervised Audio Representation Learning](https://arxiv.org/pdf/2209.14345.pdf) [Anton et _al._, 2022] and has been accepted at ICASSP 2023.
+<br />
+
+The full written report can be found in the file ABT_full_report.pdf.
